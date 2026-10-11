@@ -1610,13 +1610,16 @@ function loadRequestsData() {
                     const dateStr = (r.timestamp || r.date) ? new Date(r.timestamp || r.date).toLocaleDateString() : '-';
                     const outletName = r.outletName || (outletsData.find(o => o.id === r.outletId)?.name) || 'Branch';
                     
+                    const parentIndent = r.indentId ? indentsData.find(i => i.id === r.indentId) : null;
+                    const indentNum = parentIndent ? (parentIndent.indentNumber || parentIndent.id) : null;
+
                     let statusBadge = '';
                     if (r.status === 'Pending') {
                         statusBadge = `<span class="status pending" style="background: rgba(255,190,11,0.15); color: var(--primary); border: 1px solid rgba(255,190,11,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Pending Supervisor</span>`;
-                    } else if (r.status === 'Sent to Admin') {
-                        statusBadge = `<span class="status" style="background: rgba(67,97,238,0.15); color: #4895ef; border: 1px solid rgba(67,97,238,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Sent to Admin</span>`;
-                    } else if (r.status === 'Consolidated') {
-                        statusBadge = `<span class="status ok" style="background: rgba(142,68,173,0.15); color: #af7ac5; border: 1px solid rgba(142,68,173,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Consolidated</span>`;
+                    } else if (r.status === 'Sent to Admin' || r.status === 'Consolidated') {
+                        statusBadge = indentNum 
+                            ? `<span class="status" style="background: rgba(67,97,238,0.15); color: #4895ef; border: 1px solid rgba(67,97,238,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">In Indent ${indentNum}</span>`
+                            : `<span class="status" style="background: rgba(67,97,238,0.15); color: #4895ef; border: 1px solid rgba(67,97,238,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Sent to Admin</span>`;
                     } else if (r.status === 'Approved') {
                         statusBadge = `<span class="status ok" style="background: rgba(46,196,182,0.15); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Approved</span>`;
                     } else {
@@ -1625,11 +1628,20 @@ function loadRequestsData() {
 
                     let actionHtml = '';
                     if (currentUser.role === 'admin') {
-                        if (r.status === 'Sent to Admin' || r.status === 'Pending') {
-                            actionHtml = `
-                                <button class="btn btn-outline" style="padding: 3px 8px; font-size: 0.72rem; border-color: var(--success); color: var(--success);" onclick="approveRequest('${r.id}')"><i data-lucide="check" style="width:12px; height:12px;"></i> Approve</button>
-                                <button class="btn btn-outline" style="padding: 3px 8px; font-size: 0.72rem; border-color: var(--danger); color: var(--danger);" onclick="rejectRequest('${r.id}')"><i data-lucide="x" style="width:12px; height:12px;"></i> Reject</button>
-                            `;
+                        if (r.status === 'Sent to Admin' || r.status === 'Consolidated') {
+                            if (r.indentId) {
+                                actionHtml = `
+                                    <button class="btn btn-outline" style="padding: 3px 8px; font-size: 0.72rem; border-color: var(--primary); color: var(--primary); display: inline-flex; align-items: center; gap: 4px;" onclick="openIndentApprovalModal('${r.indentId}')">
+                                        <i data-lucide="file-text" style="width:11px; height:11px;"></i> Review Indent
+                                    </button>
+                                `;
+                            } else {
+                                actionHtml = `<span style="font-size: 0.75rem; color: #4895ef; font-weight: 500;">Awaiting Indent Approval</span>`;
+                            }
+                        } else if (r.status === 'Pending') {
+                            actionHtml = `<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">Awaiting Supervisor</span>`;
+                        } else if (r.status === 'Approved') {
+                            actionHtml = `<span style="font-size: 0.75rem; color: var(--success); font-weight: 600;">✓ Approved</span>`;
                         } else {
                             actionHtml = `<span style="font-size: 0.75rem; color: var(--text-muted);">-</span>`;
                         }
@@ -1643,8 +1655,10 @@ function loadRequestsData() {
                                     <i data-lucide="trash-2" style="width:11px; height:11px;"></i>
                                 </button>
                             `;
-                        } else if (r.status === 'Sent to Admin') {
-                            actionHtml = `<span style="font-size: 0.75rem; color: #4895ef; font-weight: 500;">Awaiting Admin</span>`;
+                        } else if (r.status === 'Sent to Admin' || r.status === 'Consolidated') {
+                            actionHtml = `<span style="font-size: 0.75rem; color: #4895ef; font-weight: 500;">Awaiting Admin (${indentNum || 'Indent'})</span>`;
+                        } else if (r.status === 'Approved') {
+                            actionHtml = `<span style="font-size: 0.75rem; color: var(--success); font-weight: 600;">✓ Approved</span>`;
                         } else {
                             actionHtml = `<span style="font-size: 0.75rem; color: var(--text-muted);">-</span>`;
                         }
@@ -1732,13 +1746,16 @@ function loadRequestsData() {
         const outlet = outletsData.find(o => o.id === req.outletId) || { name: req.outletName || 'Assigned Store' };
         const dateStr = (req.timestamp || req.date) ? new Date(req.timestamp || req.date).toLocaleDateString() : '-';
         
+        const parentIndent = req.indentId ? indentsData.find(i => i.id === req.indentId) : null;
+        const indentNum = parentIndent ? (parentIndent.indentNumber || parentIndent.id) : null;
+
         let statusHtml = '';
         if (req.status === 'Pending') {
             statusHtml = `<span class="status pending" style="background: rgba(255,190,11,0.15); color: var(--primary); border: 1px solid rgba(255,190,11,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Pending Supervisor</span>`;
-        } else if (req.status === 'Sent to Admin') {
-            statusHtml = `<span class="status" style="background: rgba(67,97,238,0.15); color: #4895ef; border: 1px solid rgba(67,97,238,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Sent to Admin</span>`;
-        } else if (req.status === 'Consolidated') {
-            statusHtml = `<span class="status ok" style="background: rgba(142,68,173,0.15); color: #af7ac5; border: 1px solid rgba(142,68,173,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Consolidated in Indent</span>`;
+        } else if (req.status === 'Sent to Admin' || req.status === 'Consolidated') {
+            statusHtml = indentNum 
+                ? `<span class="status" style="background: rgba(67,97,238,0.15); color: #4895ef; border: 1px solid rgba(67,97,238,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">In Indent ${indentNum}</span>`
+                : `<span class="status" style="background: rgba(67,97,238,0.15); color: #4895ef; border: 1px solid rgba(67,97,238,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Sent to Admin</span>`;
         } else if (req.status === 'Approved') {
             statusHtml = `<span class="status ok" style="background: rgba(46,196,182,0.15); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Approved</span>`;
         } else {
@@ -1747,15 +1764,22 @@ function loadRequestsData() {
         
         let actionsHtml = '<span class="text-muted">-</span>';
         if (currentUser.role === 'admin') {
-            if (req.status === 'Sent to Admin' || req.status === 'Pending') {
-                actionsHtml = `
-                    <button class="btn btn-outline" style="padding: 4px 10px; font-size: 0.72rem; border-color: var(--success); color: var(--success); display: inline-flex; align-items: center; gap: 4px;" onclick="approveRequest('${req.id}')" title="Approve and allocate stock">
-                        <i data-lucide="check" style="width: 12px; height: 12px;"></i> Approve
-                    </button>
-                    <button class="btn btn-outline" style="padding: 4px 10px; font-size: 0.72rem; border-color: var(--danger); color: var(--danger); display: inline-flex; align-items: center; gap: 4px;" onclick="rejectRequest('${req.id}')" title="Reject request">
-                        <i data-lucide="x" style="width: 12px; height: 12px;"></i> Reject
-                    </button>
-                `;
+            if (req.status === 'Sent to Admin' || req.status === 'Consolidated') {
+                if (req.indentId) {
+                    actionsHtml = `
+                        <button class="btn btn-outline" style="padding: 4px 10px; font-size: 0.72rem; border-color: var(--primary); color: var(--primary); display: inline-flex; align-items: center; gap: 4px;" onclick="openIndentApprovalModal('${req.indentId}')">
+                            <i data-lucide="file-text" style="width: 12px; height: 12px;"></i> Review Indent
+                        </button>
+                    `;
+                } else {
+                    actionsHtml = `<span style="font-size: 0.75rem; color: #4895ef;">Awaiting Indent Approval</span>`;
+                }
+            } else if (req.status === 'Pending') {
+                actionsHtml = `<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">Awaiting Supervisor</span>`;
+            } else if (req.status === 'Approved') {
+                actionsHtml = `<span style="font-size: 0.75rem; color: var(--success); font-weight: 600;">✓ Approved</span>`;
+            } else {
+                actionsHtml = `<span style="font-size: 0.75rem; color: var(--danger); font-weight: 600;">✗ Rejected</span>`;
             }
         } else if (currentUser.role === 'supervisor') {
             if (req.status === 'Pending') {
@@ -1763,13 +1787,12 @@ function loadRequestsData() {
                     <button class="btn btn-primary" style="padding: 4px 10px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 4px;" onclick="sendRequestToAdmin('${req.id}')" title="Send this chef request to Admin for approval">
                         <i data-lucide="send" style="width: 12px; height: 12px;"></i> Send to Admin
                     </button>
-                    <button class="btn btn-outline" style="padding: 4px 8px; font-size: 0.72rem; border-color: var(--primary); color: var(--primary);" onclick="openConsolidationModal()" title="Consolidate with others into an indent">Consolidate</button>
                     <button class="btn btn-outline" style="padding: 4px 8px; font-size: 0.72rem; border-color: var(--danger); color: var(--danger);" onclick="deleteRequest('${req.id}')" title="Delete request">Delete</button>
                 `;
-            } else if (req.status === 'Sent to Admin') {
-                actionsHtml = `<span style="font-size: 0.75rem; color: #4895ef; font-weight: 500; display: inline-flex; align-items: center; gap: 4px;"><i data-lucide="clock" style="width: 12px; height: 12px;"></i> Awaiting Admin</span>`;
-            } else if (req.status === 'Consolidated') {
-                actionsHtml = `<span style="font-size: 0.75rem; color: #af7ac5; font-weight: 500;">In Indent</span>`;
+            } else if (req.status === 'Sent to Admin' || req.status === 'Consolidated') {
+                actionsHtml = `<span style="font-size: 0.75rem; color: #4895ef; font-weight: 500; display: inline-flex; align-items: center; gap: 4px;"><i data-lucide="clock" style="width: 12px; height: 12px;"></i> Awaiting Admin (${indentNum || 'Indent'})</span>`;
+            } else if (req.status === 'Approved') {
+                actionsHtml = `<span style="font-size: 0.75rem; color: var(--success); font-weight: 600;">✓ Approved</span>`;
             }
         } else {
             if (req.status === 'Pending') {
