@@ -15,7 +15,9 @@ window.showUiModal = function(options) {
     let title = 'Notice';
     let type = 'success';
     let btnText = 'Got it';
-    let callback = null;
+    let isConfirm = false;
+    let onConfirm = null;
+    let onCancel = null;
 
     if (typeof options === 'string') {
         msg = options;
@@ -37,13 +39,16 @@ window.showUiModal = function(options) {
         msg = options.message || '';
         title = options.title || 'Notice';
         type = options.type || 'success';
-        btnText = options.btnText || 'Got it';
-        callback = options.onConfirm || null;
+        btnText = options.btnText || (options.isConfirm ? 'Confirm' : 'Got it');
+        isConfirm = !!options.isConfirm;
+        onConfirm = options.onConfirm || null;
+        onCancel = options.onCancel || null;
     }
 
     const modal = document.getElementById('uiAlertModal');
     if (!modal) {
         console.log(title, msg);
+        if (onConfirm) onConfirm();
         return;
     }
 
@@ -51,10 +56,21 @@ window.showUiModal = function(options) {
     const msgEl = document.getElementById('uiAlertMessage');
     const iconContainer = document.getElementById('uiAlertIconContainer');
     const okBtn = document.getElementById('uiAlertOkBtn');
+    const cancelBtn = document.getElementById('uiAlertCancelBtn');
+    const inputWrapper = document.getElementById('uiAlertInputWrapper');
 
     if (titleEl) titleEl.textContent = title;
     if (msgEl) msgEl.textContent = msg;
     if (okBtn) okBtn.textContent = btnText;
+    if (inputWrapper) inputWrapper.style.display = 'none';
+
+    if (cancelBtn) {
+        cancelBtn.style.display = isConfirm ? 'inline-block' : 'none';
+        cancelBtn.onclick = () => {
+            modal.classList.add('hidden');
+            if (typeof onCancel === 'function') onCancel();
+        };
+    }
 
     if (iconContainer) {
         if (type === 'success') {
@@ -80,14 +96,18 @@ window.showUiModal = function(options) {
 
     function closeModal() {
         modal.classList.add('hidden');
-        if (typeof callback === 'function') callback();
+        if (typeof onConfirm === 'function') onConfirm();
         if (okBtn) okBtn.onclick = null;
         document.removeEventListener('keydown', handleKey);
     }
 
     function handleKey(e) {
-        if (e.key === 'Enter' || e.key === 'Escape') {
+        if (e.key === 'Enter') {
             closeModal();
+        } else if (e.key === 'Escape') {
+            modal.classList.add('hidden');
+            if (isConfirm && typeof onCancel === 'function') onCancel();
+            document.removeEventListener('keydown', handleKey);
         }
     }
 

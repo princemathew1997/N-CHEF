@@ -7,7 +7,7 @@
     <link rel="icon" type="image/jpeg" href="assets/images/logo.jpg">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/styles.css?v=24">
     <!-- NUNIT-INJECT: CATCH JS ERRORS -->
     <script>
         window.addEventListener('error', function(e) { 
@@ -592,9 +592,9 @@
         </main>
     </div>
 
-    <script src="js/data.js?v=23"></script>
-    <script src="js/app.js?v=23"></script>
-    <script src="js/wizard.js?v=23"></script>
+    <script src="js/data.js?v=24"></script>
+    <script src="js/app.js?v=24"></script>
+    <script src="js/wizard.js?v=24"></script>
     <script>
         lucide.createIcons();
     </script>
@@ -843,10 +843,16 @@
                 <i data-lucide="check-circle" style="width: 30px; height: 30px;"></i>
             </div>
             <h3 id="uiAlertTitle" style="margin: 0 0 8px 0; font-size: 1.25rem; font-weight: 700; color: #ffffff;">Submitted Successfully</h3>
-            <p id="uiAlertMessage" style="margin: 0 0 24px 0; color: var(--text-muted); font-size: 0.92rem; line-height: 1.5; word-break: break-word;">Ingredient requests submitted successfully to supervisor!</p>
-            <button class="btn btn-primary" id="uiAlertOkBtn" style="width: 100%; padding: 11px 24px; font-size: 0.95rem; font-weight: 600; border-radius: 8px; box-shadow: 0 4px 16px rgba(255,190,11,0.3); cursor: pointer;">
-                Got it
-            </button>
+            <p id="uiAlertMessage" style="margin: 0 0 20px 0; color: var(--text-muted); font-size: 0.92rem; line-height: 1.5; word-break: break-word;">Ingredient requests submitted successfully to supervisor!</p>
+            <div id="uiAlertInputWrapper" style="display: none; margin-bottom: 20px;">
+                <input type="text" id="uiAlertInput" style="width: 100%; padding: 10px 14px; background: var(--dark); color: white; border: 1px solid var(--border); border-radius: 8px; font-size: 0.95rem; outline: none; text-align: center;">
+            </div>
+            <div id="uiAlertBtnGroup" style="display: flex; gap: 10px; justify-content: center;">
+                <button type="button" class="btn btn-outline" id="uiAlertCancelBtn" style="flex: 1; padding: 11px 18px; font-size: 0.92rem; border-radius: 8px; display: none;">Cancel</button>
+                <button type="button" class="btn btn-primary" id="uiAlertOkBtn" style="flex: 1; padding: 11px 24px; font-size: 0.95rem; font-weight: 600; border-radius: 8px; box-shadow: 0 4px 16px rgba(255,190,11,0.3); cursor: pointer;">
+                    Got it
+                </button>
+            </div>
         </div>
     </div>
 
