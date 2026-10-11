@@ -201,7 +201,16 @@ function initRequestWizard() {
 
         saveData();
         modal.classList.add('hidden');
-        alert('Ingredient requests submitted successfully to supervisor!');
+        if (typeof showUiModal === 'function') {
+            showUiModal({
+                title: 'Requests Submitted',
+                message: 'Ingredient requests submitted successfully to supervisor!',
+                type: 'success',
+                btnText: 'Done'
+            });
+        } else {
+            alert('Ingredient requests submitted successfully to supervisor!');
+        }
         if (typeof updateRequestsBadge === 'function') updateRequestsBadge();
         if (typeof updateIndentsBadge === 'function') updateIndentsBadge();
         if (typeof loadRequestsData === 'function') loadRequestsData();

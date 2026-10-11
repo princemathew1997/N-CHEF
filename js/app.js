@@ -8,6 +8,99 @@ let loaderInterval = null;
 let currentStoreView = 'all';
 
 // ============================================================
+// CENTER OF SCREEN UI MODAL NOTIFICATION (Matches n.chef Theme)
+// ============================================================
+window.showUiModal = function(options) {
+    let msg = '';
+    let title = 'Notice';
+    let type = 'success';
+    let btnText = 'Got it';
+    let callback = null;
+
+    if (typeof options === 'string') {
+        msg = options;
+        const lower = msg.toLowerCase();
+        if (lower.includes('success') || lower.includes('submitted') || lower.includes('approved') || lower.includes('forwarded')) {
+            type = 'success';
+            title = 'Success';
+            btnText = 'Done';
+        } else if (lower.includes('not enough') || lower.includes('error') || lower.includes('cannot') || lower.includes('invalid') || lower.includes('required') || lower.includes('already exists') || lower.includes('rejected')) {
+            type = 'warning';
+            title = 'Attention';
+            btnText = 'Understood';
+        } else {
+            type = 'info';
+            title = 'Notice';
+            btnText = 'Got it';
+        }
+    } else if (typeof options === 'object' && options !== null) {
+        msg = options.message || '';
+        title = options.title || 'Notice';
+        type = options.type || 'success';
+        btnText = options.btnText || 'Got it';
+        callback = options.onConfirm || null;
+    }
+
+    const modal = document.getElementById('uiAlertModal');
+    if (!modal) {
+        console.log(title, msg);
+        return;
+    }
+
+    const titleEl = document.getElementById('uiAlertTitle');
+    const msgEl = document.getElementById('uiAlertMessage');
+    const iconContainer = document.getElementById('uiAlertIconContainer');
+    const okBtn = document.getElementById('uiAlertOkBtn');
+
+    if (titleEl) titleEl.textContent = title;
+    if (msgEl) msgEl.textContent = msg;
+    if (okBtn) okBtn.textContent = btnText;
+
+    if (iconContainer) {
+        if (type === 'success') {
+            iconContainer.style.background = 'rgba(46, 196, 182, 0.15)';
+            iconContainer.style.borderColor = 'rgba(46, 196, 182, 0.4)';
+            iconContainer.style.color = '#2ec4b6';
+            iconContainer.innerHTML = '<i data-lucide="check-circle" style="width: 30px; height: 30px;"></i>';
+        } else if (type === 'warning' || type === 'danger') {
+            iconContainer.style.background = 'rgba(230, 57, 70, 0.15)';
+            iconContainer.style.borderColor = 'rgba(230, 57, 70, 0.4)';
+            iconContainer.style.color = '#ff6b6b';
+            iconContainer.innerHTML = '<i data-lucide="alert-circle" style="width: 30px; height: 30px;"></i>';
+        } else {
+            iconContainer.style.background = 'rgba(255, 190, 11, 0.15)';
+            iconContainer.style.borderColor = 'rgba(255, 190, 11, 0.4)';
+            iconContainer.style.color = 'var(--primary)';
+            iconContainer.innerHTML = '<i data-lucide="info" style="width: 30px; height: 30px;"></i>';
+        }
+    }
+
+    modal.classList.remove('hidden');
+    if (window.lucide) window.lucide.createIcons();
+
+    function closeModal() {
+        modal.classList.add('hidden');
+        if (typeof callback === 'function') callback();
+        if (okBtn) okBtn.onclick = null;
+        document.removeEventListener('keydown', handleKey);
+    }
+
+    function handleKey(e) {
+        if (e.key === 'Enter' || e.key === 'Escape') {
+            closeModal();
+        }
+    }
+
+    if (okBtn) okBtn.onclick = closeModal;
+    document.addEventListener('keydown', handleKey);
+};
+
+// Seamlessly route all window.alert calls to the center UI modal!
+window.alert = function(msg) {
+    window.showUiModal(msg);
+};
+
+// ============================================================
 // INITIALIZATION
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
