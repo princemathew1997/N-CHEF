@@ -196,6 +196,56 @@ window.alert = function(msg) {
     window.showUiModal(msg);
 };
 
+// Lightweight, non-intrusive floating toast notification
+window.showToast = function(msg, type = 'success') {
+    let toast = document.getElementById('uiFloatingToast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'uiFloatingToast';
+        document.body.appendChild(toast);
+    }
+    
+    const icon = type === 'success' ? 'check-circle' : (type === 'danger' ? 'alert-triangle' : 'info');
+    const color = type === 'success' ? '#2ec4b6' : (type === 'danger' ? '#ff6b6b' : 'var(--primary)');
+    const border = type === 'success' ? 'rgba(46,196,182,0.4)' : (type === 'danger' ? 'rgba(230,57,70,0.4)' : 'rgba(255,190,11,0.4)');
+    
+    toast.style.cssText = `
+        position: fixed;
+        top: 24px;
+        left: 50%;
+        transform: translateX(-50%) translateY(-20px);
+        background: rgba(20, 20, 20, 0.95);
+        color: #ffffff;
+        border: 1px solid ${border};
+        box-shadow: 0 12px 36px rgba(0,0,0,0.8), 0 0 20px rgba(0,0,0,0.5);
+        border-radius: 30px;
+        padding: 10px 22px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        z-index: 99999999;
+        opacity: 0;
+        transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        pointer-events: none;
+    `;
+    
+    toast.innerHTML = `<span style="color: ${color}; display: flex; align-items: center;"><i data-lucide="${icon}" style="width: 18px; height: 18px;"></i></span> <span>${msg}</span>`;
+    if (window.lucide) window.lucide.createIcons();
+    
+    requestAnimationFrame(() => {
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateX(-50%) translateY(0)';
+    });
+    
+    if (window._toastTimeout) clearTimeout(window._toastTimeout);
+    window._toastTimeout = setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(-50%) translateY(-15px)';
+    }, 2400);
+};
+
 // ============================================================
 // INITIALIZATION
 // ============================================================
@@ -1042,11 +1092,8 @@ function initForms() {
                 saveData();
                 loadRequestsData();
                 updateRequestsBadge();
-                window.showUiModal({
-                    title: "Requests Cleared",
-                    message: "All requests have been successfully cleared.",
-                    type: "info"
-                });
+                if (typeof loadChefPortalData === 'function') loadChefPortalData();
+                window.showToast("All requests cleared successfully", 'info');
             }
         });
     }
@@ -1528,7 +1575,7 @@ function loadChefPortalData() {
                 : `<span style="font-size: 0.75rem; color: var(--text-muted);">-</span>`;
             
             return `
-                <tr>
+                <tr id="chefReqRow_${r.id}">
                     <td style="font-size: 0.85rem; color: var(--text-muted);">${dateStr}</td>
                     <td><strong>${r.itemName || 'Item'}</strong> <span style="font-size: 0.75rem; color: var(--text-muted);">(${r.unit || 'kg'})</span></td>
                     <td><span style="background: rgba(255,190,11,0.12); color: var(--primary); padding: 2px 7px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">${r.cuisine || '-'}</span></td>
@@ -1548,24 +1595,36 @@ function loadChefPortalData() {
 window.loadChefPortalData = loadChefPortalData;
 
 window.deleteChefRequest = async function(reqId) {
-    const reqIndex = requestsData.findIndex(r => r.id === reqId);
-    if (reqIndex === -1 || requestsData[reqIndex].status !== 'Pending') return;
+    const req = requestsData.find(r => String(r.id) === String(reqId));
+    if (!req || req.status !== 'Pending') return;
     
-    const confirmed = await window.showConfirmModal("Are you sure you want to cancel this request?", "Cancel Request", {
-        type: 'danger',
-        confirmText: 'Yes, Cancel Request'
-    });
+    const confirmed = await window.showConfirmModal(
+        `Are you sure you want to cancel the request for "${req.itemName}" (${req.qty} ${req.unit || 'kg'})?`,
+        "Cancel Request",
+        {
+            type: 'danger',
+            confirmText: 'Yes, Cancel Request',
+            cancelText: 'Keep Request'
+        }
+    );
+    
     if (confirmed) {
-        requestsData.splice(reqIndex, 1);
-        saveData();
-        loadChefPortalData();
-        if (typeof loadRequestsData === 'function') loadRequestsData();
-        if (typeof updateRequestsBadge === 'function') updateRequestsBadge();
-        window.showUiModal({
-            title: "Request Cancelled",
-            message: "Your request has been cancelled.",
-            type: "info"
-        });
+        const rowEl = document.getElementById(`chefReqRow_${reqId}`);
+        if (rowEl) {
+            rowEl.style.transition = 'all 0.2s ease';
+            rowEl.style.opacity = '0';
+            rowEl.style.transform = 'scale(0.96)';
+        }
+        const reqIndex = requestsData.findIndex(r => String(r.id) === String(reqId));
+        if (reqIndex !== -1) {
+            const itemName = requestsData[reqIndex].itemName;
+            requestsData.splice(reqIndex, 1);
+            saveData();
+            loadChefPortalData();
+            if (typeof loadRequestsData === 'function') loadRequestsData();
+            if (typeof updateRequestsBadge === 'function') updateRequestsBadge();
+            window.showToast(`Cancelled request for ${itemName}`, 'info');
+        }
     }
 };
 
@@ -1576,21 +1635,25 @@ function loadStoreInventoryData() {}
 // ADMIN VIEWS
 // ============================================================
 window.deleteItem = async function(itemId) {
-    const confirmed = await window.showConfirmModal("Are you sure you want to delete this item? This action cannot be undone.", "Delete Item", {
-        type: 'danger',
-        confirmText: 'Yes, Delete'
-    });
+    const item = masterItemsData.find(i => String(i.id) === String(itemId));
+    const itemName = item ? item.name : 'this item';
+    
+    const confirmed = await window.showConfirmModal(
+        `Are you sure you want to delete "${itemName}"? This action cannot be undone.`,
+        "Delete Item",
+        {
+            type: 'danger',
+            confirmText: 'Yes, Delete'
+        }
+    );
+    
     if (confirmed) {
-        const itemIndex = masterItemsData.findIndex(i => i.id === itemId);
+        const itemIndex = masterItemsData.findIndex(i => String(i.id) === String(itemId));
         if (itemIndex > -1) {
             masterItemsData.splice(itemIndex, 1);
             saveData();
             loadDashboardData();
-            window.showUiModal({
-                title: "Item Deleted",
-                message: "Master item removed successfully.",
-                type: "info"
-            });
+            window.showToast(`Deleted ${itemName}`, 'info');
         }
     }
 };
@@ -2911,23 +2974,24 @@ window.editRequest = async function(reqId) {
 };
 
 window.deleteRequest = async function(reqId) {
-    const reqIndex = requestsData.findIndex(r => r.id === reqId);
-    if (reqIndex === -1 || requestsData[reqIndex].status !== 'Pending') return;
+    const req = requestsData.find(r => String(r.id) === String(reqId));
+    if (!req || req.status !== 'Pending') return;
     
-    const confirmed = await window.showConfirmModal("Are you sure you want to delete this request?", "Delete Request", {
+    const confirmed = await window.showConfirmModal(`Are you sure you want to delete the request for "${req.itemName}"?`, "Delete Request", {
         type: 'danger',
         confirmText: 'Delete'
     });
     if (confirmed) {
-        requestsData.splice(reqIndex, 1);
-        saveData();
-        loadRequestsData();
-        updateRequestsBadge();
-        window.showUiModal({
-            title: "Request Deleted",
-            message: "The request has been deleted.",
-            type: "info"
-        });
+        const reqIndex = requestsData.findIndex(r => String(r.id) === String(reqId));
+        if (reqIndex !== -1) {
+            const itemName = requestsData[reqIndex].itemName;
+            requestsData.splice(reqIndex, 1);
+            saveData();
+            loadRequestsData();
+            updateRequestsBadge();
+            if (typeof loadChefPortalData === 'function') loadChefPortalData();
+            window.showToast(`Deleted request for ${itemName}`, 'info');
+        }
     }
 };
 
