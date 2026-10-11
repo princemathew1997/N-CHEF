@@ -3097,24 +3097,22 @@ window.renderConsolidateWorkspaceTable = function() {
     });
     if (sections.length === 0) sections.push('Indian', 'Tandoor');
 
-    // 1. Render Table Head (Matching user's matrix: Ingredient | Indian | Tandoor | ... | Buffer | Total | Note)
+    // 1. Render Table Head (Matching user's matrix: Ingredient | Indian | Tandoor | ... | Total | Supervisor Note)
     thead.innerHTML = `
         <tr style="border-bottom: 2px solid rgba(255,190,11,0.25);">
-            <th style="text-align: left; padding: 12px 16px; background: rgba(0,0,0,0.5); color: #fff; font-weight: 700; width: 22%;">Ingredient</th>
+            <th style="text-align: left; padding: 12px 16px; background: rgba(0,0,0,0.5); color: #fff; font-weight: 700; width: 24%;">Ingredient</th>
             ${sections.map(sec => `
                 <th style="text-align: center; padding: 12px 14px; background: rgba(255,190,11,0.08); color: var(--primary); font-weight: 700; border-left: 1px solid rgba(255,255,255,0.06); font-size: 0.88rem;">
                     ${sec}
                 </th>
             `).join('')}
-            <th style="text-align: center; padding: 12px 12px; background: rgba(46,196,182,0.08); color: #2ec4b6; font-weight: 700; border-left: 1px solid rgba(255,255,255,0.06); width: 10%;">Buffer</th>
-            <th style="text-align: center; padding: 12px 16px; background: rgba(255,190,11,0.18); color: #fff; font-weight: 800; border-left: 1px solid rgba(255,190,11,0.3); width: 14%;">Total</th>
-            <th style="text-align: left; padding: 12px 14px; background: rgba(0,0,0,0.4); color: var(--text-muted); font-weight: 600; width: 18%; border-left: 1px solid rgba(255,255,255,0.06);">Supervisor Note</th>
+            <th style="text-align: center; padding: 12px 16px; background: rgba(255,190,11,0.18); color: #fff; font-weight: 800; border-left: 1px solid rgba(255,190,11,0.3); width: 16%;">Total</th>
+            <th style="text-align: left; padding: 12px 14px; background: rgba(0,0,0,0.4); color: var(--text-muted); font-weight: 600; width: 22%; border-left: 1px solid rgba(255,255,255,0.06);">Supervisor Note</th>
         </tr>
     `;
 
     // 2. Render Table Body (Matrix Rows)
     let grandSum = 0;
-    let totalBufferSum = 0;
 
     tbody.innerHTML = items.map(entry => {
         grandSum += (parseFloat(entry.revisedQty) || 0);
@@ -3133,20 +3131,10 @@ window.renderConsolidateWorkspaceTable = function() {
             }
         }).join('');
 
-        // Buffer calculation
-        const bufferQty = (entry.revisedQty > entry.originalQty) ? (entry.revisedQty - entry.originalQty) : 0;
-        totalBufferSum += bufferQty;
-
-        const bufferCell = `<td style="text-align: center; padding: 10px 12px; border-left: 1px solid rgba(255,255,255,0.04);">
-            ${bufferQty > 0 
-                ? `<span style="color: #2ec4b6; font-weight: 700; font-size: 0.88rem;">+${bufferQty} <span style="font-size: 0.72rem;">${entry.unit}</span></span>` 
-                : `<span style="color: rgba(255,255,255,0.2);">-</span>`}
-        </td>`;
-
-        // Total input
+        // Total input with oninput for LIVE instant updates
         const totalCell = `<td style="text-align: center; padding: 10px 14px; background: rgba(255,190,11,0.05); border-left: 1px solid rgba(255,190,11,0.25);">
             <div style="display: flex; align-items: center; justify-content: center; gap: 5px;">
-                <input type="number" step="any" min="0" value="${entry.revisedQty}" onchange="updateWorkspaceItemQty('${entry.itemId}', this.value)" style="width: 78px; padding: 5px 6px; font-size: 0.92rem; font-weight: 700; background: #0d0d0d; color: var(--primary); border: 1px solid var(--border-gold); border-radius: 6px; text-align: center;">
+                <input type="number" step="any" min="0" value="${entry.revisedQty}" oninput="updateWorkspaceItemQty('${entry.itemId}', this.value)" style="width: 82px; padding: 5px 6px; font-size: 0.95rem; font-weight: 700; background: #0d0d0d; color: var(--primary); border: 1px solid var(--border-gold); border-radius: 6px; text-align: center;">
                 <span style="font-size: 0.76rem; color: var(--text-muted); font-weight: 600;">${entry.unit}</span>
             </div>
         </td>`;
@@ -3154,7 +3142,7 @@ window.renderConsolidateWorkspaceTable = function() {
         // Note / comments
         const noteCell = `<td style="padding: 10px 14px; border-left: 1px solid rgba(255,255,255,0.04);">
             <div style="display: flex; align-items: center; gap: 6px;">
-                <input type="text" placeholder="Reason / buffer..." value="${entry.comment || ''}" onchange="updateWorkspaceItemComment('${entry.itemId}', this.value)" style="width: 100%; padding: 5px 8px; font-size: 0.82rem; background: #0d0d0d; color: #fff; border: 1px solid var(--border); border-radius: 5px;">
+                <input type="text" placeholder="Reason / note..." value="${entry.comment || ''}" oninput="updateWorkspaceItemComment('${entry.itemId}', this.value)" style="width: 100%; padding: 5px 8px; font-size: 0.82rem; background: #0d0d0d; color: #fff; border: 1px solid var(--border); border-radius: 5px;">
                 ${entry.originalQty === 0 ? `<button class="btn btn-outline" style="padding: 3px 6px; font-size: 0.68rem; border-color: var(--danger); color: var(--danger);" onclick="removeWorkspaceExtraItem('${entry.itemId}')" title="Remove"><i data-lucide="trash-2" style="width: 12px; height: 12px;"></i></button>` : ''}
             </div>
         </td>`;
@@ -3166,7 +3154,6 @@ window.renderConsolidateWorkspaceTable = function() {
                     <div style="font-size: 0.72rem; color: var(--text-muted);">${entry.category}</div>
                 </td>
                 ${secCellsHtml}
-                ${bufferCell}
                 ${totalCell}
                 ${noteCell}
             </tr>
@@ -3189,10 +3176,7 @@ window.renderConsolidateWorkspaceTable = function() {
                 Total Section Units
             </td>
             ${sectionTotalsHtml}
-            <td style="text-align: center; padding: 12px; font-weight: 700; color: #2ec4b6; border-left: 1px solid rgba(255,255,255,0.06); font-size: 0.88rem;">
-                ${totalBufferSum > 0 ? `+${totalBufferSum.toFixed(1)}` : '-'}
-            </td>
-            <td style="text-align: center; padding: 12px; font-weight: 800; color: #fff; background: rgba(255,190,11,0.15); border-left: 1px solid rgba(255,190,11,0.3); font-size: 1rem;">
+            <td id="wsMatrixGrandTotalCell" style="text-align: center; padding: 12px; font-weight: 800; color: #fff; background: rgba(255,190,11,0.15); border-left: 1px solid rgba(255,190,11,0.3); font-size: 1rem;">
                 ${grandSum.toFixed(1)}
             </td>
             <td style="border-left: 1px solid rgba(255,255,255,0.06);"></td>
@@ -3249,7 +3233,9 @@ window.exportConsolidationToPdf = function() {
     printDoc.style.width = '100%';
     printDoc.style.boxSizing = 'border-box';
 
+    let totalPrintQty = 0;
     const rowsHtml = items.map((entry, idx) => {
+        totalPrintQty += (parseFloat(entry.revisedQty) || 0);
         const secCells = sections.map(sec => {
             const secReqs = (entry.chefRequests || []).filter(cr => (cr.cuisine || '').toLowerCase() === sec.toLowerCase());
             const secQty = secReqs.reduce((acc, cr) => acc + (parseFloat(cr.qty) || 0), 0);
@@ -3258,8 +3244,6 @@ window.exportConsolidationToPdf = function() {
             </td>`;
         }).join('');
 
-        const bufferQty = (entry.revisedQty > entry.originalQty) ? (entry.revisedQty - entry.originalQty) : 0;
-
         return `
             <tr style="background: ${idx % 2 === 0 ? '#ffffff' : '#f9f9f9'};">
                 <td style="border: 1px solid #ddd; padding: 8px 10px; font-weight: 600;">
@@ -3267,9 +3251,6 @@ window.exportConsolidationToPdf = function() {
                     <div style="font-size: 11px; color: #666;">${entry.category}</div>
                 </td>
                 ${secCells}
-                <td style="border: 1px solid #ddd; padding: 8px 10px; text-align: center; color: #028090;">
-                    ${bufferQty > 0 ? `+${bufferQty} ${entry.unit}` : '-'}
-                </td>
                 <td style="border: 1px solid #ddd; padding: 8px 10px; text-align: center; font-weight: 700; background: #fff8e7;">
                     ${entry.revisedQty} ${entry.unit}
                 </td>
@@ -3295,7 +3276,7 @@ window.exportConsolidationToPdf = function() {
         <div style="display: flex; justify-content: space-between; background: #f4f4f4; border: 1px solid #e0e0e0; border-radius: 6px; padding: 12px 18px; margin-bottom: 20px; font-size: 13px;">
             <div><strong>Outlet:</strong> <span style="color: #d49500; font-weight: 700;">${outletName}</span></div>
             <div><strong>Prepared By (Supervisor):</strong> ${supervisor}</div>
-            <div><strong>Total Line Items:</strong> ${items.length} ingredients</div>
+            <div><strong>Total Line Items:</strong> ${items.length} ingredients (${totalPrintQty.toFixed(1)} units)</div>
         </div>
 
         <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 26px;">
@@ -3303,7 +3284,6 @@ window.exportConsolidationToPdf = function() {
                 <tr style="background: #222; color: #fff;">
                     <th style="border: 1px solid #222; padding: 9px 10px; text-align: left;">Ingredient</th>
                     ${sections.map(s => `<th style="border: 1px solid #222; padding: 9px 10px; text-align: center;">${s}</th>`).join('')}
-                    <th style="border: 1px solid #222; padding: 9px 10px; text-align: center;">Buffer</th>
                     <th style="border: 1px solid #222; padding: 9px 10px; text-align: center; background: #d49500; color: #000;">Total</th>
                     <th style="border: 1px solid #222; padding: 9px 10px; text-align: left;">Notes</th>
                 </tr>
@@ -3378,6 +3358,18 @@ window.exportConsolidationToPdf = function() {
 window.updateWorkspaceItemQty = function(itemId, val) {
     if (activeWorkspaceConsolidation.groupedItems[itemId]) {
         activeWorkspaceConsolidation.groupedItems[itemId].revisedQty = parseFloat(val) || 0;
+    }
+    
+    // Live update grand total and summary instantly
+    const items = Object.values(activeWorkspaceConsolidation.groupedItems || {});
+    const grandSum = items.reduce((acc, it) => acc + (parseFloat(it.revisedQty) || 0), 0);
+    const grandCell = document.getElementById('wsMatrixGrandTotalCell');
+    if (grandCell) {
+        grandCell.textContent = grandSum.toFixed(1);
+    }
+    const summaryTextEl = document.getElementById('wsFooterSummaryText');
+    if (summaryTextEl) {
+        summaryTextEl.textContent = `Consolidating ${items.length} items (${grandSum.toFixed(1)} units total)`;
     }
 };
 
