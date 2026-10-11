@@ -78,9 +78,6 @@
                         </a>
                     </div>
                 </div>
-                <a href="#" class="nav-item no-chef" id="navIndents">
-                    <i data-lucide="file-check"></i> Indents <span id="pendingIndentsBadge" class="hidden" style="background: var(--primary); color: var(--dark); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 0.7rem; margin-left: auto; font-weight: bold; line-height: 1;">0</span>
-                </a>
                 <a href="#" class="nav-item chef-only-bg hidden" id="navChefPortal">
                     <i data-lucide="clipboard-list"></i> My Requests
                 </a>
@@ -119,11 +116,8 @@
                 
                   <header class="dash-header">
                       <div class="header-title">
-                          <h1 id="reqHeaderTitle">Manage <span class="text-primary">Requests</span></h1>
-                          <p id="reqHeaderSub">Consolidate chef requests into indents for approval.</p>
-                      </div>
-                      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                          <button class="btn btn-primary" id="btnConsolidateIndent" style="display: none;">Submit Consolidated Indent</button>
+                          <h1 id="reqHeaderTitle">Master <span class="text-primary">Orders</span></h1>
+                          <p id="reqHeaderSub">Monitor store inventory, kitchen requests, and stock fulfillment.</p>
                       </div>
                   </header>
 
@@ -235,7 +229,7 @@
                         
                           <div class="panel form-section supervisor-only">
                               <h3>Request Ingredients</h3>
-                              <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">Start the category-based request wizard to select ingredients and submit an indent.</p>
+                              <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">Start the category-based request wizard to select ingredients and submit a request.</p>
                               <button class="btn btn-primary" style="width: 100%;" id="openRequestWizardBtn">Start Request Wizard</button>
                           </div>
 
@@ -290,9 +284,6 @@
                         <button class="btn btn-outline" id="clearAllRequestsBtn" style="padding: 6px 12px; font-size: 0.8rem; border-color: var(--danger); color: var(--danger); display: flex; align-items: center; gap: 4px;">
                             <i data-lucide="trash" style="width: 14px; height: 14px;"></i> Clear All
                         </button>
-                        <button class="btn btn-primary supervisor-only" id="btnConsolidateIndentViewRequests" style="padding: 6px 14px; font-size: 0.8rem; display: flex; align-items: center; gap: 6px;">
-                            <i data-lucide="layers" style="width: 14px; height: 14px;"></i> Consolidate Indent
-                        </button>
                     </div>
                 </header>
 
@@ -304,11 +295,6 @@
                         </button>
                         <button id="btnViewModeList" class="btn btn-outline" style="padding: 7px 16px; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; cursor: pointer;">
                             <i data-lucide="list" style="width: 15px; height: 15px;"></i> All Requests List
-                        </button>
-                    </div>
-                    <div id="sectionsActionHeader" style="display: flex; gap: 10px; align-items: center;">
-                        <button id="btnSendAllSectionsToAdmin" class="btn btn-primary supervisor-only" style="padding: 7px 18px; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 8px; font-weight: 600; box-shadow: 0 4px 14px rgba(255,190,11,0.3); cursor: pointer;">
-                            <i data-lucide="send" style="width: 16px; height: 16px;"></i> Send Sections Indent to Admin
                         </button>
                     </div>
                 </div>
@@ -374,7 +360,7 @@
                         <select id="wsStockItemSelect" style="padding: 8px 12px; background: var(--dark); color: white; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem;"></select>
                         <input type="number" id="wsStockItemQty" min="0.1" step="any" placeholder="Quantity" style="padding: 8px 12px; background: var(--dark); color: white; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem;">
                         <input type="text" id="wsStockItemReason" placeholder="Reason (e.g., Weekend buffer, Event)" style="padding: 8px 12px; background: var(--dark); color: white; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem;">
-                        <button class="btn btn-primary" id="btnWsAddStockConfirm" style="padding: 8px 16px; font-size: 0.85rem;">Add to Indent</button>
+                        <button class="btn btn-primary" id="btnWsAddStockConfirm" style="padding: 8px 16px; font-size: 0.85rem;">Add to Request</button>
                     </div>
                 </div>
 
@@ -449,7 +435,7 @@
                             <i data-lucide="check-circle-2" style="width: 22px; height: 22px;"></i>
                         </div>
                         <div>
-                            <div style="font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Approved / Indented</div>
+                            <div style="font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Approved Requests</div>
                             <div id="metricChefApproved" style="font-size: 1.5rem; font-weight: 700; color: #2ec4b6; line-height: 1.2;">0</div>
                             <div style="font-size: 0.72rem; color: var(--text-muted);">Consolidated & approved</div>
                         </div>
@@ -514,8 +500,8 @@
               <div id="viewIndents" class="hidden">
                   <header class="dash-header">
                       <div class="header-title">
-                          <h1>Manage <span class="text-primary">Indents</span></h1>
-                          <p>Review and approve consolidated outlet indents.</p>
+                          <h1>Consolidated <span class="text-primary">Requests</span></h1>
+                          <p>Review and approve consolidated outlet requests.</p>
                       </div>
                       <div class="header-actions" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                           <select id="filterIndentsOutlet" style="background: var(--dark); color: var(--text-main); width: auto; padding: 7px 12px; font-size: 0.82rem; border-radius: 6px; cursor: pointer; border: 1px solid var(--border);">
@@ -538,7 +524,7 @@
                       <div class="panel table-container" style="grid-column: span 12;">
                           <table>
                               <thead>
-                                  <tr><th>Indent #</th><th>Date</th><th>Outlet</th><th>Supervisor</th><th>Ingredients</th><th>Total Qty</th><th>Status</th><th>Actions</th></tr>
+                                  <tr><th>Request #</th><th>Date</th><th>Outlet</th><th>Supervisor</th><th>Ingredients</th><th>Total Qty</th><th>Status</th><th>Actions</th></tr>
                               </thead>
                               <tbody id="indentsTableBody"></tbody>
                           </table>
@@ -687,9 +673,9 @@
         </main>
     </div>
 
-    <script src="js/data.js?v=30"></script>
-    <script src="js/app.js?v=30"></script>
-    <script src="js/wizard.js?v=30"></script>
+    <script src="js/data.js?v=31"></script>
+    <script src="js/app.js?v=31"></script>
+    <script src="js/wizard.js?v=31"></script>
     <script>
         lucide.createIcons();
     </script>
@@ -834,7 +820,7 @@
                 <div style="background: rgba(255, 190, 11, 0.08); border: 1px solid rgba(255, 190, 11, 0.25); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                         <div>
-                            <span style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--primary); font-weight: 600;">Consolidated Indent Summary</span>
+                            <span style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--primary); font-weight: 600;">Consolidated Request Summary</span>
                             <h3 id="summaryOutletTitle" style="margin: 2px 0 0 0;">Outlet: BRIGADE</h3>
                         </div>
                         <div style="text-align: right;">
@@ -866,7 +852,7 @@
                             <tr>
                                 <th>Item</th>
                                 <th>Original Total</th>
-                                <th>Final Indent Qty</th>
+                                <th>Final Requested Qty</th>
                                 <th>Change</th>
                                 <th>Supervisor Alteration Comment</th>
                             </tr>
@@ -877,7 +863,7 @@
 
                 <div style="display: flex; justify-content: space-between;">
                     <button class="btn btn-outline" id="btnConsolidateBackToStep1">Back to Review</button>
-                    <button class="btn btn-primary" id="btnConfirmSubmitIndent" style="padding: 10px 24px; font-weight: 600;">Confirm & Submit Indent <i data-lucide="send" style="width: 15px; height: 15px; margin-left: 6px;"></i></button>
+                    <button class="btn btn-primary" id="btnConfirmSubmitIndent" style="padding: 10px 24px; font-weight: 600;">Confirm & Send Request <i data-lucide="send" style="width: 15px; height: 15px; margin-left: 6px;"></i></button>
                 </div>
             </div>
         </div>
@@ -892,8 +878,8 @@
                     <i data-lucide="file-check" style="width: 22px; height: 22px;"></i>
                 </div>
                 <div>
-                    <h2 style="margin: 0; font-size: 1.3rem;">Indent <span id="apprModalIndentId" class="text-primary">IND-001</span></h2>
-                    <p id="apprModalSubtitle" style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">Review consolidated items, cuisine share breakdown, and approve or reject.</p>
+                    <h2 style="margin: 0; font-size: 1.3rem;">Consolidated Request <span id="apprModalIndentId" class="text-primary">REQ-001</span></h2>
+                    <p id="apprModalSubtitle" style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">Review consolidated items, kitchen section breakdown, and approve or reject.</p>
                 </div>
             </div>
 
@@ -926,8 +912,8 @@
             <div id="apprModalFooterActions" style="margin-top: 24px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); padding-top: 16px;">
                 <button class="btn btn-outline" id="apprModalCloseBtn">Close</button>
                 <div id="apprModalAdminButtons" style="display: flex; gap: 10px;">
-                    <button class="btn btn-outline" id="btnRejectIndent" style="border-color: var(--danger); color: var(--danger);">Reject Indent</button>
-                    <button class="btn btn-primary" id="btnApproveIndent">Approve & Fulfill Indent</button>
+                    <button class="btn btn-outline" id="btnRejectIndent" style="border-color: var(--danger); color: var(--danger);">Reject Request</button>
+                    <button class="btn btn-primary" id="btnApproveIndent">Approve & Allocate Stock</button>
                 </div>
             </div>
         </div>

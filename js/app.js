@@ -1259,7 +1259,12 @@ function initForms() {
             });
             saveData();
             document.getElementById('modalIndentApproval')?.classList.add('hidden');
-            alert(`Indent ${indent.indentNumber || indent.id} approved successfully! Stock has been allocated to ${indent.outletName}.`);
+            window.showUiModal({
+                title: "Request Approved",
+                message: `Consolidated Request ${indent.indentNumber || indent.id} approved successfully! Stock has been allocated to ${indent.outletName}.`,
+                type: "success"
+            });
+            loadRequestsData();
             loadIndentsData();
             loadDashboardData();
         }
@@ -1268,7 +1273,7 @@ function initForms() {
     document.getElementById('btnRejectIndent')?.addEventListener('click', async () => {
         const indent = indentsData.find(i => i.id === activeReviewingIndentId);
         if (indent) {
-            const reason = await window.showPromptModal("Enter reason for rejection:", "Insufficient stock / revised plan", "Reject Indent");
+            const reason = await window.showPromptModal("Enter reason for rejection:", "Insufficient stock / revised plan", "Reject Request");
             if (reason !== null && reason !== false) {
                 indent.status = 'Rejected';
                 indent.rejectReason = reason;
@@ -1281,10 +1286,11 @@ function initForms() {
                 saveData();
                 document.getElementById('modalIndentApproval')?.classList.add('hidden');
                 window.showUiModal({
-                    title: "Indent Rejected",
-                    message: `Indent ${indent.indentNumber || indent.id} has been rejected.`,
+                    title: "Request Rejected",
+                    message: `Consolidated Request ${indent.indentNumber || indent.id} has been rejected.`,
                     type: "warning"
                 });
+                loadRequestsData();
                 loadIndentsData();
             }
         }
@@ -1779,28 +1785,10 @@ function loadRequestsData() {
         headerSub.textContent = `Review and approve stock requests forwarded by supervisors or submitted by kitchen staff.`;
     } else if (currentUser.role === 'supervisor') {
         headerTitle.innerHTML = `Chef <span class="text-primary">Requests</span>`;
-        headerSub.textContent = `Review requests for your allocated outlet, send them to admin, or consolidate into indents.`;
+        headerSub.textContent = `Review requests for your allocated outlet and accept items to consolidate.`;
     } else {
         headerTitle.innerHTML = `My <span class="text-primary">Requests</span>`;
         headerSub.textContent = `Track the status of your stock requests.`;
-    }
-    
-    // Consolidate Indent buttons
-    const btnCons1 = document.getElementById('btnConsolidateIndent');
-    const btnCons2 = document.getElementById('btnConsolidateIndentViewRequests');
-    if (btnCons1) {
-        btnCons1.style.display = (currentUser.role === 'supervisor') ? 'inline-flex' : 'none';
-        if (!btnCons1.dataset.bound) {
-            btnCons1.addEventListener('click', openConsolidationModal);
-            btnCons1.dataset.bound = 'true';
-        }
-    }
-    if (btnCons2) {
-        btnCons2.style.display = (currentUser.role === 'supervisor') ? 'inline-flex' : 'none';
-        if (!btnCons2.dataset.bound) {
-            btnCons2.addEventListener('click', openConsolidationModal);
-            btnCons2.dataset.bound = 'true';
-        }
     }
     
     // View switcher tab listeners
@@ -1828,12 +1816,7 @@ function loadRequestsData() {
         btnListMode.dataset.bound = 'true';
     }
     
-    // Header action buttons setup
-    const btnSendAll = document.getElementById('btnSendAllSectionsToAdmin');
-    if (btnSendAll && !btnSendAll.dataset.bound) {
-        btnSendAll.addEventListener('click', window.sendAllSectionsToAdmin);
-        btnSendAll.dataset.bound = 'true';
-    }
+    // Admin header action buttons setup
     const btnAdminApproveAll = document.getElementById('btnAdminApproveAllSections');
     if (btnAdminApproveAll && !btnAdminApproveAll.dataset.bound) {
         btnAdminApproveAll.addEventListener('click', window.adminApproveAllSections);
@@ -1958,9 +1941,7 @@ function loadRequestsData() {
                     } else if (r.status === 'Accepted') {
                         statusBadge = `<span class="status ok" style="background: rgba(46,196,182,0.15); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.35); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">✓ Accepted</span>`;
                     } else if (r.status === 'Sent to Admin' || r.status === 'Consolidated') {
-                        statusBadge = indentNum 
-                            ? `<span class="status" style="background: rgba(67,97,238,0.15); color: #4895ef; border: 1px solid rgba(67,97,238,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">In Indent ${indentNum}</span>`
-                            : `<span class="status" style="background: rgba(67,97,238,0.15); color: #4895ef; border: 1px solid rgba(67,97,238,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Sent to Admin</span>`;
+                        statusBadge = `<span class="status" style="background: rgba(67,97,238,0.15); color: #4895ef; border: 1px solid rgba(67,97,238,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Sent to Admin</span>`;
                     } else if (r.status === 'Approved') {
                         statusBadge = `<span class="status ok" style="background: rgba(46,196,182,0.15); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Approved</span>`;
                     } else {
@@ -1973,11 +1954,11 @@ function loadRequestsData() {
                             if (r.indentId) {
                                 actionHtml = `
                                     <button class="btn btn-outline" style="padding: 3px 8px; font-size: 0.72rem; border-color: var(--primary); color: var(--primary); display: inline-flex; align-items: center; gap: 4px;" onclick="openIndentApprovalModal('${r.indentId}')">
-                                        <i data-lucide="file-text" style="width:11px; height:11px;"></i> Review Indent
+                                        <i data-lucide="file-text" style="width:11px; height:11px;"></i> Review Request
                                     </button>
                                 `;
                             } else {
-                                actionHtml = `<span style="font-size: 0.75rem; color: #4895ef; font-weight: 500;">Awaiting Indent Approval</span>`;
+                                actionHtml = `<span style="font-size: 0.75rem; color: #4895ef; font-weight: 500;">Awaiting Admin Approval</span>`;
                             }
                         } else if (r.status === 'Pending' || r.status === 'Accepted') {
                             actionHtml = `<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">Awaiting Supervisor</span>`;
@@ -2004,7 +1985,7 @@ function loadRequestsData() {
                                 <button class="btn btn-outline" style="padding: 2px 6px; font-size: 0.68rem; margin-left: 6px; color: var(--text-muted); border-radius: 4px;" onclick="revertChefRequest('${r.id}')" title="Revert to Pending">Undo</button>
                             `;
                         } else if (r.status === 'Sent to Admin' || r.status === 'Consolidated') {
-                            actionHtml = `<span style="font-size: 0.75rem; color: #4895ef; font-weight: 500;">Awaiting Admin (${indentNum || 'Indent'})</span>`;
+                            actionHtml = `<span style="font-size: 0.75rem; color: #4895ef; font-weight: 500;">Awaiting Admin Approval</span>`;
                         } else if (r.status === 'Approved') {
                             actionHtml = `<span style="font-size: 0.75rem; color: var(--success); font-weight: 600;">✓ Approved</span>`;
                         } else {
@@ -2110,9 +2091,7 @@ function loadRequestsData() {
         } else if (req.status === 'Accepted') {
             statusHtml = `<span class="status" style="background: rgba(46,196,182,0.15); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">✓ Accepted (Ready to Consolidate)</span>`;
         } else if (req.status === 'Sent to Admin' || req.status === 'Consolidated') {
-            statusHtml = indentNum 
-                ? `<span class="status" style="background: rgba(67,97,238,0.15); color: #4895ef; border: 1px solid rgba(67,97,238,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">In Indent ${indentNum}</span>`
-                : `<span class="status" style="background: rgba(67,97,238,0.15); color: #4895ef; border: 1px solid rgba(67,97,238,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Sent to Admin</span>`;
+            statusHtml = `<span class="status" style="background: rgba(67,97,238,0.15); color: #4895ef; border: 1px solid rgba(67,97,238,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Sent to Admin</span>`;
         } else if (req.status === 'Approved') {
             statusHtml = `<span class="status ok" style="background: rgba(46,196,182,0.15); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Approved</span>`;
         } else {
@@ -2125,11 +2104,11 @@ function loadRequestsData() {
                 if (req.indentId) {
                     actionsHtml = `
                         <button class="btn btn-outline" style="padding: 4px 10px; font-size: 0.72rem; border-color: var(--primary); color: var(--primary); display: inline-flex; align-items: center; gap: 4px;" onclick="openIndentApprovalModal('${req.indentId}')">
-                            <i data-lucide="file-text" style="width: 12px; height: 12px;"></i> Review Indent
+                            <i data-lucide="file-text" style="width: 12px; height: 12px;"></i> Review Request
                         </button>
                     `;
                 } else {
-                    actionsHtml = `<span style="font-size: 0.75rem; color: #4895ef;">Awaiting Indent Approval</span>`;
+                    actionsHtml = `<span style="font-size: 0.75rem; color: #4895ef;">Awaiting Admin Approval</span>`;
                 }
             } else if (req.status === 'Pending') {
                 actionsHtml = `<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">Awaiting Supervisor</span>`;
@@ -2156,7 +2135,7 @@ function loadRequestsData() {
                     <button class="btn btn-outline" style="padding: 2px 6px; font-size: 0.68rem; margin-left: 6px; color: var(--text-muted); border-radius: 4px;" onclick="revertChefRequest('${req.id}')" title="Revert to Pending">Undo</button>
                 `;
             } else if (req.status === 'Sent to Admin' || req.status === 'Consolidated') {
-                actionsHtml = `<span style="font-size: 0.75rem; color: #4895ef; font-weight: 500; display: inline-flex; align-items: center; gap: 4px;"><i data-lucide="clock" style="width: 12px; height: 12px;"></i> Awaiting Admin (${indentNum || 'Indent'})</span>`;
+                actionsHtml = `<span style="font-size: 0.75rem; color: #4895ef; font-weight: 500; display: inline-flex; align-items: center; gap: 4px;"><i data-lucide="clock" style="width: 12px; height: 12px;"></i> Awaiting Admin Approval</span>`;
             } else if (req.status === 'Approved') {
                 actionsHtml = `<span style="font-size: 0.75rem; color: var(--success); font-weight: 600;">✓ Approved</span>`;
             }
@@ -3452,7 +3431,7 @@ window.submitWorkspaceConsolidatedIndent = async function() {
     const adjustedItems = items.filter(it => Math.abs((parseFloat(it.revisedQty) || 0) - (parseFloat(it.originalQty) || 0)) > 0.001 || (it.comment && it.comment.trim()));
     const grandUnits = items.reduce((sum, it) => sum + (parseFloat(it.revisedQty) || 0), 0);
     
-    let confirmPrompt = `Send consolidated indent with ${items.length} ingredients (${grandUnits.toFixed(1)} total units) to Admin for approval?`;
+    let confirmPrompt = `Send consolidated request with ${items.length} ingredients (${grandUnits.toFixed(1)} total units) to Admin for approval?`;
     if (adjustedItems.length > 0) {
         confirmPrompt += `\n\nNote: ${adjustedItems.length} item(s) have supervisor quantity modifications or notes that will be included in the request.`;
     }
@@ -3465,7 +3444,7 @@ window.submitWorkspaceConsolidatedIndent = async function() {
     if (!confirmed) return;
     
     const today = new Date().toLocaleDateString();
-    const indentNumber = 'IND-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + Math.floor(100 + Math.random() * 900);
+    const indentNumber = 'REQ-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + Math.floor(100 + Math.random() * 900);
     const indentId = 'ind_' + Date.now();
     
     const formattedItems = items.map(entry => {
@@ -3536,12 +3515,12 @@ window.submitWorkspaceConsolidatedIndent = async function() {
                 outletName: activeWorkspaceConsolidation.outletName,
                 requestedBy: supName,
                 chefName: supName,
-                cuisine: 'Supervisor Buffer',
+                cuisine: 'Supervisor Extra',
                 status: 'Consolidated',
                 indentId: indentId,
                 date: today,
                 timestamp: nowIso,
-                supervisorNote: entry.comment || 'Supervisor Buffer'
+                supervisorNote: entry.comment || 'Supervisor Addition'
             });
         }
     });
@@ -3555,7 +3534,7 @@ window.submitWorkspaceConsolidatedIndent = async function() {
     
     window.showUiModal({
         title: "Request Sent to Admin",
-        message: `Consolidated Indent <strong>${indentNumber}</strong> (${items.length} items, ${grandUnits.toFixed(1)} units) has been sent to Admin for approval with your updated quantities and notes!`,
+        message: `Consolidated Request <strong>${indentNumber}</strong> (${items.length} items, ${grandUnits.toFixed(1)} units) has been sent to Admin for approval with your updated quantities and notes!`,
         type: "success"
     });
     
