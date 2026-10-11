@@ -50,7 +50,7 @@ function initRequestWizard() {
             }
         }
         
-        // Cuisine setup: Chef only sees their assigned cuisine(s)
+        // Cuisine setup: Chef can pick their default cuisine or choose per item
         const cuisineSelect = document.getElementById('wizardCuisine');
         const wizardCuisineDisplay = document.getElementById('wizardCuisineDisplay');
         if (cuisineSelect) {
@@ -65,32 +65,19 @@ function initRequestWizard() {
                 }
             }
             
-            if (isChef && chefCuisines.length === 1) {
-                // Exactly 1 cuisine assigned: NO dropdown, just display that cuisine
-                const singleCuisine = chefCuisines[0];
-                cuisineSelect.innerHTML = `<option value="${singleCuisine}" selected>${singleCuisine}</option>`;
-                cuisineSelect.value = singleCuisine;
-                cuisineSelect.style.display = 'none';
-                if (wizardCuisineDisplay) {
-                    wizardCuisineDisplay.textContent = singleCuisine;
-                    wizardCuisineDisplay.style.display = 'inline-block';
-                }
-            } else if (isChef && chefCuisines.length > 1) {
-                // Multiple cuisines assigned: dropdown with ONLY those assigned cuisines
-                cuisineSelect.style.display = '';
-                if (wizardCuisineDisplay) wizardCuisineDisplay.style.display = 'none';
-                cuisineSelect.innerHTML = chefCuisines.map(c => `<option value="${c}">${c}</option>`).join('');
-                cuisineSelect.value = chefCuisines[0];
-            } else {
-                // Admin, supervisor, or chef with no specific cuisine: show all cuisines
-                cuisineSelect.style.display = '';
-                if (wizardCuisineDisplay) wizardCuisineDisplay.style.display = 'none';
-                const allCuisines = (typeof cuisinesData !== 'undefined' && cuisinesData.length > 0)
-                    ? cuisinesData.map(c => c.name)
-                    : ['Indian', 'Continental', 'Tandoor', 'Chinese', 'Arabic', 'Kerala'];
-                cuisineSelect.innerHTML = allCuisines.map(c => `<option value="${c}">${c}</option>`).join('');
-                if (allCuisines.length > 0) cuisineSelect.value = allCuisines[0];
+            const allCuisines = (typeof cuisinesData !== 'undefined' && cuisinesData.length > 0)
+                ? cuisinesData.map(c => c.name)
+                : ['Indian', 'Continental', 'Tandoor', 'Chinese', 'Arabic', 'Kerala'];
+            
+            const selectableCuisines = (chefCuisines.length > 0) ? chefCuisines : allCuisines;
+            
+            cuisineSelect.style.display = '';
+            if (wizardCuisineDisplay) wizardCuisineDisplay.style.display = 'none';
+            cuisineSelect.innerHTML = selectableCuisines.map(c => `<option value="${c}">${c}</option>`).join('');
+            if (selectableCuisines.length > 1) {
+                cuisineSelect.innerHTML = `<option value="all">-- All / Mixed Cuisines --</option>` + selectableCuisines.map(c => `<option value="${c}">${c}</option>`).join('');
             }
+            if (selectableCuisines.length > 0) cuisineSelect.value = selectableCuisines[0];
         }
         
         document.getElementById('wizardStep1').classList.remove('hidden');
@@ -166,7 +153,7 @@ function initRequestWizard() {
             return;
         }
 
-        const cuisine = document.getElementById('wizardCuisine')?.value || 'Tandoor';
+        const defaultCuisine = (document.getElementById('wizardCuisine')?.value !== 'all') ? document.getElementById('wizardCuisine')?.value : 'Indian';
         let outletId = document.getElementById('wizardOutlet')?.value;
         if (currentUser && currentUser.role === 'chef') {
             let allocatedOutlet = null;
@@ -191,6 +178,8 @@ function initRequestWizard() {
 
         for (const it of items) {
             const masterItem = masterItemsData.find(i => i.id === it.itemId);
+            const itemCuisine = document.getElementById('wizardCuisine_' + it.itemId)?.value || defaultCuisine || 'Indian';
+            
             requestsData.unshift({
                 id: 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
                 itemId: it.itemId,
@@ -199,7 +188,7 @@ function initRequestWizard() {
                 outletId: outletId,
                 outletName: outletName,
                 qty: it.qty,
-                cuisine: cuisine,
+                cuisine: itemCuisine,
                 chefName: chefName,
                 requestedBy: chefName,
                 status: 'Pending',
@@ -269,16 +258,49 @@ window.toggleWizardItem = toggleWizardItem;
 function renderWizardReview() {
     const tbody = document.getElementById('wizardReviewTableBody');
     if(!tbody) return;
+    
+    const isChef = currentUser && currentUser.role === 'chef';
+    let chefCuisines = [];
+    if (isChef) {
+        const assigned = currentUser.assignedSections || currentUser.assignedCuisines;
+        if (Array.isArray(assigned)) {
+            chefCuisines = assigned.filter(Boolean);
+        } else if (typeof assigned === 'string' && assigned.trim()) {
+            chefCuisines = assigned.split(',').map(s => s.trim());
+        }
+    }
+    
+    const allCuisines = (typeof cuisinesData !== 'undefined' && cuisinesData.length > 0)
+        ? cuisinesData.map(c => c.name)
+        : ['Indian', 'Continental', 'Tandoor', 'Chinese', 'Arabic', 'Kerala'];
+        
+    const selectableCuisines = (chefCuisines.length > 0) ? chefCuisines : allCuisines;
+    
+    // Read the current default cuisine chosen at Step 1 top bar
+    const topCuisineVal = document.getElementById('wizardCuisine')?.value;
+    const defaultCuisine = (topCuisineVal && topCuisineVal !== 'all') ? topCuisineVal : (selectableCuisines[0] || 'Indian');
+
     tbody.innerHTML = Object.keys(wizardSelectedItems).map(itemId => {
         const item = masterItemsData.find(i => i.id === itemId);
         if(!item) return '';
+        
+        // Cuisine section dropdown options for this item
+        const cuisineOptions = selectableCuisines.map(c => 
+            `<option value="${c}" ${c === defaultCuisine ? 'selected' : ''}>${c}</option>`
+        ).join('');
+        
         return `<tr>
             <td><strong>${item.name}</strong></td>
-            <td>${item.category}</td>
+            <td><span style="font-size: 0.8rem; color: var(--text-muted);">${item.category}</span></td>
+            <td>
+                <select id="wizardCuisine_${item.id}" style="padding: 6px 10px; font-size: 0.85rem; font-weight: 600; border-radius: 6px; background: var(--dark); color: var(--primary); border: 1px solid var(--border); outline: none; cursor: pointer;">
+                    ${cuisineOptions}
+                </select>
+            </td>
             <td>
                 <div style="display:flex; align-items:center; gap:8px;">
-                    <input type="number" id="wizardQty_${item.id}" min="1" value="1" style="width:80px; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--dark); color:white;">
-                    <span>${item.unit}</span>
+                    <input type="number" id="wizardQty_${item.id}" min="0.5" step="0.5" value="1" style="width:75px; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--dark); color:white; text-align:center; font-weight:600;">
+                    <span style="font-size: 0.85rem; color: var(--text-muted);">${item.unit}</span>
                 </div>
             </td>
             <td><button class="icon-btn text-danger" onclick="delete wizardSelectedItems['${item.id}']; renderWizardReview(); document.getElementById('wizardSelectedCount').textContent = '(' + Object.keys(wizardSelectedItems).length + ')';"><i data-lucide="trash-2"></i></button></td>
