@@ -62,7 +62,7 @@
                 <a href="#" class="nav-item active no-chef" id="navMasterOrders">
                     <i data-lucide="layout-dashboard"></i> Master Orders
                 </a>
-                <div class="nav-group supervisor-only no-chef" id="navGroupRequests">
+                <div class="nav-group no-chef" id="navGroupRequests">
                     <a href="#" class="nav-item" id="navRequests">
                         <i data-lucide="clipboard-list"></i>
                         <span>Requests</span>
@@ -73,7 +73,7 @@
                         <a href="#" class="nav-subitem" id="navManageRequests">
                             <i data-lucide="list-checks" style="width: 14px; height: 14px;"></i> Manage Request
                         </a>
-                        <a href="#" class="nav-subitem" id="navConsolidateRequests">
+                        <a href="#" class="nav-subitem supervisor-only" id="navConsolidateRequests">
                             <i data-lucide="boxes" style="width: 14px; height: 14px;"></i> Consolidate Request
                         </a>
                     </div>
@@ -83,6 +83,9 @@
                 </a>
                 <a href="#" class="nav-item no-chef" id="navSidebarRaiseRequest" style="margin-top: 10px; background: rgba(255, 230, 0, 0.15); border: 1px solid var(--primary); color: var(--primary);">
                     <i data-lucide="plus-circle"></i> Raise Request
+                </a>
+                <a href="#" class="nav-item supervisor-only" id="navAddChef">
+                    <i data-lucide="chef-hat"></i> Add Chef
                 </a>
                 <a href="#" class="nav-item admin-only" id="navVendors">
                     <i data-lucide="truck"></i> Vendors
@@ -287,10 +290,13 @@
                     </div>
                 </header>
 
-                <!-- Requests View Switcher Tabs: Sections Table vs All Requests List -->
+                <!-- Requests View Switcher Tabs: Supervisor Requests vs Kitchen Sections Table vs All Requests List -->
                 <div style="display: flex; gap: 12px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
-                    <div style="display: flex; gap: 8px;">
-                        <button id="btnViewModeSections" class="btn btn-primary" style="padding: 7px 16px; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button id="btnViewModeSupervisorRequests" class="btn btn-primary admin-only" style="padding: 7px 16px; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                            <i data-lucide="inbox" style="width: 15px; height: 15px;"></i> Supervisor Requests <span id="adminPendingSupervisorBadge" class="hidden" style="background: var(--danger); color: white; padding: 1px 6px; border-radius: 10px; font-size: 0.72rem; font-weight: 700;">0</span>
+                        </button>
+                        <button id="btnViewModeSections" class="btn btn-outline" style="padding: 7px 16px; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; cursor: pointer;">
                             <i data-lucide="layout-grid" style="width: 15px; height: 15px;"></i> Kitchen Sections Table
                         </button>
                         <button id="btnViewModeList" class="btn btn-outline" style="padding: 7px 16px; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; cursor: pointer;">
@@ -299,8 +305,27 @@
                     </div>
                 </div>
 
+                <!-- SUPERVISOR CONSOLIDATED REQUESTS CONTAINER (Directly sent by Supervisors to Admin) -->
+                <div id="containerSupervisorRequestsView" class="panel table-container" style="margin-bottom: 20px; overflow-x: auto;">
+                    <table style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th>Request ID</th>
+                                <th>Date</th>
+                                <th>Outlet</th>
+                                <th>Supervisor</th>
+                                <th>Ingredients Included</th>
+                                <th>Total Units</th>
+                                <th>Status</th>
+                                <th style="text-align: right;">Admin Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="supervisorRequestsTableBody"></tbody>
+                    </table>
+                </div>
+
                 <!-- SECTIONS TABLE CONTAINER (Grouped by Kitchen Cuisine Sections) -->
-                <div id="containerSectionsView" style="display: flex; flex-direction: column; gap: 18px;">
+                <div id="containerSectionsView" class="hidden" style="display: flex; flex-direction: column; gap: 18px;">
                     <!-- Dynamically populated kitchen section cards / tables -->
                 </div>
 
@@ -557,6 +582,31 @@
                         <button class="btn btn-primary" style="width: 100%;" id="addVendorBtn">Add</button>
                     </div>
                 </div>
+
+                <!-- Purchase Orders Raised to Vendors -->
+                <div style="margin-top: 24px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <h3 style="margin: 0; font-size: 1.1rem; color: var(--primary); display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="truck" style="width: 18px; height: 18px;"></i> Purchase Orders Raised to Vendors
+                        </h3>
+                    </div>
+                    <div class="panel table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>PO Number</th>
+                                    <th>Date</th>
+                                    <th>Vendor</th>
+                                    <th>Outlet</th>
+                                    <th>Ingredients Ordered</th>
+                                    <th>Status</th>
+                                    <th>Expected Delivery</th>
+                                </tr>
+                            </thead>
+                            <tbody id="vendorPOTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
 
             <!-- USERS VIEW (Admin Only) -->
@@ -670,12 +720,111 @@
                 </div>
             </div>
 
+            <!-- ADD CHEF VIEW (Supervisor & Admin) -->
+            <div id="viewAddChef" class="hidden">
+                <header class="dash-header">
+                    <div class="header-title">
+                        <h1>Kitchen <span class="text-primary">Chefs</span></h1>
+                        <p>Register new chefs, assign login credentials, and configure cuisine sections for your outlet.</p>
+                    </div>
+                </header>
+                <div class="dash-grid" style="grid-template-columns: 1fr 1.15fr; gap: 20px; align-items: start;">
+                    <!-- Add Chef Form -->
+                    <div class="panel form-section" style="background: rgba(20, 17, 10, 0.75); border: 1px solid var(--border-gold); border-radius: 16px; padding: 24px;">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+                            <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(255,190,11,0.15); color: var(--primary); display: flex; align-items: center; justify-content: center;">
+                                <i data-lucide="chef-hat" style="width: 24px; height: 24px;"></i>
+                            </div>
+                            <div>
+                                <h3 id="chefFormTitle" style="margin: 0; font-size: 1.2rem; color: #fff;">Add New Chef</h3>
+                                <p style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">Create chef account with cuisine section access</p>
+                            </div>
+                        </div>
+
+                        <input type="hidden" id="editChefUsername">
+
+                        <div class="input-group" style="margin-bottom: 14px;">
+                            <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Chef Full Name</label>
+                            <input type="text" id="chefFullName" placeholder="e.g. Chef Sanjay" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+                            <div class="input-group">
+                                <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Username (Login)</label>
+                                <input type="text" id="chefUsername" placeholder="e.g. chef_sanjay" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
+                            </div>
+                            <div class="input-group">
+                                <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Password</label>
+                                <input type="password" id="chefPassword" placeholder="e.g. 123" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
+                            </div>
+                        </div>
+
+                        <!-- Supervisor who is adding him (pre-filled by default) & Outlet -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                            <div class="input-group">
+                                <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Adding Supervisor</label>
+                                <input type="text" id="chefSupervisorDisplay" readonly style="background: rgba(255,190,11,0.08); color: var(--primary); font-weight: 600; padding: 11px 14px; border: 1px solid rgba(255,190,11,0.3); border-radius: 8px; cursor: not-allowed; width: 100%;">
+                            </div>
+                            <div class="input-group">
+                                <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Assigned Outlet</label>
+                                <input type="text" id="chefOutletDisplay" readonly style="background: rgba(255,190,11,0.08); color: var(--primary); font-weight: 600; padding: 11px 14px; border: 1px solid rgba(255,190,11,0.3); border-radius: 8px; cursor: not-allowed; width: 100%;">
+                            </div>
+                        </div>
+
+                        <!-- Assigned Cuisines -->
+                        <div class="input-group" style="margin-bottom: 20px;">
+                            <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 8px; display: flex; justify-content: space-between; font-weight: 500;">
+                                <span>Assign Kitchen Cuisines / Sections</span>
+                                <span style="font-size: 0.72rem; color: var(--primary);">Select all sections chef handles</span>
+                            </label>
+                            <div id="chefCuisinesCheckboxes" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; background: rgba(0,0,0,0.35); padding: 14px; border: 1px solid var(--border); border-radius: 8px;">
+                                <!-- Checkboxes populated dynamically -->
+                            </div>
+                        </div>
+
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn btn-primary" id="btnSaveChefSubmit" style="flex: 1; padding: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.95rem;">
+                                <i data-lucide="user-plus" style="width: 16px; height: 16px;"></i> Save & Register Chef
+                            </button>
+                            <button class="btn btn-outline hidden" id="btnCancelEditChef" style="padding: 12px 20px; font-size: 0.9rem;">Cancel</button>
+                        </div>
+                    </div>
+
+                    <!-- Table of registered chefs -->
+                    <div class="panel table-container" style="background: rgba(20, 17, 10, 0.75); border: 1px solid var(--border); border-radius: 16px; padding: 22px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <div>
+                                <h3 style="margin: 0; font-size: 1.15rem; color: #fff; display: flex; align-items: center; gap: 8px;">
+                                    <i data-lucide="users" style="width: 18px; height: 18px; color: var(--primary);"></i> Kitchen Chefs
+                                </h3>
+                                <p style="margin: 2px 0 0 0; font-size: 0.78rem; color: var(--text-muted);">Active chefs assigned to this outlet</p>
+                            </div>
+                            <span id="chefCountBadge" style="background: rgba(255,190,11,0.15); color: var(--primary); padding: 4px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 700;">0 Chefs</span>
+                        </div>
+                        <div style="overflow-x: auto;">
+                            <table style="width: 100%; font-size: 0.85rem;">
+                                <thead>
+                                    <tr>
+                                        <th>Chef Name</th>
+                                        <th>Username</th>
+                                        <th>Added By</th>
+                                        <th>Assigned Cuisines</th>
+                                        <th style="text-align: right;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="chefsTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </main>
     </div>
 
-    <script src="js/data.js?v=31"></script>
-    <script src="js/app.js?v=31"></script>
-    <script src="js/wizard.js?v=31"></script>
+    <script src="js/data.js?v=34"></script>
+    <script src="js/app.js?v=34"></script>
+    <script src="js/wizard.js?v=34"></script>
     <script>
         lucide.createIcons();
     </script>
@@ -913,7 +1062,74 @@
                 <button class="btn btn-outline" id="apprModalCloseBtn">Close</button>
                 <div id="apprModalAdminButtons" style="display: flex; gap: 10px;">
                     <button class="btn btn-outline" id="btnRejectIndent" style="border-color: var(--danger); color: var(--danger);">Reject Request</button>
+                    <button class="btn btn-outline" id="btnRaiseVendorPO" style="border-color: var(--primary); color: var(--primary); display: inline-flex; align-items: center; gap: 6px;">
+                        <i data-lucide="truck" style="width: 14px; height: 14px;"></i> Raise to Vendor
+                    </button>
                     <button class="btn btn-primary" id="btnApproveIndent">Approve & Allocate Stock</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RAISE TO VENDOR / PURCHASE ORDER MODAL -->
+    <div id="modalVendorPO" class="modal hidden" style="position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 10000; display: flex; align-items: center; justify-content: center;">
+        <div class="panel" style="width: 90%; max-width: 680px; max-height: 90vh; overflow-y: auto; background: #181510; border: 1px solid var(--border-gold); border-radius: 16px; padding: 24px; position: relative;">
+            <button class="icon-btn" id="closeVendorPOModalBtn" style="position: absolute; top: 16px; right: 16px;"><i data-lucide="x"></i></button>
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                <div style="width: 44px; height: 44px; border-radius: 10px; background: rgba(255,190,11,0.15); color: var(--primary); display: flex; align-items: center; justify-content: center;">
+                    <i data-lucide="truck" style="width: 22px; height: 22px;"></i>
+                </div>
+                <div>
+                    <h2 style="margin: 0; font-size: 1.25rem;">Raise Request to <span class="text-primary">Vendor</span></h2>
+                    <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0;">Create a purchase order for consolidated ingredients to replenish store stock.</p>
+                </div>
+            </div>
+
+            <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.85rem;">
+                <div><span style="color: var(--text-muted);">Request Ref:</span> <strong id="poModalRef" style="color: var(--primary);">-</strong></div>
+                <div><span style="color: var(--text-muted);">Destination Outlet:</span> <strong id="poModalOutlet">-</strong></div>
+            </div>
+
+            <!-- Vendor Select and PO Date -->
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-bottom: 16px;">
+                <div>
+                    <label style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; display: block;">Select Vendor / Supplier</label>
+                    <select id="poVendorSelect" style="background: var(--dark); color: #fff; padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.88rem;">
+                        <!-- Dynamically filled with vendorsData -->
+                    </select>
+                </div>
+                <div>
+                    <label style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; display: block;">Expected Delivery</label>
+                    <input type="date" id="poDeliveryDate" style="background: var(--dark); color: #fff; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem;">
+                </div>
+            </div>
+
+            <!-- Items Table -->
+            <div class="panel table-container" style="background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; max-height: 240px; overflow-y: auto;">
+                <table style="width: 100%; font-size: 0.85rem;">
+                    <thead>
+                        <tr>
+                            <th>Ingredient</th>
+                            <th>Unit</th>
+                            <th style="width: 120px;">Order Qty</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody id="poItemsTableBody"></tbody>
+                </table>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <label style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; display: block;">PO Notes / Instructions</label>
+                <input type="text" id="poNotesInput" placeholder="e.g., Deliver by 7:00 AM, Quality grade A required" style="background: var(--dark); color: #fff; padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem;">
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); padding-top: 14px;">
+                <button class="btn btn-outline" id="poModalCancelBtn">Cancel</button>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-primary" id="btnConfirmSendPO" style="display: inline-flex; align-items: center; gap: 6px; font-weight: 600;">
+                        <i data-lucide="send" style="width: 14px; height: 14px;"></i> Confirm & Send PO to Vendor
+                    </button>
                 </div>
             </div>
         </div>

@@ -520,6 +520,7 @@ function initNavigation() {
     const navVendors = document.getElementById('navVendors');
     const navLocations = document.getElementById('navLocations');
     const navUsers = document.getElementById('navUsers');
+    const navAddChef = document.getElementById('navAddChef');
     
     const navManageRequests = document.getElementById('navManageRequests');
     const navConsolidateRequests = document.getElementById('navConsolidateRequests');
@@ -534,6 +535,7 @@ function initNavigation() {
     const viewVendors = document.getElementById('viewVendors');
     const viewLocations = document.getElementById('viewLocations');
     const viewUsers = document.getElementById('viewUsers');
+    const viewAddChef = document.getElementById('viewAddChef');
     
     const hideAllViews = () => {
         viewMaster.classList.add('hidden');
@@ -544,6 +546,7 @@ function initNavigation() {
         viewVendors.classList.add('hidden');
         viewLocations.classList.add('hidden');
         viewUsers.classList.add('hidden');
+        if (viewAddChef) viewAddChef.classList.add('hidden');
         
         navMaster.classList.remove('active');
         navRequests.classList.remove('active');
@@ -554,6 +557,7 @@ function initNavigation() {
         navVendors.classList.remove('active');
         navLocations.classList.remove('active');
         navUsers.classList.remove('active');
+        if (navAddChef) navAddChef.classList.remove('active');
     };
 
     navMaster.addEventListener('click', (e) => {
@@ -664,6 +668,19 @@ function initNavigation() {
         navUsers.classList.add('active');
         loadUsersData();
     });
+
+    if (navAddChef) {
+        navAddChef.addEventListener('click', (e) => {
+            e.preventDefault();
+            hideAllViews();
+            if (navRequestsSubmenu) navRequestsSubmenu.classList.remove('open');
+            if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(0deg)';
+            if (viewAddChef) viewAddChef.classList.remove('hidden');
+            navAddChef.classList.add('active');
+            currentView = 'viewAddChef';
+            if (typeof loadAddChefView === 'function') loadAddChefView();
+        });
+    }
 }
 
 function initCustomDatePicker() {
@@ -1128,24 +1145,32 @@ function initForms() {
     const clearAllRequestsBtn = document.getElementById('clearAllRequestsBtn');
     if (clearAllRequestsBtn) {
         clearAllRequestsBtn.addEventListener('click', async () => {
-            const confirmed = await window.showConfirmModal("Are you sure you want to clear all requests? This action cannot be undone.", "Clear All Requests", {
+            const confirmed = await window.showConfirmModal("Are you sure you want to clear all requests and supervisor indents? This action cannot be undone.", "Clear All Requests", {
                 type: 'danger',
                 confirmText: 'Clear All'
             });
             if (confirmed) {
                 if (currentUser.role === 'admin') {
                     requestsData.length = 0;
+                    indentsData.length = 0;
                 } else {
                     const currentUserName = currentUser.name;
                     for (let i = requestsData.length - 1; i >= 0; i--) {
-                        if (requestsData[i].requestedBy === currentUserName) {
+                        if (requestsData[i].requestedBy === currentUserName || requestsData[i].chefName === currentUserName) {
                             requestsData.splice(i, 1);
+                        }
+                    }
+                    for (let i = indentsData.length - 1; i >= 0; i--) {
+                        if (indentsData[i].supervisorName === currentUserName) {
+                            indentsData.splice(i, 1);
                         }
                     }
                 }
                 saveData();
                 loadRequestsData();
+                loadIndentsData();
                 updateRequestsBadge();
+                updateIndentsBadge();
                 if (typeof loadChefPortalData === 'function') loadChefPortalData();
                 window.showToast("All requests cleared successfully", 'info');
             }
@@ -1294,6 +1319,31 @@ function initForms() {
                 loadIndentsData();
             }
         }
+    });
+
+    // Raise to Vendor PO Modal Handlers
+    document.getElementById('btnRaiseVendorPO')?.addEventListener('click', () => {
+        if (typeof openVendorPOModal === 'function') openVendorPOModal();
+    });
+
+    document.getElementById('closeVendorPOModalBtn')?.addEventListener('click', () => {
+        document.getElementById('modalVendorPO')?.classList.add('hidden');
+    });
+
+    document.getElementById('poModalCancelBtn')?.addEventListener('click', () => {
+        document.getElementById('modalVendorPO')?.classList.add('hidden');
+    });
+
+    document.getElementById('btnConfirmSendPO')?.addEventListener('click', () => {
+        if (typeof submitVendorPurchaseOrder === 'function') submitVendorPurchaseOrder();
+    });
+
+    // Add Chef Handlers
+    document.getElementById('btnSaveChefSubmit')?.addEventListener('click', () => {
+        if (typeof saveChefUser === 'function') saveChefUser();
+    });
+    document.getElementById('btnCancelEditChef')?.addEventListener('click', () => {
+        if (typeof resetChefForm === 'function') resetChefForm();
     });
 }
 
@@ -1792,29 +1842,62 @@ function loadRequestsData() {
     }
     
     // View switcher tab listeners
+    const btnSupMode = document.getElementById('btnViewModeSupervisorRequests');
     const btnSecMode = document.getElementById('btnViewModeSections');
     const btnListMode = document.getElementById('btnViewModeList');
+    const containerSup = document.getElementById('containerSupervisorRequestsView');
     const containerSec = document.getElementById('containerSectionsView');
     const containerList = document.getElementById('containerListView');
     
+    window.switchRequestsTab = function(mode) {
+        if (currentUser.role !== 'admin' && mode === 'supervisor') {
+            mode = 'sections';
+        }
+        window._activeRequestsTab = mode;
+        if (btnSupMode) {
+            btnSupMode.className = (mode === 'supervisor') ? 'btn btn-primary admin-only' : 'btn btn-outline admin-only';
+            if (currentUser.role !== 'admin') btnSupMode.classList.add('hidden');
+        }
+        if (btnSecMode) btnSecMode.className = (mode === 'sections') ? 'btn btn-primary' : 'btn btn-outline';
+        if (btnListMode) btnListMode.className = (mode === 'list') ? 'btn btn-primary' : 'btn btn-outline';
+
+        if (containerSup) {
+            if (mode === 'supervisor' && currentUser.role === 'admin') containerSup.classList.remove('hidden');
+            else containerSup.classList.add('hidden');
+        }
+        if (containerSec) {
+            if (mode === 'sections') containerSec.classList.remove('hidden');
+            else containerSec.classList.add('hidden');
+        }
+        if (containerList) {
+            if (mode === 'list') containerList.classList.remove('hidden');
+            else containerList.classList.add('hidden');
+        }
+    };
+
+    if (btnSupMode && !btnSupMode.dataset.bound) {
+        btnSupMode.addEventListener('click', () => window.switchRequestsTab('supervisor'));
+        btnSupMode.dataset.bound = 'true';
+    }
     if (btnSecMode && !btnSecMode.dataset.bound) {
-        btnSecMode.addEventListener('click', () => {
-            btnSecMode.className = 'btn btn-primary';
-            btnListMode.className = 'btn btn-outline';
-            if (containerSec) containerSec.classList.remove('hidden');
-            if (containerList) containerList.classList.add('hidden');
-        });
+        btnSecMode.addEventListener('click', () => window.switchRequestsTab('sections'));
         btnSecMode.dataset.bound = 'true';
     }
     if (btnListMode && !btnListMode.dataset.bound) {
-        btnListMode.addEventListener('click', () => {
-            btnListMode.className = 'btn btn-primary';
-            btnSecMode.className = 'btn btn-outline';
-            if (containerList) containerList.classList.remove('hidden');
-            if (containerSec) containerSec.classList.add('hidden');
-        });
+        btnListMode.addEventListener('click', () => window.switchRequestsTab('list'));
         btnListMode.dataset.bound = 'true';
     }
+
+    if (currentUser.role === 'supervisor') {
+        window._activeRequestsTab = 'sections';
+        if (btnSupMode) btnSupMode.classList.add('hidden');
+    } else if (currentUser.role === 'admin') {
+        if (!window._activeRequestsTab) {
+            window._activeRequestsTab = 'supervisor';
+        }
+        if (btnSupMode) btnSupMode.classList.remove('hidden');
+    }
+    window.switchRequestsTab(window._activeRequestsTab);
     
     // Admin header action buttons setup
     const btnAdminApproveAll = document.getElementById('btnAdminApproveAllSections');
@@ -1874,6 +1957,127 @@ function loadRequestsData() {
             const reqDateStr = new Date(r.timestamp || r.date).toISOString().split('T')[0];
             return reqDateStr === selDate;
         });
+    }
+
+    // -------------------------------------------------------------
+    // 0. RENDER SUPERVISOR CONSOLIDATED REQUESTS TABLE (Admin / Supervisor)
+    // -------------------------------------------------------------
+    const pendingSupervisorReqs = indentsData.filter(ind => ind.status === 'Pending Approval');
+    const pendingBadge = document.getElementById('adminPendingSupervisorBadge');
+    if (pendingBadge) {
+        if (pendingSupervisorReqs.length > 0) {
+            pendingBadge.textContent = pendingSupervisorReqs.length;
+            pendingBadge.classList.remove('hidden');
+        } else {
+            pendingBadge.classList.add('hidden');
+        }
+    }
+
+    const supTbody = document.getElementById('supervisorRequestsTableBody');
+    if (supTbody) {
+        let viewableIndents = [...indentsData];
+        if (currentUser.role === 'supervisor') {
+            const vis = getVisibleOutlets().map(o => o.id);
+            if (vis.length > 0) {
+                viewableIndents = viewableIndents.filter(ind => vis.includes(ind.outletId));
+            }
+        }
+        if (selOutlet !== 'all') {
+            viewableIndents = viewableIndents.filter(ind => ind.outletId === selOutlet);
+        }
+        if (selStatus !== 'all') {
+            if (selStatus === 'Pending') {
+                viewableIndents = viewableIndents.filter(ind => ind.status === 'Pending Approval');
+            } else {
+                viewableIndents = viewableIndents.filter(ind => (ind.status || '').toLowerCase().includes(selStatus.toLowerCase()));
+            }
+        }
+        if (selDate) {
+            viewableIndents = viewableIndents.filter(ind => {
+                const indKey = typeof getIndentDateKey === 'function' ? getIndentDateKey(ind) : '';
+                return indKey === selDate || (ind.date && ind.date.includes(selDate));
+            });
+        }
+
+        if (viewableIndents.length === 0) {
+            supTbody.innerHTML = `
+                <tr>
+                    <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 36px 20px;">
+                        <div style="font-size: 2.2rem; margin-bottom: 8px;">📬</div>
+                        <div style="font-size: 1.05rem; font-weight: 600; color: var(--text-main);">No Supervisor Requests Found</div>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">Consolidated requests submitted by supervisors will appear here for Admin review, stock allocation, or vendor purchase order placement.</p>
+                    </td>
+                </tr>
+            `;
+        } else {
+            supTbody.innerHTML = viewableIndents.map(indent => {
+                const totalUnits = (indent.items || []).reduce((sum, item) => sum + (parseFloat(item.revisedQty) || parseFloat(item.originalQty) || 0), 0);
+                const itemsCount = (indent.items || []).length;
+                const topItems = (indent.items || []).slice(0, 3).map(it => it.itemName).join(', ');
+                const moreItems = itemsCount > 3 ? ` +${itemsCount - 3} more` : '';
+
+                let statusBadge = '';
+                if (indent.status === 'Pending Approval') {
+                    statusBadge = `<span class="status pending" style="background: rgba(255,190,11,0.15); color: var(--primary); border: 1px solid rgba(255,190,11,0.3); font-weight: 600; padding: 4px 10px; border-radius: 6px;">Pending Admin Approval</span>`;
+                } else if (indent.status === 'Approved') {
+                    statusBadge = `<span class="status ok" style="background: rgba(46,196,182,0.15); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.3); font-weight: 600; padding: 4px 10px; border-radius: 6px;">Approved & Allocated</span>`;
+                } else if (indent.status && indent.status.startsWith('PO Raised')) {
+                    statusBadge = `<span class="status" style="background: rgba(67, 97, 238, 0.15); color: #4895ef; border: 1px solid rgba(67, 97, 238, 0.35); font-weight: 600; padding: 4px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;"><i data-lucide="truck" style="width: 12px; height: 12px;"></i> ${indent.status}</span>`;
+                } else {
+                    statusBadge = `<span class="status low" style="padding: 4px 10px; border-radius: 6px;">${indent.status}</span>`;
+                }
+
+                let actionBtn = '';
+                const deleteBtnHtml = (currentUser.role === 'admin' || currentUser.name === indent.supervisorName)
+                    ? `<button class="icon-btn text-danger" onclick="deleteSupervisorRequest('${indent.id}')" title="Delete this request" style="padding: 6px;"><i data-lucide="trash-2" style="width: 14px; height: 14px;"></i></button>`
+                    : '';
+
+                if (currentUser.role === 'admin') {
+                    if (indent.status === 'Pending Approval') {
+                        actionBtn = `<div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px;">
+                            <button class="btn btn-primary" onclick="openIndentApprovalModal('${indent.id}')" style="padding: 6px 14px; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 6px; font-weight: 600;">
+                                <i data-lucide="check-square" style="width: 14px; height: 14px;"></i> Review & Action
+                            </button>
+                            ${deleteBtnHtml}
+                        </div>`;
+                    } else {
+                        actionBtn = `<div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px;">
+                            <button class="btn btn-outline" onclick="openIndentApprovalModal('${indent.id}')" style="padding: 6px 14px; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 6px;">
+                                <i data-lucide="eye" style="width: 14px; height: 14px;"></i> View Details
+                            </button>
+                            ${deleteBtnHtml}
+                        </div>`;
+                    }
+                } else {
+                    actionBtn = `<div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px;">
+                        <button class="btn btn-outline" onclick="openIndentApprovalModal('${indent.id}')" style="padding: 6px 14px; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 6px;">
+                            <i data-lucide="eye" style="width: 14px; height: 14px;"></i> View Details
+                        </button>
+                        ${deleteBtnHtml}
+                    </div>`;
+                }
+
+                const displayDate = typeof formatIndentTableDate === 'function' ? formatIndentTableDate(indent) : (indent.date || '-');
+
+                return `
+                    <tr>
+                        <td><strong style="color: var(--primary); font-family: monospace; font-size: 0.95rem;">${indent.indentNumber || indent.id}</strong></td>
+                        <td>${displayDate}</td>
+                        <td><span style="background: rgba(255,190,11,0.1); color: var(--primary); padding: 3px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">${indent.outletName || 'Outlet'}</span></td>
+                        <td><strong>${indent.supervisorName || 'Supervisor'}</strong></td>
+                        <td>
+                            <div><strong style="color: var(--text-main);">${itemsCount} ingredients</strong></div>
+                            <div style="font-size: 0.74rem; color: var(--text-muted); max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${(indent.items || []).map(i => i.itemName).join(', ')}">
+                                ${topItems}${moreItems}
+                            </div>
+                        </td>
+                        <td><strong style="font-size: 0.95rem;">${totalUnits.toFixed(1)}</strong></td>
+                        <td>${statusBadge}</td>
+                        <td style="text-align: right;">${actionBtn}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
     }
 
     // -------------------------------------------------------------
@@ -2654,7 +2858,19 @@ function openIndentApprovalModal(indentId) {
     }
     document.getElementById('apprModalDate').textContent = dateDisplay;
     
-    let statusBadge = `<span class="status ${indent.status === 'Approved' ? 'ok' : (indent.status === 'Rejected' ? 'low' : 'pending')}">${indent.status}</span>`;
+    let statusBadge = '';
+    if (indent.status === 'Approved') {
+        statusBadge = `<span class="status ok">Approved</span>`;
+    } else if (indent.status === 'Rejected') {
+        statusBadge = `<span class="status low">Rejected</span>`;
+    } else if (indent.status && indent.status.startsWith('PO Raised')) {
+        statusBadge = `<span class="status" style="background: rgba(67, 97, 238, 0.15); color: #4895ef; border: 1px solid rgba(67, 97, 238, 0.35); font-weight: 600; padding: 4px 10px; border-radius: 6px;"><i data-lucide="truck" style="width: 13px; height: 13px;"></i> ${indent.status}</span>`;
+    } else {
+        statusBadge = `<span class="status pending">${indent.status}</span>`;
+    }
+    if (indent.poNumber) {
+        statusBadge += ` <span style="font-size: 0.78rem; color: var(--text-muted); margin-left: 8px;">(PO: <strong style="color: var(--primary); font-family: monospace;">${indent.poNumber}</strong>)</span>`;
+    }
     document.getElementById('apprModalStatus').innerHTML = statusBadge;
     
     // Admin buttons visibility
@@ -2768,8 +2984,265 @@ function openIndentApprovalModal(indentId) {
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
+function openVendorPOModal() {
+    const indent = indentsData.find(i => i.id === activeReviewingIndentId);
+    if (!indent) return;
+    
+    const poModal = document.getElementById('modalVendorPO');
+    if (!poModal) return;
+    
+    document.getElementById('poModalRef').textContent = indent.indentNumber || indent.id;
+    document.getElementById('poModalOutlet').textContent = indent.outletName || 'Outlet';
+    
+    // Vendor options
+    const vendorSel = document.getElementById('poVendorSelect');
+    if (vendorSel) {
+        if (!vendorsData || vendorsData.length === 0) {
+            vendorSel.innerHTML = '<option value="" disabled selected>No vendors registered (Go to Vendors page to add)</option>';
+        } else {
+            vendorSel.innerHTML = vendorsData.map((v, idx) => `<option value="${v.id || v.name}" ${idx === 0 ? 'selected' : ''}>${v.name}</option>`).join('');
+        }
+    }
+    
+    // Default delivery date: tomorrow
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const dateInput = document.getElementById('poDeliveryDate');
+    if (dateInput) {
+        dateInput.value = tomorrow.toISOString().split('T')[0];
+    }
+    
+    // Populate items table with editable quantities and notes
+    const poTableBody = document.getElementById('poItemsTableBody');
+    if (poTableBody) {
+        poTableBody.innerHTML = (indent.items || []).map(it => `
+            <tr>
+                <td>
+                    <strong style="color: var(--text-main);">${it.itemName}</strong>
+                    <div style="font-size: 0.72rem; color: var(--text-muted);">${it.category || ''}</div>
+                </td>
+                <td style="color: var(--text-muted);">${it.unit || 'units'}</td>
+                <td>
+                    <input type="number" class="po-item-qty" data-item-id="${it.itemId}" value="${it.revisedQty || it.originalQty || 1}" min="0.1" step="any" style="width: 90px; padding: 6px 8px; font-size: 0.85rem; background: var(--dark); color: #fff; border: 1px solid var(--border); border-radius: 4px; text-align: center; font-weight: 700;">
+                </td>
+                <td>
+                    <input type="text" class="po-item-note" data-item-id="${it.itemId}" value="${it.comment || ''}" placeholder="Note for vendor" style="width: 100%; padding: 6px 8px; font-size: 0.8rem; background: var(--dark); color: #fff; border: 1px solid var(--border); border-radius: 4px;">
+                </td>
+            </tr>
+        `).join('');
+    }
+    
+    const notesInput = document.getElementById('poNotesInput');
+    if (notesInput) notesInput.value = '';
+    
+    poModal.classList.remove('hidden');
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function submitVendorPurchaseOrder() {
+    const indent = indentsData.find(i => i.id === activeReviewingIndentId);
+    if (!indent) return;
+    
+    const vendorSel = document.getElementById('poVendorSelect');
+    const selectedVendorIdOrName = vendorSel ? vendorSel.value : '';
+    if (!selectedVendorIdOrName) {
+        window.showUiModal({
+            title: "Select Vendor",
+            message: "Please select a vendor/supplier to raise the Purchase Order to.",
+            type: "warning"
+        });
+        return;
+    }
+    
+    const vendorObj = vendorsData.find(v => (v.id === selectedVendorIdOrName || v.name === selectedVendorIdOrName)) || { name: selectedVendorIdOrName, id: 'v_' + Date.now() };
+    const deliveryDate = document.getElementById('poDeliveryDate')?.value || '';
+    const generalNotes = document.getElementById('poNotesInput')?.value.trim() || '';
+    
+    // Collect item quantities from inputs
+    const qtyInputs = document.querySelectorAll('.po-item-qty');
+    const noteInputs = document.querySelectorAll('.po-item-note');
+    
+    const orderedItems = [];
+    qtyInputs.forEach(input => {
+        const itemId = input.dataset.itemId;
+        const qtyVal = parseFloat(input.value) || 0;
+        const matchingOrig = (indent.items || []).find(it => it.itemId === itemId);
+        const matchingNoteInput = Array.from(noteInputs).find(n => n.dataset.itemId === itemId);
+        const itemNote = matchingNoteInput ? matchingNoteInput.value.trim() : '';
+        
+        if (matchingOrig && qtyVal > 0) {
+            orderedItems.push({
+                itemId: itemId,
+                itemName: matchingOrig.itemName,
+                unit: matchingOrig.unit,
+                category: matchingOrig.category,
+                qty: qtyVal,
+                notes: itemNote
+            });
+        }
+    });
+    
+    if (orderedItems.length === 0) {
+        window.showUiModal({
+            title: "No Items",
+            message: "Please specify a positive quantity for at least one ingredient.",
+            type: "warning"
+        });
+        return;
+    }
+    
+    const poNumber = 'PO-' + new Date().toISOString().slice(0,10).replace(/-/g, '') + '-' + Math.floor(100 + Math.random() * 900);
+    const newPO = {
+        id: 'po_' + Date.now(),
+        poNumber: poNumber,
+        date: new Date().toLocaleDateString(),
+        createdAt: new Date().toISOString(),
+        indentId: indent.id,
+        indentNumber: indent.indentNumber || indent.id,
+        vendorId: vendorObj.id,
+        vendorName: vendorObj.name,
+        outletId: indent.outletId,
+        outletName: indent.outletName,
+        items: orderedItems,
+        expectedDelivery: deliveryDate,
+        notes: generalNotes,
+        status: 'PO Raised',
+        raisedBy: currentUser ? currentUser.name : 'Admin'
+    };
+    
+    purchaseOrdersData.unshift(newPO);
+    
+    // Update Indent status
+    indent.status = `PO Raised (${vendorObj.name})`;
+    indent.poNumber = poNumber;
+    indent.vendorName = vendorObj.name;
+    
+    // Update linked chef requests
+    requestsData.forEach(r => {
+        if (r.indentId === indent.id) {
+            r.status = 'PO Raised';
+            r.poNumber = poNumber;
+            r.vendorName = vendorObj.name;
+        }
+    });
+    
+    saveData();
+    
+    // Close modals
+    document.getElementById('modalVendorPO')?.classList.add('hidden');
+    document.getElementById('modalIndentApproval')?.classList.add('hidden');
+    
+    window.showUiModal({
+        title: "Purchase Order Raised",
+        message: `Purchase Order ${poNumber} has been successfully raised to ${vendorObj.name} for ${indent.outletName}.`,
+        type: "success"
+    });
+    
+    loadRequestsData();
+    loadIndentsData();
+    renderVendorPOTable();
+    loadDashboardData();
+}
+
+function renderVendorPOTable() {
+    const tbody = document.getElementById('vendorPOTableBody');
+    if (!tbody) return;
+    
+    if (!purchaseOrdersData || purchaseOrdersData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">No Purchase Orders raised yet. When an Admin approves a supervisor request and clicks "Raise to Vendor", the PO will appear here.</td></tr>`;
+        return;
+    }
+    
+    tbody.innerHTML = purchaseOrdersData.map(po => {
+        const itemsSummary = (po.items || []).map(it => `${it.itemName}: ${it.qty} ${it.unit || ''}`).join(', ');
+        const countText = `${(po.items || []).length} items`;
+        
+        return `
+            <tr>
+                <td><strong style="color: var(--primary); font-family: monospace;">${po.poNumber}</strong></td>
+                <td>${po.date || '-'}</td>
+                <td><strong style="color: #fff;">${po.vendorName}</strong></td>
+                <td><span style="background: rgba(255,190,11,0.1); color: var(--primary); padding: 2px 7px; border-radius: 4px; font-weight: 600; font-size: 0.78rem;">${po.outletName}</span></td>
+                <td>
+                    <div style="font-weight: 600;">${countText}</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${itemsSummary}">${itemsSummary}</div>
+                </td>
+                <td><span class="status ok" style="background: rgba(67, 97, 238, 0.15); color: #4895ef; border: 1px solid rgba(67, 97, 238, 0.3); font-weight: 600; padding: 3px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;"><i data-lucide="truck" style="width: 12px; height: 12px;"></i> ${po.status}</span></td>
+                <td>${po.expectedDelivery || 'Not specified'}</td>
+            </tr>
+        `;
+    }).join('');
+    
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
 window.openConsolidationModal = openConsolidationModal;
 window.openIndentApprovalModal = openIndentApprovalModal;
+window.openVendorPOModal = openVendorPOModal;
+window.submitVendorPurchaseOrder = submitVendorPurchaseOrder;
+window.renderVendorPOTable = renderVendorPOTable;
+
+window.deleteSupervisorRequest = async function(indentId) {
+    const idx = indentsData.findIndex(i => String(i.id) === String(indentId));
+    if (idx === -1) return;
+    const indent = indentsData[idx];
+    const ref = indent.indentNumber || indent.id;
+    const confirmed = await window.showConfirmModal(`Are you sure you want to delete supervisor request "${ref}"?`, "Delete Request", {
+        type: 'danger',
+        confirmText: 'Delete'
+    });
+    if (confirmed) {
+        // Also reset any linked chef requests
+        requestsData.forEach(r => {
+            if (r.indentId === indentId) {
+                delete r.indentId;
+                r.status = 'Pending';
+            }
+        });
+        indentsData.splice(idx, 1);
+        saveData();
+        loadRequestsData();
+        loadIndentsData();
+        updateRequestsBadge();
+        updateIndentsBadge();
+        window.showToast(`Deleted request ${ref}`, 'info');
+    }
+};
+
+// Global live sync receiver across browser tabs/windows
+function onLiveSyncReceived() {
+    if (typeof reloadDataFromStorage === 'function') {
+        reloadDataFromStorage();
+    }
+    if (typeof updateRequestsBadge === 'function') updateRequestsBadge();
+    if (typeof updateIndentsBadge === 'function') updateIndentsBadge();
+    
+    if (currentView === 'viewRequests' && typeof loadRequestsData === 'function') {
+        loadRequestsData();
+    } else if (currentView === 'viewMasterOrders' && typeof loadDashboardData === 'function') {
+        loadDashboardData();
+    } else if (currentView === 'viewIndents' && typeof loadIndentsData === 'function') {
+        loadIndentsData();
+    } else if (currentView === 'viewConsolidateRequests' && typeof loadConsolidateWorkspace === 'function') {
+        loadConsolidateWorkspace();
+    } else if (currentView === 'viewChefPortal' && typeof loadChefPortalData === 'function') {
+        loadChefPortalData();
+    } else if (currentView === 'viewVendors' && typeof loadVendorsData === 'function') {
+        loadVendorsData();
+    } else if (currentView === 'viewAddChef' && typeof loadAddChefView === 'function') {
+        loadAddChefView();
+    }
+}
+
+if (typeof BroadcastChannel !== 'undefined') {
+    const appLiveChannel = new BroadcastChannel('nchef_live_channel');
+    appLiveChannel.onmessage = () => {
+        onLiveSyncReceived();
+    };
+}
+window.addEventListener('storage', () => {
+    onLiveSyncReceived();
+});
 
 window.approveRequest = async function(reqId) {
     const req = requestsData.find(r => r.id === reqId);
@@ -3653,13 +4126,18 @@ window.deleteRequest = async function(reqId) {
 
 function loadVendorsData() {
     const tbody = document.getElementById('vendorsTableBody');
-    tbody.innerHTML = vendorsData.map(v => `
-        <tr>
-            <td>${v.name}</td>
-            <td><button class="icon-btn text-danger" onclick="removeVendor('${v.id}')"><i data-lucide="trash-2"></i></button></td>
-        </tr>
-    `).join('');
-    lucide.createIcons();
+    if (tbody) {
+        tbody.innerHTML = vendorsData.map(v => `
+            <tr>
+                <td>${v.name}</td>
+                <td><button class="icon-btn text-danger" onclick="removeVendor('${v.id}')"><i data-lucide="trash-2"></i></button></td>
+            </tr>
+        `).join('');
+    }
+    if (typeof renderVendorPOTable === 'function') {
+        renderVendorPOTable();
+    }
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 window.removeVendor = function(id) {
@@ -3849,6 +4327,212 @@ window.removeUser = function(username) {
         loadUsersData();
     }
 };
+
+// ============================================================
+// SUPERVISOR CHEF MANAGEMENT (Add Chef)
+// ============================================================
+function loadAddChefView() {
+    const supervisorInput = document.getElementById('chefSupervisorDisplay');
+    const outletInput = document.getElementById('chefOutletDisplay');
+    
+    const supervisorName = currentUser ? currentUser.name : 'Supervisor';
+    if (supervisorInput) supervisorInput.value = supervisorName;
+    
+    const visibleOutlets = (typeof getVisibleOutlets === 'function') ? getVisibleOutlets() : outletsData;
+    const currentOutlet = (visibleOutlets && visibleOutlets.length > 0) ? visibleOutlets[0] : (outletsData[0] || { id: 'brigade', name: 'BRIGADE' });
+    if (outletInput) {
+        outletInput.value = currentOutlet.name || 'BRIGADE';
+        outletInput.dataset.outletId = currentOutlet.id || 'brigade';
+    }
+
+    // Populate Cuisines Checkboxes
+    const cuisinesContainer = document.getElementById('chefCuisinesCheckboxes');
+    if (cuisinesContainer && cuisinesContainer.children.length === 0) {
+        const availableCuisines = [
+            { id: 'Indian', name: 'Indian', icon: '🍛' },
+            { id: 'Continental', name: 'Continental', icon: '🥗' },
+            { id: 'Tandoor', name: 'Tandoor', icon: '🍢' },
+            { id: 'Chinese', name: 'Chinese', icon: '🍲' },
+            { id: 'Arabic', name: 'Arabic', icon: '🫓' },
+            { id: 'Kerala', name: 'Kerala', icon: '🥥' }
+        ];
+
+        cuisinesContainer.innerHTML = availableCuisines.map(c => `
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #fff; cursor: pointer; background: rgba(255,255,255,0.03); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08);">
+                <input type="checkbox" value="${c.name}" class="chef-cuisine-cb" style="accent-color: var(--primary); cursor: pointer;">
+                <span>${c.icon} ${c.name}</span>
+            </label>
+        `).join('');
+    }
+
+    renderChefsTable();
+}
+
+function renderChefsTable() {
+    const tbody = document.getElementById('chefsTableBody');
+    if (!tbody) return;
+
+    const visibleOutlets = (typeof getVisibleOutlets === 'function') ? getVisibleOutlets().map(o => o.id) : [];
+    const allChefs = usersData.filter(u => u.role === 'chef');
+    
+    let outletChefs = allChefs;
+    if (currentUser && currentUser.role === 'supervisor') {
+        outletChefs = allChefs.filter(c => {
+            if (c.addedBySupervisor === currentUser.name) return true;
+            if (c.assignedLocations && c.assignedLocations.some(loc => visibleOutlets.includes(loc) || loc === 'all')) return true;
+            return false;
+        });
+    }
+
+    const badge = document.getElementById('chefCountBadge');
+    if (badge) badge.textContent = `${outletChefs.length} Chef${outletChefs.length === 1 ? '' : 's'}`;
+
+    if (outletChefs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 28px;">No chefs registered yet. Use the form to add your kitchen chefs.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = outletChefs.map(chef => {
+        const cuisines = chef.assignedSections || chef.assignedCuisines || ['Indian'];
+        const cuisinesBadges = cuisines.map(cs => `<span style="background: rgba(255,190,11,0.12); color: var(--primary); border: 1px solid rgba(255,190,11,0.25); padding: 2px 7px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; margin: 2px; display: inline-block;">${cs}</span>`).join('');
+        const addedBy = chef.addedBySupervisor || 'Supervisor';
+
+        return `
+            <tr>
+                <td><strong style="color: var(--text-main); font-size: 0.9rem;">${chef.name}</strong></td>
+                <td><span style="font-family: monospace; color: var(--text-muted); font-size: 0.82rem;">${chef.username}</span></td>
+                <td><span style="color: var(--text-muted); font-size: 0.8rem;">${addedBy}</span></td>
+                <td><div>${cuisinesBadges}</div></td>
+                <td style="text-align: right; white-space: nowrap;">
+                    <button class="icon-btn" onclick="editChefUser('${chef.username}')" title="Edit Chef" style="margin-right: 4px;"><i data-lucide="edit" style="width: 14px; height: 14px;"></i></button>
+                    <button class="icon-btn text-danger" onclick="removeChefUser('${chef.username}')" title="Remove Chef"><i data-lucide="trash-2" style="width: 14px; height: 14px;"></i></button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function saveChefUser() {
+    const editUsername = document.getElementById('editChefUsername')?.value;
+    const name = document.getElementById('chefFullName')?.value.trim();
+    const username = document.getElementById('chefUsername')?.value.trim();
+    const password = document.getElementById('chefPassword')?.value.trim();
+    const supervisorName = currentUser ? currentUser.name : 'Supervisor';
+    
+    const outletInput = document.getElementById('chefOutletDisplay');
+    const outletId = (outletInput && outletInput.dataset.outletId) ? outletInput.dataset.outletId : primaryOutlet.id;
+
+    if (!name) {
+        window.showToast("Please enter the chef's full name.", "warning");
+        return;
+    }
+    if (!username) {
+        window.showToast("Please enter a username for the chef.", "warning");
+        return;
+    }
+    if (!editUsername && !password) {
+        window.showToast("Please provide a password for the chef.", "warning");
+        return;
+    }
+
+    const checkedBoxes = document.querySelectorAll('.chef-cuisine-cb:checked');
+    const selectedCuisines = Array.from(checkedBoxes).map(cb => cb.value);
+    if (selectedCuisines.length === 0) {
+        window.showToast("Please assign at least one cuisine section to the chef.", "warning");
+        return;
+    }
+
+    if (editUsername) {
+        const existingChef = usersData.find(u => u.username === editUsername);
+        if (existingChef) {
+            existingChef.name = name;
+            existingChef.username = username;
+            if (password) existingChef.password = password;
+            existingChef.assignedSections = selectedCuisines;
+            existingChef.assignedCuisines = selectedCuisines;
+            window.showToast(`Chef ${name} updated successfully!`, "success");
+        }
+    } else {
+        if (usersData.some(u => u.username.toLowerCase() === username.toLowerCase())) {
+            window.showToast("A user with this username already exists. Choose a different username.", "warning");
+            return;
+        }
+
+        const newChef = {
+            username: username,
+            password: password || '123',
+            role: 'chef',
+            name: name,
+            title: 'Store Chef',
+            salary: '-',
+            assignedLocations: [outletId],
+            assignedSections: selectedCuisines,
+            assignedCuisines: selectedCuisines,
+            addedBySupervisor: supervisorName
+        };
+        usersData.push(newChef);
+        window.showToast(`Chef ${name} registered successfully!`, "success");
+    }
+
+    saveData();
+    resetChefForm();
+    renderChefsTable();
+    if (typeof loadUsersData === 'function') loadUsersData();
+}
+
+function resetChefForm() {
+    document.getElementById('editChefUsername').value = '';
+    document.getElementById('chefFullName').value = '';
+    document.getElementById('chefUsername').value = '';
+    document.getElementById('chefPassword').value = '';
+    document.getElementById('chefFormTitle').textContent = 'Add New Chef';
+    document.getElementById('btnCancelEditChef')?.classList.add('hidden');
+    document.querySelectorAll('.chef-cuisine-cb').forEach(cb => cb.checked = false);
+}
+
+window.editChefUser = function(username) {
+    const chef = usersData.find(u => u.username === username);
+    if (!chef) return;
+
+    document.getElementById('editChefUsername').value = chef.username;
+    document.getElementById('chefFullName').value = chef.name || '';
+    document.getElementById('chefUsername').value = chef.username || '';
+    document.getElementById('chefPassword').value = '';
+    document.getElementById('chefFormTitle').textContent = `Edit Chef: ${chef.name}`;
+    document.getElementById('btnCancelEditChef')?.classList.remove('hidden');
+
+    const cuisines = chef.assignedSections || chef.assignedCuisines || [];
+    document.querySelectorAll('.chef-cuisine-cb').forEach(cb => {
+        cb.checked = cuisines.includes(cb.value);
+    });
+};
+
+window.removeChefUser = async function(username) {
+    const chef = usersData.find(u => u.username === username);
+    if (!chef) return;
+
+    const confirmed = await window.showConfirmModal(`Are you sure you want to remove chef "${chef.name}" (${chef.username})?`, "Remove Chef", {
+        type: 'danger',
+        confirmText: 'Remove'
+    });
+    if (confirmed) {
+        const idx = usersData.findIndex(u => u.username === username);
+        if (idx !== -1) {
+            usersData.splice(idx, 1);
+            saveData();
+            renderChefsTable();
+            if (typeof loadUsersData === 'function') loadUsersData();
+            window.showToast(`Chef ${chef.name} removed`, 'info');
+        }
+    }
+};
+
+window.loadAddChefView = loadAddChefView;
+window.renderChefsTable = renderChefsTable;
+window.saveChefUser = saveChefUser;
+window.resetChefForm = resetChefForm;
 
 function loadLocationsData() {
     const tbody = document.getElementById('locationsTableBody');

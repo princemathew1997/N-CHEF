@@ -73,10 +73,20 @@ usersData.forEach(u => {
     }
 });
 
+const defaultVendors = [
+    { id: 'v_01', name: 'Fresh Farms Produce Ltd' },
+    { id: 'v_02', name: 'Metro Food Distributors' },
+    { id: 'v_03', name: 'Prime Meats & Seafood' },
+    { id: 'v_04', name: 'Global Dairy Supplies' }
+];
 const vendorsData = JSON.parse(localStorage.getItem('nchef_vendors')) || [];
+if (vendorsData.length === 0) {
+    vendorsData.push(...defaultVendors);
+}
 let masterItemsData = JSON.parse(localStorage.getItem('nchef_items')) || [];
 const requestsData = JSON.parse(localStorage.getItem('nchef_requests')) || [];
 const indentsData = JSON.parse(localStorage.getItem('nchef_indents')) || [];
+const purchaseOrdersData = JSON.parse(localStorage.getItem('nchef_purchase_orders')) || [];
 
 // Normalize any requests with legacy/missing outletId or outletName
 requestsData.forEach(r => {
@@ -116,6 +126,64 @@ indentsData.forEach(ind => {
     }
 });
 
+// Auto-link any requests marked 'Sent to Admin' or 'Consolidated' into a consolidated supervisor request if missing
+const pendingForwardedReqs = requestsData.filter(r => (r.status === 'Sent to Admin' || r.status === 'Consolidated') && !r.indentId);
+if (pendingForwardedReqs.length > 0) {
+    const groupedByOutlet = {};
+    pendingForwardedReqs.forEach(r => {
+        const oId = r.outletId || primaryOutlet.id;
+        if (!groupedByOutlet[oId]) groupedByOutlet[oId] = [];
+        groupedByOutlet[oId].push(r);
+    });
+
+    Object.keys(groupedByOutlet).forEach(oId => {
+        const reqs = groupedByOutlet[oId];
+        const outletName = reqs[0].outletName || primaryOutlet.name;
+        const indentId = 'ind_synced_' + oId;
+        const indentNumber = 'REQ-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + Math.floor(100 + Math.random() * 900);
+        
+        const itemMap = {};
+        reqs.forEach(r => {
+            const mItem = masterItemsData.find(i => i.id === r.itemId) || { name: r.itemName, category: 'General', unit: r.unit || 'kg' };
+            if (!itemMap[r.itemId]) {
+                itemMap[r.itemId] = {
+                    itemId: r.itemId,
+                    itemName: r.itemName || mItem.name,
+                    category: mItem.category || 'Kitchen Ingredients',
+                    unit: r.unit || mItem.unit || 'units',
+                    originalQty: 0,
+                    revisedQty: 0,
+                    comment: r.supervisorNote || '',
+                    cuisineBreakdown: []
+                };
+            }
+            const q = parseFloat(r.qty) || 0;
+            itemMap[r.itemId].originalQty += q;
+            itemMap[r.itemId].revisedQty += (parseFloat(r.revisedQty) || q);
+            itemMap[r.itemId].cuisineBreakdown.push({
+                cuisine: r.cuisine || 'Cuisine Section',
+                chef: r.chefName || r.requestedBy || 'Chef',
+                qty: q
+            });
+            r.indentId = indentId;
+        });
+
+        if (!indentsData.some(i => i.id === indentId)) {
+            indentsData.unshift({
+                id: indentId,
+                indentNumber: indentNumber,
+                date: new Date().toLocaleDateString(),
+                outletId: oId,
+                outletName: outletName,
+                supervisorName: 'Supervisor Lora',
+                status: 'Pending Approval',
+                items: Object.values(itemMap),
+                createdAt: new Date().toISOString()
+            });
+        }
+    });
+}
+
 const cuisinesData = [
     { id: 'c_01', name: 'Indian' },
     { id: 'c_02', name: 'Continental' },
@@ -147,6 +215,54 @@ function getItemStatus(item) {
     return 'Allocated/Pending PO';
 }
 
+const liveSyncChannel = (typeof BroadcastChannel !== 'undefined') ? new BroadcastChannel('nchef_live_channel') : null;
+
+function reloadDataFromStorage() {
+    const rawUsers = localStorage.getItem('nchef_users');
+    if (rawUsers) {
+        usersData.length = 0;
+        usersData.push(...JSON.parse(rawUsers));
+    }
+    const rawVendors = localStorage.getItem('nchef_vendors');
+    if (rawVendors) {
+        vendorsData.length = 0;
+        vendorsData.push(...JSON.parse(rawVendors));
+    }
+    const rawOutlets = localStorage.getItem('nchef_outlets');
+    if (rawOutlets) {
+        outletsData.length = 0;
+        outletsData.push(...JSON.parse(rawOutlets));
+    }
+    const rawItems = localStorage.getItem('nchef_items');
+    if (rawItems) {
+        masterItemsData.length = 0;
+        masterItemsData.push(...JSON.parse(rawItems));
+    }
+    const rawRequests = localStorage.getItem('nchef_requests');
+    if (rawRequests) {
+        requestsData.length = 0;
+        requestsData.push(...JSON.parse(rawRequests));
+    }
+    const rawIndents = localStorage.getItem('nchef_indents');
+    if (rawIndents) {
+        indentsData.length = 0;
+        indentsData.push(...JSON.parse(rawIndents));
+    }
+    const rawPOs = localStorage.getItem('nchef_purchase_orders');
+    if (rawPOs) {
+        purchaseOrdersData.length = 0;
+        purchaseOrdersData.push(...JSON.parse(rawPOs));
+    }
+}
+
+function broadcastLiveUpdate() {
+    if (liveSyncChannel) {
+        try {
+            liveSyncChannel.postMessage({ action: 'sync', time: Date.now() });
+        } catch(e) {}
+    }
+}
+
 function saveData() {
     localStorage.setItem('nchef_users', JSON.stringify(usersData));
     localStorage.setItem('nchef_vendors', JSON.stringify(vendorsData));
@@ -154,10 +270,12 @@ function saveData() {
     localStorage.setItem('nchef_items', JSON.stringify(masterItemsData));
     localStorage.setItem('nchef_requests', JSON.stringify(requestsData));
     localStorage.setItem('nchef_indents', JSON.stringify(indentsData));
+    localStorage.setItem('nchef_purchase_orders', JSON.stringify(purchaseOrdersData));
+    broadcastLiveUpdate();
 }
 
 function initSeedRequests() {
-    if (requestsData.length === 0 && masterItemsData.length > 0) {
+    if (localStorage.getItem('nchef_requests') === null && requestsData.length === 0 && masterItemsData.length > 0) {
         const chickenItem = masterItemsData.find(i => i.name.toLowerCase().includes('chicken')) || masterItemsData[0];
         const outletId = primaryOutlet.id;
         const outletName = primaryOutlet.name;
