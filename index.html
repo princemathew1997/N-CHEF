@@ -581,9 +581,9 @@
         </main>
     </div>
 
-    <script src="js/data.js?v=17"></script>
-    <script src="js/app.js?v=17"></script>
-    <script src="js/wizard.js?v=17"></script>
+    <script src="js/data.js?v=18"></script>
+    <script src="js/app.js?v=18"></script>
+    <script src="js/wizard.js?v=18"></script>
     <script>
         lucide.createIcons();
     </script>
@@ -598,8 +598,8 @@
             <div id="wizardStep1">
                 <div style="display: flex; gap: 16px; margin-top: 14px; align-items: center; background: rgba(0,0,0,0.25); padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); flex-wrap: wrap;">
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <label style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500;">Default Cuisine:</label>
-                        <select id="wizardCuisine" style="padding: 6px 12px; font-size: 0.85rem; border-radius: 6px; background: var(--dark); color: var(--text-main); border: 1px solid var(--border); outline: none;">
+                        <label style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500;">Cuisine Section:</label>
+                        <select id="wizardCuisine" style="padding: 6px 12px; font-size: 0.85rem; font-weight: 600; border-radius: 6px; background: var(--dark); color: var(--primary); border: 1px solid var(--border); outline: none; cursor: pointer;">
                             <!-- Populated dynamically based on chef cuisine -->
                         </select>
                         <span id="wizardCuisineDisplay" style="display: none; font-size: 0.9rem; font-weight: 600; color: var(--primary); padding: 4px 8px; background: rgba(255,190,11,0.12); border: 1px solid rgba(255,190,11,0.25); border-radius: 6px;"></span>
@@ -611,6 +611,9 @@
                         </select>
                         <span id="wizardOutletDisplay" style="display: none; font-size: 0.9rem; font-weight: 600; color: var(--primary); padding: 4px 0;"></span>
                     </div>
+                    <div style="margin-left: auto; font-size: 0.8rem; color: var(--text-muted);">
+                        💡 Switch cuisine section anytime to add items across multiple cuisines in one request.
+                    </div>
                 </div>
                 <div style="display: flex; gap: 12px; margin-top: 16px; overflow-x: auto; padding-bottom: 8px;" id="wizardCategoryTabs">
                     <!-- Categories will be loaded here -->
@@ -618,8 +621,13 @@
                 <div id="wizardItemsGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-top: 16px; min-height: 200px;">
                     <!-- Items for selected category will be loaded here -->
                 </div>
-                <div style="margin-top: 24px; display: flex; justify-content: space-between; align-items: center;">
-                    <button class="btn" id="wizardNextCatBtn" style="background: rgba(255, 190, 11, 0.18); color: var(--primary); border: 1px solid var(--primary); padding: 9px 18px; font-weight: 600; border-radius: 8px; display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem;">Next Category <i data-lucide="arrow-right" style="width: 16px; height: 16px;"></i></button>
+                <div style="margin-top: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <button class="btn" id="wizardNextCatBtn" style="background: rgba(255, 190, 11, 0.18); color: var(--primary); border: 1px solid var(--primary); padding: 9px 18px; font-weight: 600; border-radius: 8px; display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer;">Next Category <i data-lucide="arrow-right" style="width: 16px; height: 16px;"></i></button>
+                        <button type="button" class="btn" id="wizardClearBtn" onclick="clearWizardSelection()" style="background: rgba(230, 57, 70, 0.12); color: #ff6b6b; border: 1px solid rgba(230, 57, 70, 0.35); padding: 9px 16px; font-weight: 600; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; font-size: 0.9rem; cursor: pointer;">
+                            <i data-lucide="rotate-ccw" style="width: 15px; height: 15px;"></i> Clear Selection
+                        </button>
+                    </div>
                     <button class="btn btn-primary" id="wizardReviewBtn" style="padding: 9px 20px; font-weight: 600; border-radius: 8px; font-size: 0.9rem;">Review & Submit <span id="wizardSelectedCount">(0)</span></button>
                 </div>
             </div>
@@ -637,8 +645,13 @@
                         </tbody>
                     </table>
                 </div>
-                <div style="margin-top: 24px; display: flex; justify-content: space-between; align-items: center;">
-                    <button class="btn" id="wizardBackBtn" style="background: rgba(255, 190, 11, 0.18); color: var(--primary); border: 1px solid var(--primary); padding: 9px 18px; font-weight: 600; border-radius: 8px; display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem;"><i data-lucide="arrow-left" style="width: 16px; height: 16px;"></i> Back to Categories</button>
+                <div style="margin-top: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <button class="btn" id="wizardBackBtn" style="background: rgba(255, 190, 11, 0.18); color: var(--primary); border: 1px solid var(--primary); padding: 9px 18px; font-weight: 600; border-radius: 8px; display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem;"><i data-lucide="arrow-left" style="width: 16px; height: 16px;"></i> Back to Categories</button>
+                        <button type="button" class="btn" onclick="clearWizardSelection()" style="background: rgba(230, 57, 70, 0.12); color: #ff6b6b; border: 1px solid rgba(230, 57, 70, 0.35); padding: 9px 16px; font-weight: 600; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; font-size: 0.9rem; cursor: pointer;">
+                            <i data-lucide="rotate-ccw" style="width: 15px; height: 15px;"></i> Reset All
+                        </button>
+                    </div>
                     <button class="btn btn-primary" id="wizardSubmitBtn" style="padding: 9px 20px; font-weight: 600; border-radius: 8px; font-size: 0.9rem;">Submit Request</button>
                 </div>
             </div>

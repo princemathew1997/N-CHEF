@@ -74,15 +74,15 @@ function initRequestWizard() {
             cuisineSelect.style.display = '';
             if (wizardCuisineDisplay) wizardCuisineDisplay.style.display = 'none';
             cuisineSelect.innerHTML = selectableCuisines.map(c => `<option value="${c}">${c}</option>`).join('');
-            if (selectableCuisines.length > 1) {
-                cuisineSelect.innerHTML = `<option value="all">-- All / Mixed Cuisines --</option>` + selectableCuisines.map(c => `<option value="${c}">${c}</option>`).join('');
-            }
             if (selectableCuisines.length > 0) cuisineSelect.value = selectableCuisines[0];
+            cuisineSelect.onchange = () => {
+                renderWizardItems();
+            };
         }
         
         document.getElementById('wizardStep1').classList.remove('hidden');
         document.getElementById('wizardStep2').classList.add('hidden');
-        document.getElementById('wizardSelectedCount').textContent = '(0)';
+        updateWizardSelectedCount();
         modal.classList.remove('hidden');
     }
     window.openRequestWizard = openRequestWizard;
@@ -178,7 +178,9 @@ function initRequestWizard() {
 
         for (const it of items) {
             const masterItem = masterItemsData.find(i => i.id === it.itemId);
-            const itemCuisine = document.getElementById('wizardCuisine_' + it.itemId)?.value || defaultCuisine || 'Indian';
+            const selData = wizardSelectedItems[it.itemId];
+            const storedCuisine = (typeof selData === 'object' && selData?.cuisine) ? selData.cuisine : null;
+            const itemCuisine = document.getElementById('wizardCuisine_' + it.itemId)?.value || storedCuisine || defaultCuisine || 'Indian';
             
             requestsData.unshift({
                 id: 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
@@ -224,17 +226,27 @@ function renderWizardCategories() {
 
 window.renderWizardCategories = renderWizardCategories;
 
+function updateWizardSelectedCount() {
+    const badge = document.getElementById('wizardSelectedCount');
+    if (badge) badge.textContent = '(' + Object.keys(wizardSelectedItems).length + ')';
+}
+window.updateWizardSelectedCount = updateWizardSelectedCount;
+
 function renderWizardItems() {
     const grid = document.getElementById('wizardItemsGrid');
     if(!grid) return;
     const items = masterItemsData.filter(i => i.category === currentWizardCat);
     grid.innerHTML = items.map(item => {
-        const isSelected = !!wizardSelectedItems[item.id];
-        return `<div class="panel" style="cursor:pointer; display:flex; flex-direction:column; justify-content:space-between; align-items:center; text-align:center; padding:16px; border: 2px solid ${isSelected ? 'var(--primary)' : 'transparent'}; transition:all 0.2s;" onclick="toggleWizardItem('${item.id}')">
-            <strong style="margin-bottom:8px;">${item.name}</strong>
+        const selData = wizardSelectedItems[item.id];
+        const isSelected = !!selData;
+        const assignedCuisine = (typeof selData === 'object' && selData?.cuisine) ? selData.cuisine : '';
+        
+        return `<div class="panel" style="cursor:pointer; display:flex; flex-direction:column; justify-content:space-between; align-items:center; text-align:center; padding:16px; border: 2px solid ${isSelected ? 'var(--primary)' : 'rgba(255,255,255,0.06)'}; transition:all 0.2s; position:relative; min-height:130px; background:${isSelected ? 'rgba(255,190,11,0.06)' : 'var(--card-bg, #1a1a1a)'};" onclick="toggleWizardItem('${item.id}')">
+            ${isSelected && assignedCuisine ? `<span style="position:absolute; top:8px; right:8px; font-size:0.68rem; font-weight:700; background:rgba(255,190,11,0.22); color:var(--primary); padding:2px 7px; border-radius:4px; border:1px solid rgba(255,190,11,0.4); text-transform:uppercase; letter-spacing:0.5px;">${assignedCuisine}</span>` : ''}
+            <strong style="margin-bottom:6px; margin-top:${isSelected && assignedCuisine ? '12px' : '0'}; font-size: 0.95rem;">${item.name}</strong>
             <span style="font-size:0.8rem; color:var(--text-muted);">${item.unit}</span>
             <div style="margin-top:12px; width:24px; height:24px; border-radius:50%; background:${isSelected ? 'var(--primary)' : 'rgba(255,255,255,0.1)'}; display:flex; align-items:center; justify-content:center;">
-                <i data-lucide="check" style="width:14px; height:14px; color:${isSelected ? '#fff' : 'transparent'};"></i>
+                <i data-lucide="check" style="width:14px; height:14px; color:${isSelected ? '#000' : 'transparent'};"></i>
             </div>
         </div>`;
     }).join('');
@@ -244,16 +256,37 @@ function renderWizardItems() {
 window.renderWizardItems = renderWizardItems;
 
 function toggleWizardItem(itemId) {
+    const cuisineSelect = document.getElementById('wizardCuisine');
+    const activeCuisine = (cuisineSelect && cuisineSelect.value && cuisineSelect.value !== 'all') ? cuisineSelect.value : 'Indian';
+    
     if (wizardSelectedItems[itemId]) {
-        delete wizardSelectedItems[itemId];
+        // If clicked again and current active cuisine in dropdown is different, update to current cuisine
+        if (typeof wizardSelectedItems[itemId] === 'object' && wizardSelectedItems[itemId].cuisine !== activeCuisine) {
+            wizardSelectedItems[itemId] = { cuisine: activeCuisine };
+        } else {
+            // Otherwise deselect
+            delete wizardSelectedItems[itemId];
+        }
     } else {
-        wizardSelectedItems[itemId] = true;
+        wizardSelectedItems[itemId] = { cuisine: activeCuisine };
     }
     renderWizardItems();
-    document.getElementById('wizardSelectedCount').textContent = '(' + Object.keys(wizardSelectedItems).length + ')';
+    updateWizardSelectedCount();
 }
 
 window.toggleWizardItem = toggleWizardItem;
+
+window.clearWizardSelection = function() {
+    wizardSelectedItems = {};
+    updateWizardSelectedCount();
+    if (allCategories.length > 0) {
+        currentWizardCat = allCategories[0];
+    }
+    renderWizardCategories();
+    renderWizardItems();
+    document.getElementById('wizardStep2')?.classList.add('hidden');
+    document.getElementById('wizardStep1')?.classList.remove('hidden');
+};
 
 function renderWizardReview() {
     const tbody = document.getElementById('wizardReviewTableBody');
@@ -275,18 +308,19 @@ function renderWizardReview() {
         : ['Indian', 'Continental', 'Tandoor', 'Chinese', 'Arabic', 'Kerala'];
         
     const selectableCuisines = (chefCuisines.length > 0) ? chefCuisines : allCuisines;
-    
-    // Read the current default cuisine chosen at Step 1 top bar
-    const topCuisineVal = document.getElementById('wizardCuisine')?.value;
-    const defaultCuisine = (topCuisineVal && topCuisineVal !== 'all') ? topCuisineVal : (selectableCuisines[0] || 'Indian');
 
     tbody.innerHTML = Object.keys(wizardSelectedItems).map(itemId => {
         const item = masterItemsData.find(i => i.id === itemId);
         if(!item) return '';
         
+        const selData = wizardSelectedItems[itemId];
+        const assignedCuisine = (typeof selData === 'object' && selData?.cuisine) 
+            ? selData.cuisine 
+            : (selectableCuisines[0] || 'Indian');
+        
         // Cuisine section dropdown options for this item
         const cuisineOptions = selectableCuisines.map(c => 
-            `<option value="${c}" ${c === defaultCuisine ? 'selected' : ''}>${c}</option>`
+            `<option value="${c}" ${c === assignedCuisine ? 'selected' : ''}>${c}</option>`
         ).join('');
         
         return `<tr>
@@ -303,7 +337,7 @@ function renderWizardReview() {
                     <span style="font-size: 0.85rem; color: var(--text-muted);">${item.unit}</span>
                 </div>
             </td>
-            <td><button class="icon-btn text-danger" onclick="delete wizardSelectedItems['${item.id}']; renderWizardReview(); document.getElementById('wizardSelectedCount').textContent = '(' + Object.keys(wizardSelectedItems).length + ')';"><i data-lucide="trash-2"></i></button></td>
+            <td><button class="icon-btn text-danger" onclick="delete wizardSelectedItems['${item.id}']; renderWizardReview(); updateWizardSelectedCount();"><i data-lucide="trash-2"></i></button></td>
         </tr>`;
     }).join('');
     if(window.lucide) window.lucide.createIcons();
