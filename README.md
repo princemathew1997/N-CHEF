@@ -31,16 +31,21 @@ A modern, high-performance web application designed for commercial multi-branch 
 ## 📁 Repository Structure
 
 ```
-├── index.html                                 # Main Single Page Application interface
-├── styles.css                                 # Core design system (dark culinary theme)
-├── data.js                                    # Data models, seed data & localStorage persistence
-├── app.js                                     # Core application logic, routing & tables
-├── wizard.js                                  # Chef request wizard & user management logic
-├── chef_bg.jpg                                # Background hero asset
-├── logo.jpg                                   # Branding asset
-├── Restaurant_Inventory_Change_Requirements.md # Technical workflow specifications
-├── package.json                               # Project metadata & launch scripts
-├── .gitignore                                 # Git ignore configuration
+├── assets/
+│   └── images/
+│       ├── chef_bg.jpg                        # Background hero asset
+│       └── logo.jpg                           # Application branding asset
+├── css/
+│   └── styles.css                             # Core design system & theme
+├── js/
+│   ├── data.js                                # Data models & local storage persistence
+│   ├── app.js                                 # Main controllers, indents & approvals
+│   └── wizard.js                              # Chef request wizard & user management
+├── docs/
+│   └── Restaurant_Inventory_Change_Requirements.md # Technical workflow specifications
+├── index.html                                 # Single-Page Application interface
+├── package.json                               # Project metadata & start script
+├── .gitignore                                 # Git ignore patterns
 └── README.md                                  # Project overview and documentation
 ```
 
