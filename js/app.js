@@ -521,8 +521,14 @@ function initNavigation() {
     const navLocations = document.getElementById('navLocations');
     const navUsers = document.getElementById('navUsers');
     
+    const navManageRequests = document.getElementById('navManageRequests');
+    const navConsolidateRequests = document.getElementById('navConsolidateRequests');
+    const navRequestsSubmenu = document.getElementById('navRequestsSubmenu');
+    const navRequestsChevron = document.getElementById('navRequestsChevron');
+    
     const viewMaster = document.getElementById('viewMasterOrders');
     const viewRequests = document.getElementById('viewRequests');
+    const viewConsolidateRequests = document.getElementById('viewConsolidateRequests');
     const viewIndents = document.getElementById('viewIndents');
     const viewChef = document.getElementById('viewChefPortal');
     const viewVendors = document.getElementById('viewVendors');
@@ -532,6 +538,7 @@ function initNavigation() {
     const hideAllViews = () => {
         viewMaster.classList.add('hidden');
         viewRequests.classList.add('hidden');
+        if (viewConsolidateRequests) viewConsolidateRequests.classList.add('hidden');
         if (viewIndents) viewIndents.classList.add('hidden');
         if (viewChef) viewChef.classList.add('hidden');
         viewVendors.classList.add('hidden');
@@ -540,6 +547,8 @@ function initNavigation() {
         
         navMaster.classList.remove('active');
         navRequests.classList.remove('active');
+        if (navManageRequests) navManageRequests.classList.remove('active');
+        if (navConsolidateRequests) navConsolidateRequests.classList.remove('active');
         if (navIndents) navIndents.classList.remove('active');
         if (navChef) navChef.classList.remove('active');
         navVendors.classList.remove('active');
@@ -550,6 +559,8 @@ function initNavigation() {
     navMaster.addEventListener('click', (e) => {
         e.preventDefault();
         hideAllViews();
+        if (navRequestsSubmenu) navRequestsSubmenu.classList.remove('open');
+        if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(0deg)';
         viewMaster.classList.remove('hidden');
         navMaster.classList.add('active');
         currentView = 'viewMasterOrders';
@@ -558,17 +569,60 @@ function initNavigation() {
 
     navRequests.addEventListener('click', (e) => {
         e.preventDefault();
+        const isOpen = navRequestsSubmenu && navRequestsSubmenu.classList.contains('open');
+        if (isOpen && (currentView === 'viewRequests' || currentView === 'viewConsolidateRequests')) {
+            navRequestsSubmenu.classList.remove('open');
+            if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(0deg)';
+        } else {
+            if (navRequestsSubmenu) navRequestsSubmenu.classList.add('open');
+            if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(180deg)';
+        }
+        
+        // Default to Manage Request view
         hideAllViews();
         viewRequests.classList.remove('hidden');
         navRequests.classList.add('active');
+        if (navManageRequests) navManageRequests.classList.add('active');
         currentView = 'viewRequests';
         loadRequestsData();
     });
+
+    if (navManageRequests) {
+        navManageRequests.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            hideAllViews();
+            viewRequests.classList.remove('hidden');
+            navRequests.classList.add('active');
+            if (navRequestsSubmenu) navRequestsSubmenu.classList.add('open');
+            if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(180deg)';
+            navManageRequests.classList.add('active');
+            currentView = 'viewRequests';
+            loadRequestsData();
+        });
+    }
+
+    if (navConsolidateRequests) {
+        navConsolidateRequests.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            hideAllViews();
+            if (viewConsolidateRequests) viewConsolidateRequests.classList.remove('hidden');
+            navRequests.classList.add('active');
+            if (navRequestsSubmenu) navRequestsSubmenu.classList.add('open');
+            if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(180deg)';
+            navConsolidateRequests.classList.add('active');
+            currentView = 'viewConsolidateRequests';
+            if (typeof loadConsolidateWorkspace === 'function') loadConsolidateWorkspace();
+        });
+    }
 
     if (navIndents) {
         navIndents.addEventListener('click', (e) => {
             e.preventDefault();
             hideAllViews();
+            if (navRequestsSubmenu) navRequestsSubmenu.classList.remove('open');
+            if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(0deg)';
             if (viewIndents) viewIndents.classList.remove('hidden');
             navIndents.classList.add('active');
             currentView = 'viewIndents';
@@ -1509,7 +1563,7 @@ function loadChefPortalData() {
     const allChefReqs = requestsData.filter(r => (r.chefName === currentUser.name || r.requestedBy === currentUser.name));
     
     // Update summary metric cards
-    const pendingCount = allChefReqs.filter(r => r.status === 'Pending' || r.status === 'Sent to Admin').length;
+    const pendingCount = allChefReqs.filter(r => r.status === 'Pending' || r.status === 'Accepted' || r.status === 'Sent to Admin').length;
     const approvedCount = allChefReqs.filter(r => r.status === 'Approved' || r.status === 'Consolidated').length;
     const totalCount = allChefReqs.length;
     
@@ -1556,6 +1610,8 @@ function loadChefPortalData() {
             let statusHtml = '';
             if (r.status === 'Pending') {
                 statusHtml = `<span class="status pending" style="background: rgba(255,190,11,0.15); color: var(--primary); border: 1px solid rgba(255,190,11,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Pending Supervisor</span>`;
+            } else if (r.status === 'Accepted') {
+                statusHtml = `<span class="status ok" style="background: rgba(46,196,182,0.15); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Accepted by Supervisor</span>`;
             } else if (r.status === 'Sent to Admin') {
                 statusHtml = `<span class="status" style="background: rgba(67,97,238,0.15); color: #4895ef; border: 1px solid rgba(67,97,238,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Sent to Admin</span>`;
             } else if (r.status === 'Consolidated') {
@@ -1568,8 +1624,8 @@ function loadChefPortalData() {
             
             const outletName = r.outletName || (outletsData.find(o => o.id === r.outletId)?.name) || allocatedOutlet.name;
             
-            const actionHtml = r.status === 'Pending' 
-                ? `<button class="btn btn-outline" style="padding: 3px 9px; font-size: 0.72rem; border-color: rgba(230,57,70,0.4); color: #ff6b6b; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;" onclick="deleteChefRequest('${r.id}')" title="Cancel this pending request">
+            const actionHtml = (r.status === 'Pending' || r.status === 'Accepted') 
+                ? `<button class="btn btn-outline" style="padding: 3px 9px; font-size: 0.72rem; border-color: rgba(230,57,70,0.4); color: #ff6b6b; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;" onclick="deleteChefRequest('${r.id}')" title="Cancel this request">
                     <i data-lucide="trash-2" style="width: 12px; height: 12px;"></i> Cancel
                    </button>`
                 : `<span style="font-size: 0.75rem; color: var(--text-muted);">-</span>`;
@@ -1596,7 +1652,7 @@ window.loadChefPortalData = loadChefPortalData;
 
 window.deleteChefRequest = async function(reqId) {
     const req = requestsData.find(r => String(r.id) === String(reqId));
-    if (!req || req.status !== 'Pending') return;
+    if (!req || (req.status !== 'Pending' && req.status !== 'Accepted')) return;
     
     const confirmed = await window.showConfirmModal(
         `Are you sure you want to cancel the request for "${req.itemName}" (${req.qty} ${req.unit || 'kg'})?`,
@@ -1674,7 +1730,7 @@ function updateRequestsBadge() {
         const visIds = vis.map(o => (o.id || '').toLowerCase());
         const visNames = vis.map(o => (o.name || '').toLowerCase());
         const pendingCount = requestsData.filter(r => {
-            if (r.status !== 'Pending') return false;
+            if (r.status !== 'Pending' && r.status !== 'Accepted') return false;
             if (currentUser.assignedLocations && currentUser.assignedLocations.includes('all')) return true;
             const rOutletId = (r.outletId || '').toLowerCase();
             const rOutletName = (r.outletName || '').toLowerCase();
@@ -1843,11 +1899,11 @@ function loadRequestsData() {
     if (containerSec) {
         // Filter viewableRequests for ongoing flow in Kitchen Sections Table:
         // 1. Remove 'General' section completely (requests without valid cuisine or marked 'General' are ignored)
-        // 2. Focus strictly on ongoing flow: Pending (Pending Supervisor) and Sent to Admin (Awaiting Admin)
+        // 2. Focus strictly on ongoing flow: Pending, Accepted, and Sent to Admin
         const ongoingSectionRequests = viewableRequests.filter(r => {
             if (!r.cuisine || r.cuisine.toLowerCase() === 'general') return false;
             if (selStatus === 'all') {
-                return r.status === 'Pending' || r.status === 'Sent to Admin';
+                return r.status === 'Pending' || r.status === 'Accepted' || r.status === 'Sent to Admin';
             }
             return true;
         });
@@ -1886,6 +1942,7 @@ function loadRequestsData() {
                 const chefsSet = [...new Set(reqs.map(r => r.chefName || r.requestedBy || 'Store Chef'))];
                 const outletsSet = [...new Set(reqs.map(r => r.outletName || (outletsData.find(o => o.id === r.outletId)?.name) || 'Branch'))];
                 const totalItemsQty = reqs.reduce((sum, r) => sum + (parseFloat(r.qty) || 0), 0);
+                const pendingInSec = reqs.filter(r => r.status === 'Pending').length;
 
                 const rowsHtml = reqs.map(r => {
                     const item = masterItemsData.find(i => i.id === r.itemId) || { name: r.itemName || 'Item', unit: r.unit || 'kg' };
@@ -1898,6 +1955,8 @@ function loadRequestsData() {
                     let statusBadge = '';
                     if (r.status === 'Pending') {
                         statusBadge = `<span class="status pending" style="background: rgba(255,190,11,0.15); color: var(--primary); border: 1px solid rgba(255,190,11,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Pending Supervisor</span>`;
+                    } else if (r.status === 'Accepted') {
+                        statusBadge = `<span class="status ok" style="background: rgba(46,196,182,0.15); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.35); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">✓ Accepted</span>`;
                     } else if (r.status === 'Sent to Admin' || r.status === 'Consolidated') {
                         statusBadge = indentNum 
                             ? `<span class="status" style="background: rgba(67,97,238,0.15); color: #4895ef; border: 1px solid rgba(67,97,238,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">In Indent ${indentNum}</span>`
@@ -1920,7 +1979,7 @@ function loadRequestsData() {
                             } else {
                                 actionHtml = `<span style="font-size: 0.75rem; color: #4895ef; font-weight: 500;">Awaiting Indent Approval</span>`;
                             }
-                        } else if (r.status === 'Pending') {
+                        } else if (r.status === 'Pending' || r.status === 'Accepted') {
                             actionHtml = `<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">Awaiting Supervisor</span>`;
                         } else if (r.status === 'Approved') {
                             actionHtml = `<span style="font-size: 0.75rem; color: var(--success); font-weight: 600;">✓ Approved</span>`;
@@ -1930,12 +1989,19 @@ function loadRequestsData() {
                     } else if (currentUser.role === 'supervisor') {
                         if (r.status === 'Pending') {
                             actionHtml = `
-                                <button class="btn btn-primary" style="padding: 3px 8px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 4px;" onclick="sendRequestToAdmin('${r.id}')" title="Send this item to Admin">
-                                    <i data-lucide="send" style="width:11px; height:11px;"></i> Send
+                                <button class="btn btn-primary" style="padding: 4px 10px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #2ec4b6, #208b82); border: none; color: white; font-weight: 600; border-radius: 6px; box-shadow: 0 2px 8px rgba(46,196,182,0.3); cursor: pointer;" onclick="acceptChefRequest('${r.id}')" title="Accept this request from Chef">
+                                    <i data-lucide="check" style="width:12px; height:12px;"></i> Accept
                                 </button>
-                                <button class="btn btn-outline" style="padding: 3px 8px; font-size: 0.72rem; border-color: var(--danger); color: var(--danger);" onclick="deleteRequest('${r.id}')" title="Delete item">
+                                <button class="btn btn-outline" style="padding: 3px 7px; font-size: 0.72rem; border-color: var(--danger); color: var(--danger); border-radius: 6px;" onclick="deleteRequest('${r.id}')" title="Delete item">
                                     <i data-lucide="trash-2" style="width:11px; height:11px;"></i>
                                 </button>
+                            `;
+                        } else if (r.status === 'Accepted') {
+                            actionHtml = `
+                                <span style="font-size: 0.75rem; color: #2ec4b6; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
+                                    <i data-lucide="boxes" style="width: 12px; height: 12px;"></i> Ready to Consolidate
+                                </span>
+                                <button class="btn btn-outline" style="padding: 2px 6px; font-size: 0.68rem; margin-left: 6px; color: var(--text-muted); border-radius: 4px;" onclick="revertChefRequest('${r.id}')" title="Revert to Pending">Undo</button>
                             `;
                         } else if (r.status === 'Sent to Admin' || r.status === 'Consolidated') {
                             actionHtml = `<span style="font-size: 0.75rem; color: #4895ef; font-weight: 500;">Awaiting Admin (${indentNum || 'Indent'})</span>`;
@@ -1949,7 +2015,7 @@ function loadRequestsData() {
                     }
 
                     // Editable quantity input for supervisor
-                    const qtyDisplay = (currentUser.role === 'supervisor' && r.status === 'Pending')
+                    const qtyDisplay = (currentUser.role === 'supervisor' && (r.status === 'Pending' || r.status === 'Accepted'))
                         ? `<div style="display: flex; align-items: center; gap: 6px;">
                             <input type="number" step="0.5" min="0" value="${r.qty}" onchange="updateSectionItemQty('${r.id}', this.value)" style="width: 70px; padding: 3px 6px; font-size: 0.85rem; font-weight: 600; background: var(--dark); color: var(--text-main); border: 1px solid var(--border); border-radius: 4px; text-align: center;">
                             <span style="font-size: 0.75rem; color: var(--text-muted);">${item.unit}</span>
@@ -1971,6 +2037,12 @@ function loadRequestsData() {
                     `;
                 }).join('');
 
+                const acceptSectionBtnHtml = (currentUser.role === 'supervisor' && pendingInSec > 0)
+                    ? `<button class="btn btn-outline" style="font-size: 0.74rem; padding: 4px 10px; border-color: rgba(46,196,182,0.4); color: #2ec4b6; display: inline-flex; align-items: center; gap: 4px; border-radius: 6px; cursor: pointer;" onclick="acceptAllSection('${secName}')">
+                        <i data-lucide="check-check" style="width: 13px; height: 13px;"></i> Accept Section (${pendingInSec})
+                       </button>`
+                    : '';
+
                 sectionsHtml += `
                     <div class="panel" style="padding: 18px 20px; border-radius: 12px; background: rgba(26, 22, 11, 0.85); border: 1px solid var(--border); box-shadow: 0 4px 16px rgba(0,0,0,0.25);">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 10px;">
@@ -1988,6 +2060,7 @@ function loadRequestsData() {
                                 <div style="font-size: 0.82rem; color: var(--text-muted);">
                                     Total in Section: <strong style="color: var(--text-main); font-size: 0.95rem;">${reqs.length} items</strong> (${totalItemsQty.toFixed(1)} units)
                                 </div>
+                                ${acceptSectionBtnHtml}
                             </div>
                         </div>
                         <div class="table-container" style="max-height: 380px; overflow-y: auto;">
@@ -2034,6 +2107,8 @@ function loadRequestsData() {
         let statusHtml = '';
         if (req.status === 'Pending') {
             statusHtml = `<span class="status pending" style="background: rgba(255,190,11,0.15); color: var(--primary); border: 1px solid rgba(255,190,11,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Pending Supervisor</span>`;
+        } else if (req.status === 'Accepted') {
+            statusHtml = `<span class="status" style="background: rgba(46,196,182,0.15); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">✓ Accepted (Ready to Consolidate)</span>`;
         } else if (req.status === 'Sent to Admin' || req.status === 'Consolidated') {
             statusHtml = indentNum 
                 ? `<span class="status" style="background: rgba(67,97,238,0.15); color: #4895ef; border: 1px solid rgba(67,97,238,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">In Indent ${indentNum}</span>`
@@ -2058,6 +2133,8 @@ function loadRequestsData() {
                 }
             } else if (req.status === 'Pending') {
                 actionsHtml = `<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">Awaiting Supervisor</span>`;
+            } else if (req.status === 'Accepted') {
+                actionsHtml = `<span style="font-size: 0.75rem; color: #2ec4b6; font-style: italic;">Accepted by Supervisor</span>`;
             } else if (req.status === 'Approved') {
                 actionsHtml = `<span style="font-size: 0.75rem; color: var(--success); font-weight: 600;">✓ Approved</span>`;
             } else {
@@ -2066,10 +2143,17 @@ function loadRequestsData() {
         } else if (currentUser.role === 'supervisor') {
             if (req.status === 'Pending') {
                 actionsHtml = `
-                    <button class="btn btn-primary" style="padding: 4px 10px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 4px;" onclick="sendRequestToAdmin('${req.id}')" title="Send this chef request to Admin for approval">
-                        <i data-lucide="send" style="width: 12px; height: 12px;"></i> Send to Admin
+                    <button class="btn btn-primary" style="padding: 4px 10px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 4px; background: rgba(46,196,182,0.18); border-color: rgba(46,196,182,0.4); color: #2ec4b6;" onclick="acceptChefRequest('${req.id}')" title="Accept this request from Chef">
+                        <i data-lucide="check" style="width: 12px; height: 12px;"></i> Accept
                     </button>
                     <button class="btn btn-outline" style="padding: 4px 8px; font-size: 0.72rem; border-color: var(--danger); color: var(--danger);" onclick="deleteRequest('${req.id}')" title="Delete request">Delete</button>
+                `;
+            } else if (req.status === 'Accepted') {
+                actionsHtml = `
+                    <span style="font-size: 0.75rem; color: #2ec4b6; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
+                        <i data-lucide="boxes" style="width: 12px; height: 12px;"></i> Ready to Consolidate
+                    </span>
+                    <button class="btn btn-outline" style="padding: 2px 6px; font-size: 0.68rem; margin-left: 6px; color: var(--text-muted); border-radius: 4px;" onclick="revertChefRequest('${req.id}')" title="Revert to Pending">Undo</button>
                 `;
             } else if (req.status === 'Sent to Admin' || req.status === 'Consolidated') {
                 actionsHtml = `<span style="font-size: 0.75rem; color: #4895ef; font-weight: 500; display: inline-flex; align-items: center; gap: 4px;"><i data-lucide="clock" style="width: 12px; height: 12px;"></i> Awaiting Admin (${indentNum || 'Indent'})</span>`;
@@ -2082,6 +2166,8 @@ function loadRequestsData() {
                     <button class="btn btn-outline" style="padding: 4px 8px; font-size: 0.7rem; border-color: var(--primary); color: var(--primary);" onclick="editRequest('${req.id}')">Edit</button>
                     <button class="btn btn-outline" style="padding: 4px 8px; font-size: 0.7rem; border-color: var(--danger); color: var(--danger);" onclick="deleteRequest('${req.id}')">Delete</button>
                 `;
+            } else if (req.status === 'Accepted') {
+                actionsHtml = `<span style="font-size: 0.75rem; color: #2ec4b6; font-weight: 600;">Accepted by Supervisor</span>`;
             }
         }
         
@@ -2775,9 +2861,70 @@ window.rejectRequest = function(reqId) {
     }
 };
 
+window.acceptChefRequest = function(reqId) {
+    const req = requestsData.find(r => r.id === reqId);
+    if (!req) return;
+    req.status = 'Accepted';
+    req.acceptedBy = (currentUser && currentUser.name) ? currentUser.name : 'Supervisor';
+    req.acceptedAt = new Date().toISOString();
+    
+    saveData();
+    loadRequestsData();
+    if (typeof loadChefPortalData === 'function') loadChefPortalData();
+    updateRequestsBadge();
+    
+    window.showToast(`Accepted "${req.itemName}" (${req.qty} ${req.unit || 'kg'}). Ready to consolidate.`, "success");
+};
+
+window.revertChefRequest = function(reqId) {
+    const req = requestsData.find(r => r.id === reqId);
+    if (!req) return;
+    req.status = 'Pending';
+    delete req.acceptedBy;
+    delete req.acceptedAt;
+    
+    saveData();
+    loadRequestsData();
+    if (typeof loadChefPortalData === 'function') loadChefPortalData();
+    updateRequestsBadge();
+    
+    window.showToast(`Reverted "${req.itemName}" to pending status.`, "info");
+};
+
+window.acceptAllSection = function(secName) {
+    const vis = getVisibleOutlets();
+    const visIds = vis.map(o => (o.id || '').toLowerCase());
+    const pendingInSec = requestsData.filter(r => {
+        if (r.status !== 'Pending') return false;
+        if ((r.cuisine || '').toLowerCase() !== (secName || '').toLowerCase()) return false;
+        const rOutletId = (r.outletId || '').toLowerCase();
+        return visIds.includes(rOutletId) || (currentUser.assignedLocations && currentUser.assignedLocations.includes('all'));
+    });
+    
+    if (pendingInSec.length === 0) {
+        window.showToast(`No pending requests in ${secName} section.`, "info");
+        return;
+    }
+    
+    const nowIso = new Date().toISOString();
+    const supName = (currentUser && currentUser.name) ? currentUser.name : 'Supervisor';
+    pendingInSec.forEach(r => {
+        r.status = 'Accepted';
+        r.acceptedBy = supName;
+        r.acceptedAt = nowIso;
+    });
+    
+    saveData();
+    loadRequestsData();
+    if (typeof loadChefPortalData === 'function') loadChefPortalData();
+    updateRequestsBadge();
+    
+    window.showToast(`Accepted all ${pendingInSec.length} requests in ${secName} section! Ready to consolidate.`, "success");
+};
+
 window.sendRequestToAdmin = async function(reqId) {
     const req = requestsData.find(r => r.id === reqId);
-    if (!req || req.status !== 'Pending') return;
+    if (!req) return;
     
     const chefDisplay = req.chefName || req.requestedBy || 'Chef';
     const promptMsg = `Send "${req.itemName}" (${req.qty} ${req.unit || 'kg'}) from ${chefDisplay} to Admin for approval?\nConfirm or modify the requested quantity:`;
@@ -2815,74 +2962,552 @@ window.updateSectionItemQty = function(reqId, val) {
     }
 };
 
-window.sendAllSectionsToAdmin = function() {
+// ============================================================
+// CONSOLIDATE REQUESTS WORKSPACE (Dedicated Supervisor View)
+// ============================================================
+let activeWorkspaceConsolidation = {
+    outletId: '',
+    outletName: '',
+    groupedItems: {}
+};
+
+window.loadConsolidateWorkspace = function() {
     const vis = getVisibleOutlets();
     const visIds = vis.map(o => (o.id || '').toLowerCase());
     const outlet = vis[0] || outletsData[0] || { id: 'brigade', name: 'BRIGADE' };
     
-    // Find all ongoing pending requests for this supervisor's outlet with assigned cuisine
-    const pendingReqs = requestsData.filter(r => {
-        if (r.status !== 'Pending') return false;
-        if (!r.cuisine || r.cuisine.toLowerCase() === 'general') return false;
+    activeWorkspaceConsolidation = {
+        outletId: outlet.id,
+        outletName: outlet.name,
+        groupedItems: {}
+    };
+    
+    const outletNameEl = document.getElementById('wsConsolidateOutletName');
+    if (outletNameEl) outletNameEl.textContent = outlet.name;
+    
+    // Populate stock item dropdown for extra buffer additions
+    const selStockItem = document.getElementById('wsStockItemSelect');
+    if (selStockItem) {
+        selStockItem.innerHTML = `<option value="">-- Choose Stock Item to Add --</option>` +
+            masterItemsData.map(item => `<option value="${item.id}">${item.name} (${item.unit || 'kg'} - ${item.category || 'General'})</option>`).join('');
+    }
+    
+    // Wire up events once
+    const btnSubmit = document.getElementById('btnWsSubmitIndent');
+    if (btnSubmit && !btnSubmit.dataset.bound) {
+        btnSubmit.addEventListener('click', window.submitWorkspaceConsolidatedIndent);
+        btnSubmit.dataset.bound = 'true';
+    }
+
+    const btnExportPdf = document.getElementById('btnWsExportPdf');
+    if (btnExportPdf && !btnExportPdf.dataset.bound) {
+        btnExportPdf.addEventListener('click', window.exportConsolidationToPdf);
+        btnExportPdf.dataset.bound = 'true';
+    }
+    
+    const btnToggleAdd = document.getElementById('btnWsToggleAddStock');
+    const panelAddStock = document.getElementById('wsAddStockPanel');
+    if (btnToggleAdd && !btnToggleAdd.dataset.bound) {
+        btnToggleAdd.addEventListener('click', () => {
+            if (panelAddStock) panelAddStock.classList.toggle('hidden');
+        });
+        btnToggleAdd.dataset.bound = 'true';
+    }
+    
+    const btnConfirmAdd = document.getElementById('btnWsAddStockConfirm');
+    if (btnConfirmAdd && !btnConfirmAdd.dataset.bound) {
+        btnConfirmAdd.addEventListener('click', window.addWorkspaceExtraStockItem);
+        btnConfirmAdd.dataset.bound = 'true';
+    }
+    
+    // Collect all requests for this supervisor outlet that are 'Accepted' or 'Pending'
+    const targetReqs = requestsData.filter(r => {
+        if (r.status !== 'Accepted' && r.status !== 'Pending') return false;
         const rOutletId = (r.outletId || '').toLowerCase();
         return visIds.includes(rOutletId) || (currentUser.assignedLocations && currentUser.assignedLocations.includes('all'));
     });
     
-    if (pendingReqs.length === 0) {
-        alert("No pending kitchen section requests to submit.");
-        return;
-    }
-    
-    const indentNumber = 'IND-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + Math.floor(100 + Math.random() * 900);
-    const indentId = 'ind_' + Date.now();
-    
-    // Group by item for consolidated indent with cuisine breakdown
-    const grouped = {};
-    pendingReqs.forEach(r => {
-        if (!grouped[r.itemId]) {
-            const masterItem = masterItemsData.find(i => i.id === r.itemId) || { name: r.itemName || 'Item', unit: r.unit || 'kg', category: 'Kitchen' };
-            grouped[r.itemId] = {
-                itemId: r.itemId,
-                itemName: masterItem.name,
-                category: masterItem.category || 'Kitchen',
-                unit: masterItem.unit || 'kg',
+    targetReqs.forEach(req => {
+        const item = masterItemsData.find(i => i.id === req.itemId) || { id: req.itemId, name: req.itemName || 'Unknown Item', unit: req.unit || 'kg', category: 'General' };
+        if (!activeWorkspaceConsolidation.groupedItems[req.itemId]) {
+            activeWorkspaceConsolidation.groupedItems[req.itemId] = {
+                itemId: req.itemId,
+                itemName: item.name,
+                category: item.category || 'General',
+                unit: item.unit || req.unit || 'kg',
                 originalQty: 0,
                 revisedQty: 0,
                 comment: '',
-                cuisineBreakdown: []
+                chefRequests: []
             };
         }
-        const q = parseFloat(r.qty) || 0;
-        grouped[r.itemId].originalQty += q;
-        grouped[r.itemId].revisedQty += q;
-        grouped[r.itemId].cuisineBreakdown.push({
-            cuisine: r.cuisine || 'Cuisine Section',
-            chef: r.chefName || r.requestedBy || 'Chef',
-            qty: q
-        });
+        const q = parseFloat(req.qty) || 0;
+        activeWorkspaceConsolidation.groupedItems[req.itemId].originalQty += q;
+        activeWorkspaceConsolidation.groupedItems[req.itemId].revisedQty += q;
+        activeWorkspaceConsolidation.groupedItems[req.itemId].chefRequests.push(req);
     });
     
-    const nowIso = new Date().toISOString();
+    window.renderConsolidateWorkspaceTable();
+};
+
+window.renderConsolidateWorkspaceTable = function() {
+    const thead = document.getElementById('wsConsolidateTableHead');
+    const tbody = document.getElementById('wsConsolidateTableBody');
+    const countEl = document.getElementById('wsConsolidateCount');
+    const summaryTextEl = document.getElementById('wsFooterSummaryText');
+    if (!tbody || !thead) return;
+    
+    const items = Object.values(activeWorkspaceConsolidation.groupedItems || {});
+    if (countEl) {
+        countEl.textContent = `${items.length} ingredient${items.length === 1 ? '' : 's'} ready for consolidation`;
+    }
+    
+    if (items.length === 0) {
+        thead.innerHTML = `<tr><th style="padding: 12px 16px;">Ingredient</th><th style="padding: 12px 16px;">Total</th></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 36px 20px;">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                <i data-lucide="check-circle" style="width: 32px; height: 32px; color: var(--primary);"></i>
+                <div style="font-size: 0.95rem; font-weight: 600; color: var(--text-main);">No Requests Pending Consolidation</div>
+                <div style="font-size: 0.8rem; color: var(--text-muted);">Accept chef requests in <strong>Manage Requests</strong> or click <strong>Add Extra Stock Item</strong> above.</div>
+            </div>
+        </td></tr>`;
+        if (summaryTextEl) summaryTextEl.textContent = 'No ingredients currently pending consolidation.';
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        return;
+    }
+
+    // Discover all unique kitchen sections from requests
+    const allCuisines = new Set();
+    items.forEach(it => {
+        (it.chefRequests || []).forEach(cr => {
+            if (cr.cuisine && cr.cuisine.trim() && cr.cuisine.trim().toLowerCase() !== 'general') {
+                allCuisines.add(cr.cuisine.trim());
+            }
+        });
+    });
+
+    const standardOrder = ['Indian', 'Tandoor', 'Continental', 'Chinese', 'Bakery', 'Pantry'];
+    const sections = Array.from(allCuisines).sort((a, b) => {
+        const ia = standardOrder.indexOf(a);
+        const ib = standardOrder.indexOf(b);
+        if (ia !== -1 && ib !== -1) return ia - ib;
+        if (ia !== -1) return -1;
+        if (ib !== -1) return 1;
+        return a.localeCompare(b);
+    });
+    if (sections.length === 0) sections.push('Indian', 'Tandoor');
+
+    // 1. Render Table Head (Matching user's matrix: Ingredient | Indian | Tandoor | ... | Buffer | Total | Note)
+    thead.innerHTML = `
+        <tr style="border-bottom: 2px solid rgba(255,190,11,0.25);">
+            <th style="text-align: left; padding: 12px 16px; background: rgba(0,0,0,0.5); color: #fff; font-weight: 700; width: 22%;">Ingredient</th>
+            ${sections.map(sec => `
+                <th style="text-align: center; padding: 12px 14px; background: rgba(255,190,11,0.08); color: var(--primary); font-weight: 700; border-left: 1px solid rgba(255,255,255,0.06); font-size: 0.88rem;">
+                    ${sec}
+                </th>
+            `).join('')}
+            <th style="text-align: center; padding: 12px 12px; background: rgba(46,196,182,0.08); color: #2ec4b6; font-weight: 700; border-left: 1px solid rgba(255,255,255,0.06); width: 10%;">Buffer</th>
+            <th style="text-align: center; padding: 12px 16px; background: rgba(255,190,11,0.18); color: #fff; font-weight: 800; border-left: 1px solid rgba(255,190,11,0.3); width: 14%;">Total</th>
+            <th style="text-align: left; padding: 12px 14px; background: rgba(0,0,0,0.4); color: var(--text-muted); font-weight: 600; width: 18%; border-left: 1px solid rgba(255,255,255,0.06);">Supervisor Note</th>
+        </tr>
+    `;
+
+    // 2. Render Table Body (Matrix Rows)
+    let grandSum = 0;
+    let totalBufferSum = 0;
+
+    tbody.innerHTML = items.map(entry => {
+        grandSum += (parseFloat(entry.revisedQty) || 0);
+
+        // Section cells
+        const secCellsHtml = sections.map(sec => {
+            const secReqs = (entry.chefRequests || []).filter(cr => (cr.cuisine || '').toLowerCase() === sec.toLowerCase());
+            const secQty = secReqs.reduce((acc, cr) => acc + (parseFloat(cr.qty) || 0), 0);
+            if (secQty > 0) {
+                return `<td style="text-align: center; padding: 10px 14px; border-left: 1px solid rgba(255,255,255,0.04); background: rgba(255,190,11,0.02);">
+                    <strong style="color: #ffffff; font-size: 0.94rem;">${secQty}</strong>
+                    <span style="font-size: 0.75rem; color: var(--text-muted); margin-left: 3px;">${entry.unit}</span>
+                </td>`;
+            } else {
+                return `<td style="text-align: center; padding: 10px 14px; color: rgba(255,255,255,0.18); border-left: 1px solid rgba(255,255,255,0.04); font-size: 0.9rem;">-</td>`;
+            }
+        }).join('');
+
+        // Buffer calculation
+        const bufferQty = (entry.revisedQty > entry.originalQty) ? (entry.revisedQty - entry.originalQty) : 0;
+        totalBufferSum += bufferQty;
+
+        const bufferCell = `<td style="text-align: center; padding: 10px 12px; border-left: 1px solid rgba(255,255,255,0.04);">
+            ${bufferQty > 0 
+                ? `<span style="color: #2ec4b6; font-weight: 700; font-size: 0.88rem;">+${bufferQty} <span style="font-size: 0.72rem;">${entry.unit}</span></span>` 
+                : `<span style="color: rgba(255,255,255,0.2);">-</span>`}
+        </td>`;
+
+        // Total input
+        const totalCell = `<td style="text-align: center; padding: 10px 14px; background: rgba(255,190,11,0.05); border-left: 1px solid rgba(255,190,11,0.25);">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 5px;">
+                <input type="number" step="any" min="0" value="${entry.revisedQty}" onchange="updateWorkspaceItemQty('${entry.itemId}', this.value)" style="width: 78px; padding: 5px 6px; font-size: 0.92rem; font-weight: 700; background: #0d0d0d; color: var(--primary); border: 1px solid var(--border-gold); border-radius: 6px; text-align: center;">
+                <span style="font-size: 0.76rem; color: var(--text-muted); font-weight: 600;">${entry.unit}</span>
+            </div>
+        </td>`;
+
+        // Note / comments
+        const noteCell = `<td style="padding: 10px 14px; border-left: 1px solid rgba(255,255,255,0.04);">
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <input type="text" placeholder="Reason / buffer..." value="${entry.comment || ''}" onchange="updateWorkspaceItemComment('${entry.itemId}', this.value)" style="width: 100%; padding: 5px 8px; font-size: 0.82rem; background: #0d0d0d; color: #fff; border: 1px solid var(--border); border-radius: 5px;">
+                ${entry.originalQty === 0 ? `<button class="btn btn-outline" style="padding: 3px 6px; font-size: 0.68rem; border-color: var(--danger); color: var(--danger);" onclick="removeWorkspaceExtraItem('${entry.itemId}')" title="Remove"><i data-lucide="trash-2" style="width: 12px; height: 12px;"></i></button>` : ''}
+            </div>
+        </td>`;
+
+        return `
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+                <td style="padding: 12px 16px;">
+                    <strong style="color: var(--text-main); font-size: 0.95rem;">${entry.itemName}</strong>
+                    <div style="font-size: 0.72rem; color: var(--text-muted);">${entry.category}</div>
+                </td>
+                ${secCellsHtml}
+                ${bufferCell}
+                ${totalCell}
+                ${noteCell}
+            </tr>
+        `;
+    }).join('');
+
+    // Summary footer row
+    const sectionTotalsHtml = sections.map(sec => {
+        let secSum = 0;
+        items.forEach(it => {
+            const reqs = (it.chefRequests || []).filter(cr => (cr.cuisine || '').toLowerCase() === sec.toLowerCase());
+            secSum += reqs.reduce((acc, cr) => acc + (parseFloat(cr.qty) || 0), 0);
+        });
+        return `<td style="text-align: center; padding: 12px; font-weight: 800; color: var(--primary); border-left: 1px solid rgba(255,255,255,0.06); font-size: 0.92rem;">${secSum.toFixed(1)}</td>`;
+    }).join('');
+
+    tbody.innerHTML += `
+        <tr style="background: rgba(0,0,0,0.55); border-top: 2px solid rgba(255,190,11,0.3);">
+            <td style="padding: 14px 16px; font-weight: 800; color: var(--primary); text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.5px;">
+                Total Section Units
+            </td>
+            ${sectionTotalsHtml}
+            <td style="text-align: center; padding: 12px; font-weight: 700; color: #2ec4b6; border-left: 1px solid rgba(255,255,255,0.06); font-size: 0.88rem;">
+                ${totalBufferSum > 0 ? `+${totalBufferSum.toFixed(1)}` : '-'}
+            </td>
+            <td style="text-align: center; padding: 12px; font-weight: 800; color: #fff; background: rgba(255,190,11,0.15); border-left: 1px solid rgba(255,190,11,0.3); font-size: 1rem;">
+                ${grandSum.toFixed(1)}
+            </td>
+            <td style="border-left: 1px solid rgba(255,255,255,0.06);"></td>
+        </tr>
+    `;
+
+    if (summaryTextEl) {
+        summaryTextEl.textContent = `Consolidating ${items.length} items (${grandSum.toFixed(1)} units total across ${sections.length} sections)`;
+    }
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+};
+
+window.exportConsolidationToPdf = function() {
+    const items = Object.values(activeWorkspaceConsolidation.groupedItems || {});
+    if (items.length === 0) {
+        window.showToast("No ingredients to export.", "warning");
+        return;
+    }
+
+    const outletName = activeWorkspaceConsolidation.outletName || 'BRIGADE';
+    const dateStr = new Date().toLocaleDateString();
+    const timeStr = new Date().toLocaleTimeString();
+    const supervisor = (currentUser && currentUser.name) ? currentUser.name : 'Supervisor';
+    const indentRef = 'IND-PREVIEW-' + new Date().toISOString().slice(0,10).replace(/-/g,'');
+
+    // Discover sections
+    const allCuisines = new Set();
+    items.forEach(it => {
+        (it.chefRequests || []).forEach(cr => {
+            if (cr.cuisine && cr.cuisine.trim() && cr.cuisine.trim().toLowerCase() !== 'general') {
+                allCuisines.add(cr.cuisine.trim());
+            }
+        });
+    });
+    const standardOrder = ['Indian', 'Tandoor', 'Continental', 'Chinese', 'Bakery', 'Pantry'];
+    const sections = Array.from(allCuisines).sort((a, b) => {
+        const ia = standardOrder.indexOf(a);
+        const ib = standardOrder.indexOf(b);
+        if (ia !== -1 && ib !== -1) return ia - ib;
+        if (ia !== -1) return -1;
+        if (ib !== -1) return 1;
+        return a.localeCompare(b);
+    });
+    if (sections.length === 0) sections.push('Indian', 'Tandoor');
+
+    // Build print HTML document
+    const printDoc = document.createElement('div');
+    printDoc.id = 'pdfExportRenderContainer';
+    printDoc.style.background = '#ffffff';
+    printDoc.style.color = '#111111';
+    printDoc.style.fontFamily = 'Inter, Arial, sans-serif';
+    printDoc.style.padding = '24px 30px';
+    printDoc.style.width = '100%';
+    printDoc.style.boxSizing = 'border-box';
+
+    const rowsHtml = items.map((entry, idx) => {
+        const secCells = sections.map(sec => {
+            const secReqs = (entry.chefRequests || []).filter(cr => (cr.cuisine || '').toLowerCase() === sec.toLowerCase());
+            const secQty = secReqs.reduce((acc, cr) => acc + (parseFloat(cr.qty) || 0), 0);
+            return `<td style="border: 1px solid #ddd; padding: 8px 10px; text-align: center; font-weight: ${secQty > 0 ? '700' : 'normal'};">
+                ${secQty > 0 ? `${secQty} ${entry.unit}` : '-'}
+            </td>`;
+        }).join('');
+
+        const bufferQty = (entry.revisedQty > entry.originalQty) ? (entry.revisedQty - entry.originalQty) : 0;
+
+        return `
+            <tr style="background: ${idx % 2 === 0 ? '#ffffff' : '#f9f9f9'};">
+                <td style="border: 1px solid #ddd; padding: 8px 10px; font-weight: 600;">
+                    ${entry.itemName}
+                    <div style="font-size: 11px; color: #666;">${entry.category}</div>
+                </td>
+                ${secCells}
+                <td style="border: 1px solid #ddd; padding: 8px 10px; text-align: center; color: #028090;">
+                    ${bufferQty > 0 ? `+${bufferQty} ${entry.unit}` : '-'}
+                </td>
+                <td style="border: 1px solid #ddd; padding: 8px 10px; text-align: center; font-weight: 700; background: #fff8e7;">
+                    ${entry.revisedQty} ${entry.unit}
+                </td>
+                <td style="border: 1px solid #ddd; padding: 8px 10px; font-size: 12px; color: #555;">
+                    ${entry.comment || '-'}
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    printDoc.innerHTML = `
+        <div style="border-bottom: 3px solid #ffbe0b; padding-bottom: 14px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: flex-end;">
+            <div>
+                <h1 style="margin: 0; font-size: 24px; color: #111; font-weight: 800; letter-spacing: -0.5px;">n.chef <span style="color: #d49500; font-weight: 700;">Stock Tracker</span></h1>
+                <div style="font-size: 14px; font-weight: 700; color: #333; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px;">Consolidated Kitchen Indent Request</div>
+            </div>
+            <div style="text-align: right; font-size: 12px; color: #555;">
+                <div><strong>Ref:</strong> ${indentRef}</div>
+                <div><strong>Date:</strong> ${dateStr} ${timeStr}</div>
+            </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; background: #f4f4f4; border: 1px solid #e0e0e0; border-radius: 6px; padding: 12px 18px; margin-bottom: 20px; font-size: 13px;">
+            <div><strong>Outlet:</strong> <span style="color: #d49500; font-weight: 700;">${outletName}</span></div>
+            <div><strong>Prepared By (Supervisor):</strong> ${supervisor}</div>
+            <div><strong>Total Line Items:</strong> ${items.length} ingredients</div>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 26px;">
+            <thead>
+                <tr style="background: #222; color: #fff;">
+                    <th style="border: 1px solid #222; padding: 9px 10px; text-align: left;">Ingredient</th>
+                    ${sections.map(s => `<th style="border: 1px solid #222; padding: 9px 10px; text-align: center;">${s}</th>`).join('')}
+                    <th style="border: 1px solid #222; padding: 9px 10px; text-align: center;">Buffer</th>
+                    <th style="border: 1px solid #222; padding: 9px 10px; text-align: center; background: #d49500; color: #000;">Total</th>
+                    <th style="border: 1px solid #222; padding: 9px 10px; text-align: left;">Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rowsHtml}
+            </tbody>
+        </table>
+
+        <div style="margin-top: 40px; display: flex; justify-content: space-between; padding: 0 20px; font-size: 13px;">
+            <div style="border-top: 1px solid #888; width: 220px; text-align: center; padding-top: 6px;">
+                <strong>Supervisor Signature</strong>
+                <div style="font-size: 11px; color: #777;">${supervisor}</div>
+            </div>
+            <div style="border-top: 1px solid #888; width: 220px; text-align: center; padding-top: 6px;">
+                <strong>Admin Approval Signature</strong>
+                <div style="font-size: 11px; color: #777;">Authorized Signatory</div>
+            </div>
+        </div>
+    `;
+
+    // Check if html2pdf is available
+    if (typeof html2pdf !== 'undefined') {
+        const opt = {
+            margin:       8,
+            filename:     `Consolidated_Indent_${outletName.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
+        };
+        
+        window.showToast("Generating PDF download...", "info");
+        html2pdf().set(opt).from(printDoc).save().then(() => {
+            window.showToast("PDF downloaded successfully!", "success");
+        }).catch(err => {
+            console.error(err);
+            openPrintFallback(printDoc);
+        });
+    } else {
+        openPrintFallback(printDoc);
+    }
+
+    function openPrintFallback(element) {
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            window.showToast("Please allow popups to export PDF.", "warning");
+            return;
+        }
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Consolidated Indent - ${outletName}</title>
+                    <style>
+                        @page { size: landscape; margin: 10mm; }
+                        body { font-family: Inter, Arial, sans-serif; margin: 0; padding: 10px; color: #111; }
+                    </style>
+                </head>
+                <body>
+                    ${element.innerHTML}
+                    <script>
+                        window.onload = function() {
+                            window.print();
+                        };
+                    </script>
+                </body>
+            </html>
+        `);
+        printWindow.document.close();
+    }
+};
+
+window.updateWorkspaceItemQty = function(itemId, val) {
+    if (activeWorkspaceConsolidation.groupedItems[itemId]) {
+        activeWorkspaceConsolidation.groupedItems[itemId].revisedQty = parseFloat(val) || 0;
+    }
+};
+
+window.updateWorkspaceItemComment = function(itemId, val) {
+    if (activeWorkspaceConsolidation.groupedItems[itemId]) {
+        activeWorkspaceConsolidation.groupedItems[itemId].comment = val;
+    }
+};
+
+window.removeWorkspaceExtraItem = function(itemId) {
+    if (activeWorkspaceConsolidation.groupedItems[itemId]) {
+        delete activeWorkspaceConsolidation.groupedItems[itemId];
+        window.renderConsolidateWorkspaceTable();
+    }
+};
+
+window.addWorkspaceExtraStockItem = function() {
+    const itemSel = document.getElementById('wsStockItemSelect');
+    const qtyInp = document.getElementById('wsStockItemQty');
+    const reasonInp = document.getElementById('wsStockItemReason');
+    
+    const itemId = itemSel?.value;
+    const qty = parseFloat(qtyInp?.value) || 0;
+    const reason = reasonInp?.value.trim() || 'Supervisor Buffer';
+    
+    if (!itemId) {
+        window.showToast("Please choose an ingredient.", "warning");
+        return;
+    }
+    if (qty <= 0) {
+        window.showToast("Please enter a valid positive quantity.", "warning");
+        return;
+    }
+    
+    const masterItem = masterItemsData.find(i => i.id === itemId);
+    if (!masterItem) return;
+    
+    if (!activeWorkspaceConsolidation.groupedItems[itemId]) {
+        activeWorkspaceConsolidation.groupedItems[itemId] = {
+            itemId: itemId,
+            itemName: masterItem.name,
+            category: masterItem.category || 'General',
+            unit: masterItem.unit || 'kg',
+            originalQty: 0,
+            revisedQty: qty,
+            comment: reason,
+            chefRequests: []
+        };
+    } else {
+        activeWorkspaceConsolidation.groupedItems[itemId].revisedQty += qty;
+        activeWorkspaceConsolidation.groupedItems[itemId].comment = reason;
+    }
+    
+    qtyInp.value = '';
+    reasonInp.value = '';
+    itemSel.value = '';
+    const panel = document.getElementById('wsAddStockPanel');
+    if (panel) panel.classList.add('hidden');
+    
+    window.renderConsolidateWorkspaceTable();
+    window.showToast(`Added ${qty} ${masterItem.unit || 'kg'} of ${masterItem.name} to indent list.`, "success");
+};
+
+window.submitWorkspaceConsolidatedIndent = async function() {
+    const items = Object.values(activeWorkspaceConsolidation.groupedItems || {});
+    if (items.length === 0) {
+        window.showUiModal({
+            title: "No Items to Consolidate",
+            message: "There are no accepted or pending chef requests to consolidate.",
+            type: "warning"
+        });
+        return;
+    }
+    
+    const confirmed = await window.showConfirmModal(
+        `Submit consolidated indent with ${items.length} ingredient items to Admin for approval?`,
+        "Send Request To Admin",
+        { confirmText: "Send Request To Admin" }
+    );
+    if (!confirmed) return;
+    
+    const today = new Date().toLocaleDateString();
+    const indentNumber = 'IND-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + Math.floor(100 + Math.random() * 900);
+    const indentId = 'ind_' + Date.now();
+    
+    const formattedItems = items.map(entry => {
+        const breakdown = entry.chefRequests.map(cr => ({
+            cuisine: cr.cuisine || 'Cuisine Section',
+            chef: cr.chefName || cr.requestedBy || 'Chef',
+            qty: parseFloat(cr.qty) || 0
+        }));
+        return {
+            itemId: entry.itemId,
+            itemName: entry.itemName,
+            category: entry.category,
+            unit: entry.unit,
+            originalQty: entry.originalQty,
+            revisedQty: entry.revisedQty,
+            comment: entry.comment,
+            cuisineBreakdown: breakdown
+        };
+    });
+    
     const newIndent = {
         id: indentId,
         indentNumber: indentNumber,
-        outletId: outlet.id,
-        outletName: outlet.name,
+        date: today,
+        outletId: activeWorkspaceConsolidation.outletId,
+        outletName: activeWorkspaceConsolidation.outletName,
         supervisorName: currentUser.name || 'Supervisor',
         status: 'Pending Approval',
-        items: Object.values(grouped),
-        date: new Date().toLocaleDateString(),
-        createdAt: nowIso
+        items: formattedItems,
+        createdAt: new Date().toISOString()
     };
     
     indentsData.unshift(newIndent);
     
-    // Mark requests as Sent to Admin
-    pendingReqs.forEach(r => {
-        r.status = 'Sent to Admin';
-        r.indentId = indentId;
-        r.forwardedBy = currentUser.name || 'Supervisor';
-        r.forwardedAt = new Date().toISOString();
+    // Mark source requests as Consolidated
+    const sourceReqIds = [];
+    items.forEach(it => {
+        it.chefRequests.forEach(cr => sourceReqIds.push(cr.id));
+    });
+    
+    requestsData.forEach(r => {
+        if (sourceReqIds.includes(r.id)) {
+            r.status = 'Consolidated';
+            r.indentId = indentId;
+            r.forwardedBy = currentUser.name || 'Supervisor';
+            r.forwardedAt = new Date().toISOString();
+        }
     });
     
     saveData();
@@ -2892,7 +3517,24 @@ window.sendAllSectionsToAdmin = function() {
     updateRequestsBadge();
     updateIndentsBadge();
     
-    alert(`Successfully submitted ${pendingReqs.length} section item requests from ${outlet.name} to Admin for approval!`);
+    window.showUiModal({
+        title: "Indent Submitted",
+        message: `Consolidated Indent <strong>${indentNumber}</strong> submitted successfully! Routed to Admin / Owner for approval.`,
+        type: "success"
+    });
+    
+    // Switch to Indents view to see newly submitted indent
+    const navIndents = document.getElementById('navIndents');
+    if (navIndents) navIndents.click();
+};
+
+window.sendAllSectionsToAdmin = function() {
+    const navConsolidate = document.getElementById('navConsolidateRequests');
+    if (navConsolidate) {
+        navConsolidate.click();
+    } else {
+        window.loadConsolidateWorkspace();
+    }
 };
 
 window.adminApproveAllSections = async function() {

@@ -356,6 +356,40 @@ label {
     color: var(--dark);
     background: var(--primary);
 }
+.nav-submenu {
+    display: none;
+    flex-direction: column;
+    gap: 3px;
+    padding-left: 14px;
+    margin-top: 3px;
+    margin-bottom: 4px;
+    border-left: 2px solid rgba(255, 190, 11, 0.2);
+    margin-left: 12px;
+}
+.nav-submenu.open {
+    display: flex;
+}
+.nav-subitem {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    color: var(--text-muted);
+    text-decoration: none;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+.nav-subitem:hover {
+    color: var(--primary);
+    background: rgba(255, 190, 11, 0.08);
+}
+.nav-subitem.active {
+    color: var(--primary);
+    background: rgba(255, 190, 11, 0.16);
+    font-weight: 600;
+}
 .user-profile {
     display: flex;
     align-items: center;

@@ -7,7 +7,8 @@
     <link rel="icon" type="image/jpeg" href="assets/images/logo.jpg">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="css/styles.css?v=26">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link rel="stylesheet" href="css/styles.css?v=27">
     <!-- NUNIT-INJECT: CATCH JS ERRORS -->
     <script>
         window.addEventListener('error', function(e) { 
@@ -61,9 +62,22 @@
                 <a href="#" class="nav-item active no-chef" id="navMasterOrders">
                     <i data-lucide="layout-dashboard"></i> Master Orders
                 </a>
-                <a href="#" class="nav-item supervisor-only no-chef" id="navRequests">
-                    <i data-lucide="clipboard-list"></i> Requests <span id="pendingRequestsBadge" class="hidden" style="background: var(--primary); color: var(--dark); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 0.7rem; margin-left: auto; font-weight: bold; line-height: 1;">0</span>
-                </a>
+                <div class="nav-group supervisor-only no-chef" id="navGroupRequests">
+                    <a href="#" class="nav-item" id="navRequests">
+                        <i data-lucide="clipboard-list"></i>
+                        <span>Requests</span>
+                        <span id="pendingRequestsBadge" class="hidden" style="background: var(--primary); color: var(--dark); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 0.7rem; margin-left: auto; font-weight: bold; line-height: 1;">0</span>
+                        <i data-lucide="chevron-down" id="navRequestsChevron" style="width: 14px; height: 14px; margin-left: 6px; transition: transform 0.25s ease;"></i>
+                    </a>
+                    <div class="nav-submenu" id="navRequestsSubmenu">
+                        <a href="#" class="nav-subitem" id="navManageRequests">
+                            <i data-lucide="list-checks" style="width: 14px; height: 14px;"></i> Manage Request
+                        </a>
+                        <a href="#" class="nav-subitem" id="navConsolidateRequests">
+                            <i data-lucide="boxes" style="width: 14px; height: 14px;"></i> Consolidate Request
+                        </a>
+                    </div>
+                </div>
                 <a href="#" class="nav-item no-chef" id="navIndents">
                     <i data-lucide="file-check"></i> Indents <span id="pendingIndentsBadge" class="hidden" style="background: var(--primary); color: var(--dark); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 0.7rem; margin-left: auto; font-weight: bold; line-height: 1;">0</span>
                 </a>
@@ -243,6 +257,7 @@
                         <select id="filterStatus" style="background: transparent; color: var(--text-main); width: auto; padding: 6px 12px; font-size: 0.8rem; border-radius: 6px; cursor: pointer; border: 1px solid var(--border);">
                             <option value="all" style="background: var(--dark);">All Statuses</option>
                             <option value="Pending" style="background: var(--dark);">Pending (Chef)</option>
+                            <option value="Accepted" style="background: var(--dark);">Accepted (Supervisor)</option>
                             <option value="Sent to Admin" style="background: var(--dark);">Sent to Admin</option>
                             <option value="Consolidated" style="background: var(--dark);">Consolidated</option>
                             <option value="Approved" style="background: var(--dark);">Approved</option>
@@ -312,6 +327,79 @@
                             </thead>
                             <tbody id="requestsTableBody"></tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CONSOLIDATE REQUEST VIEW (Supervisor Dedicated Workspace) -->
+            <div id="viewConsolidateRequests" class="hidden">
+                <header class="dash-header">
+                    <div class="header-title">
+                        <h1>Consolidate <span class="text-primary">Requests</span></h1>
+                        <p>Matrix breakdown of chef requests across kitchen sections. Adjust quantities and export or send to Admin.</p>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <div id="wsConsolidateOutletBadge" style="display: flex; align-items: center; gap: 8px; padding: 7px 14px; background: rgba(255,190,11,0.08); border: 1px solid rgba(255,190,11,0.25); border-radius: 8px; font-size: 0.85rem; color: var(--text-main);">
+                            <i data-lucide="map-pin" style="width: 14px; height: 14px; color: var(--primary);"></i>
+                            <span>Outlet: <strong id="wsConsolidateOutletName" style="color: var(--primary); font-weight: 600;">BRIGADE</strong></span>
+                        </div>
+                    </div>
+                </header>
+
+                <!-- Top Toolbar: Quick Add Stock Item & Summary -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+                    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                        <span id="wsConsolidateCount" style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);">0 ingredients ready for consolidation</span>
+                        <span style="font-size: 0.75rem; background: rgba(46,196,182,0.12); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.3); padding: 3px 8px; border-radius: 4px; font-weight: 600;">Kitchen Section Matrix View</span>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-outline" id="btnWsToggleAddStock" style="padding: 7px 14px; font-size: 0.82rem; display: flex; align-items: center; gap: 6px; border-color: var(--border-gold); color: var(--primary);">
+                            <i data-lucide="plus" style="width: 14px; height: 14px;"></i> Add Extra Stock Item
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Extra Stock Item Form (collapsible) -->
+                <div id="wsAddStockPanel" class="panel hidden" style="padding: 16px; margin-bottom: 18px; border: 1px dashed var(--border-gold); background: rgba(0,0,0,0.4); border-radius: 10px;">
+                    <h4 style="margin: 0 0 10px 0; font-size: 0.92rem; color: var(--primary); display: flex; align-items: center; gap: 6px;">
+                        <i data-lucide="plus-circle" style="width: 16px; height: 16px;"></i> Add Supervisor Stock Requirement
+                    </h4>
+                    <div style="display: grid; grid-template-columns: 2fr 1fr 2fr auto; gap: 10px; align-items: center;">
+                        <select id="wsStockItemSelect" style="padding: 8px 12px; background: var(--dark); color: white; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem;"></select>
+                        <input type="number" id="wsStockItemQty" min="0.1" step="any" placeholder="Quantity" style="padding: 8px 12px; background: var(--dark); color: white; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem;">
+                        <input type="text" id="wsStockItemReason" placeholder="Reason (e.g., Weekend buffer, Event)" style="padding: 8px 12px; background: var(--dark); color: white; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem;">
+                        <button class="btn btn-primary" id="btnWsAddStockConfirm" style="padding: 8px 16px; font-size: 0.85rem;">Add to Indent</button>
+                    </div>
+                </div>
+
+                <!-- Consolidated Section Matrix Table Container -->
+                <div class="panel table-container" id="wsConsolidatePrintArea" style="background: rgba(0,0,0,0.25); border-radius: 12px; border: 1px solid var(--border); margin-bottom: 20px; overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse;" id="wsMatrixTable">
+                        <thead id="wsConsolidateTableHead">
+                            <!-- Dynamic Matrix Header Generated in JS -->
+                        </thead>
+                        <tbody id="wsConsolidateTableBody">
+                            <!-- Dynamic Matrix Rows Generated in JS -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Bottom Footer Bar: Export PDF & Send Request To Admin -->
+                <div class="panel" style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-radius: 12px; background: rgba(26,22,11,0.9); border: 1px solid var(--border); margin-bottom: 24px; flex-wrap: wrap; gap: 14px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <i data-lucide="layers" style="width: 20px; height: 20px; color: var(--primary);"></i>
+                        <div>
+                            <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);" id="wsFooterSummaryText">Ready to dispatch consolidated requirement</div>
+                            <div style="font-size: 0.76rem; color: var(--text-muted);">Review matrix quantities per section before dispatching to Admin.</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                        <button class="btn btn-outline" id="btnWsExportPdf" style="padding: 9px 18px; font-size: 0.88rem; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; border-color: rgba(255,255,255,0.25); color: #fff; cursor: pointer;">
+                            <i data-lucide="file-down" style="width: 16px; height: 16px; color: var(--primary);"></i> Export as PDF
+                        </button>
+                        <button class="btn btn-primary" id="btnWsSubmitIndent" style="padding: 9px 24px; font-size: 0.9rem; font-weight: 600; box-shadow: 0 4px 18px rgba(255,190,11,0.35); display: inline-flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <i data-lucide="send" style="width: 16px; height: 16px;"></i> Send Request To Admin
+                        </button>
                     </div>
                 </div>
             </div>
@@ -388,6 +476,7 @@
                             <select id="chefFilterStatus" style="background: var(--dark); color: var(--text-main); padding: 6px 12px; font-size: 0.8rem; border-radius: 6px; border: 1px solid var(--border); outline: none; cursor: pointer;">
                                 <option value="all">All Statuses</option>
                                 <option value="Pending">Pending Supervisor</option>
+                                <option value="Accepted">Accepted by Supervisor</option>
                                 <option value="Sent to Admin">Sent to Admin</option>
                                 <option value="Consolidated">Consolidated</option>
                                 <option value="Approved">Approved</option>
@@ -592,9 +681,9 @@
         </main>
     </div>
 
-    <script src="js/data.js?v=26"></script>
-    <script src="js/app.js?v=26"></script>
-    <script src="js/wizard.js?v=26"></script>
+    <script src="js/data.js?v=28"></script>
+    <script src="js/app.js?v=28"></script>
+    <script src="js/wizard.js?v=28"></script>
     <script>
         lucide.createIcons();
     </script>
