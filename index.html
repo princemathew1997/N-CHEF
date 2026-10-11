@@ -7,7 +7,7 @@
     <link rel="icon" type="image/jpeg" href="assets/images/logo.jpg">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="css/styles.css?v=24">
+    <link rel="stylesheet" href="css/styles.css?v=25">
     <!-- NUNIT-INJECT: CATCH JS ERRORS -->
     <script>
         window.addEventListener('error', function(e) { 
@@ -592,9 +592,9 @@
         </main>
     </div>
 
-    <script src="js/data.js?v=24"></script>
-    <script src="js/app.js?v=24"></script>
-    <script src="js/wizard.js?v=24"></script>
+    <script src="js/data.js?v=25"></script>
+    <script src="js/app.js?v=25"></script>
+    <script src="js/wizard.js?v=25"></script>
     <script>
         lucide.createIcons();
     </script>
@@ -836,19 +836,21 @@
                 </div>
             </div>
         </div>
-    <!-- CENTER OF SCREEN UI MODAL DIALOG (ALERT / SUCCESS / CONFIRM) -->
-    <div id="uiAlertModal" class="modal hidden" style="position: fixed; inset: 0; background: rgba(0, 0, 0, 0.78); backdrop-filter: blur(6px); z-index: 999999; display: flex; align-items: center; justify-content: center;">
-        <div class="panel" style="width: 90%; max-width: 440px; background: #161616; border: 1px solid rgba(255, 190, 11, 0.35); box-shadow: 0 20px 60px rgba(0,0,0,0.9), 0 0 30px rgba(255,190,11,0.15); border-radius: 16px; padding: 28px 24px; text-align: center; position: relative;">
-            <div id="uiAlertIconContainer" style="width: 58px; height: 58px; border-radius: 50%; background: rgba(46, 196, 182, 0.15); border: 1px solid rgba(46, 196, 182, 0.4); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto; color: #2ec4b6;">
-                <i data-lucide="check-circle" style="width: 30px; height: 30px;"></i>
+    </div>
+
+    <!-- CENTER OF SCREEN UI MODAL DIALOG (ALERT / SUCCESS / CONFIRM / PROMPT) -->
+    <div id="uiAlertModal" class="modal hidden">
+        <div class="panel" style="width: 90%; max-width: 440px; background: #161616; border: 1px solid rgba(255, 190, 11, 0.4); box-shadow: 0 24px 70px rgba(0,0,0,0.95), 0 0 35px rgba(255,190,11,0.2); border-radius: 16px; padding: 30px 24px; text-align: center; position: relative;">
+            <div id="uiAlertIconContainer" style="width: 60px; height: 60px; border-radius: 50%; background: rgba(46, 196, 182, 0.15); border: 1px solid rgba(46, 196, 182, 0.4); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto; color: #2ec4b6;">
+                <i data-lucide="check-circle" style="width: 32px; height: 32px;"></i>
             </div>
-            <h3 id="uiAlertTitle" style="margin: 0 0 8px 0; font-size: 1.25rem; font-weight: 700; color: #ffffff;">Submitted Successfully</h3>
-            <p id="uiAlertMessage" style="margin: 0 0 20px 0; color: var(--text-muted); font-size: 0.92rem; line-height: 1.5; word-break: break-word;">Ingredient requests submitted successfully to supervisor!</p>
+            <h3 id="uiAlertTitle" style="margin: 0 0 10px 0; font-size: 1.25rem; font-weight: 700; color: #ffffff; letter-spacing: -0.3px;">Notice</h3>
+            <p id="uiAlertMessage" style="margin: 0 0 20px 0; color: var(--text-muted); font-size: 0.93rem; line-height: 1.5; word-break: break-word;">Action details</p>
             <div id="uiAlertInputWrapper" style="display: none; margin-bottom: 20px;">
-                <input type="text" id="uiAlertInput" style="width: 100%; padding: 10px 14px; background: var(--dark); color: white; border: 1px solid var(--border); border-radius: 8px; font-size: 0.95rem; outline: none; text-align: center;">
+                <input type="text" id="uiAlertInput" style="width: 100%; padding: 11px 14px; background: #0d0d0d; color: #fff; border: 1px solid var(--border-gold); border-radius: 8px; font-size: 1rem; outline: none; text-align: center; box-shadow: inset 0 2px 6px rgba(0,0,0,0.6);">
             </div>
-            <div id="uiAlertBtnGroup" style="display: flex; gap: 10px; justify-content: center;">
-                <button type="button" class="btn btn-outline" id="uiAlertCancelBtn" style="flex: 1; padding: 11px 18px; font-size: 0.92rem; border-radius: 8px; display: none;">Cancel</button>
+            <div id="uiAlertBtnGroup" style="display: flex; gap: 12px; justify-content: center;">
+                <button type="button" class="btn btn-outline" id="uiAlertCancelBtn" style="flex: 1; padding: 11px 18px; font-size: 0.92rem; border-radius: 8px; display: none; border-color: rgba(255,255,255,0.2);">Cancel</button>
                 <button type="button" class="btn btn-primary" id="uiAlertOkBtn" style="flex: 1; padding: 11px 24px; font-size: 0.95rem; font-weight: 600; border-radius: 8px; box-shadow: 0 4px 16px rgba(255,190,11,0.3); cursor: pointer;">
                     Got it
                 </button>

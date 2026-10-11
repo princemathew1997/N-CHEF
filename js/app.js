@@ -11,108 +11,184 @@ let currentStoreView = 'all';
 // CENTER OF SCREEN UI MODAL NOTIFICATION (Matches n.chef Theme)
 // ============================================================
 window.showUiModal = function(options) {
-    let msg = '';
-    let title = 'Notice';
-    let type = 'success';
-    let btnText = 'Got it';
-    let isConfirm = false;
-    let onConfirm = null;
-    let onCancel = null;
+    return new Promise((resolve) => {
+        let msg = '';
+        let title = 'Notice';
+        let type = 'info';
+        let btnText = 'Got it';
+        let isConfirm = false;
+        let isPrompt = false;
+        let defaultValue = '';
+        let inputType = 'text';
+        let onConfirm = null;
+        let onCancel = null;
 
-    if (typeof options === 'string') {
-        msg = options;
-        const lower = msg.toLowerCase();
-        if (lower.includes('success') || lower.includes('submitted') || lower.includes('approved') || lower.includes('forwarded')) {
-            type = 'success';
-            title = 'Success';
-            btnText = 'Done';
-        } else if (lower.includes('not enough') || lower.includes('error') || lower.includes('cannot') || lower.includes('invalid') || lower.includes('required') || lower.includes('already exists') || lower.includes('rejected')) {
-            type = 'warning';
-            title = 'Attention';
-            btnText = 'Understood';
-        } else {
-            type = 'info';
-            title = 'Notice';
-            btnText = 'Got it';
+        if (typeof options === 'string') {
+            msg = options;
+            const lower = msg.toLowerCase();
+            if (lower.includes('success') || lower.includes('submitted') || lower.includes('approved') || lower.includes('forwarded') || lower.includes('allocated')) {
+                type = 'success';
+                title = 'Success';
+                btnText = 'Done';
+            } else if (lower.includes('not enough') || lower.includes('error') || lower.includes('cannot') || lower.includes('invalid') || lower.includes('required') || lower.includes('already exists') || lower.includes('rejected')) {
+                type = 'warning';
+                title = 'Attention';
+                btnText = 'Understood';
+            } else {
+                type = 'info';
+                title = 'Notice';
+                btnText = 'Got it';
+            }
+        } else if (typeof options === 'object' && options !== null) {
+            msg = options.message || '';
+            title = options.title || 'Notice';
+            type = options.type || 'info';
+            btnText = options.confirmText || options.btnText || (options.isConfirm ? 'Confirm' : 'Got it');
+            isConfirm = !!options.isConfirm;
+            isPrompt = !!options.isPrompt;
+            defaultValue = options.defaultValue !== undefined ? options.defaultValue : '';
+            inputType = options.inputType || 'text';
+            onConfirm = options.onConfirm || null;
+            onCancel = options.onCancel || null;
         }
-    } else if (typeof options === 'object' && options !== null) {
-        msg = options.message || '';
-        title = options.title || 'Notice';
-        type = options.type || 'success';
-        btnText = options.btnText || (options.isConfirm ? 'Confirm' : 'Got it');
-        isConfirm = !!options.isConfirm;
-        onConfirm = options.onConfirm || null;
-        onCancel = options.onCancel || null;
-    }
 
-    const modal = document.getElementById('uiAlertModal');
-    if (!modal) {
-        console.log(title, msg);
-        if (onConfirm) onConfirm();
-        return;
-    }
-
-    const titleEl = document.getElementById('uiAlertTitle');
-    const msgEl = document.getElementById('uiAlertMessage');
-    const iconContainer = document.getElementById('uiAlertIconContainer');
-    const okBtn = document.getElementById('uiAlertOkBtn');
-    const cancelBtn = document.getElementById('uiAlertCancelBtn');
-    const inputWrapper = document.getElementById('uiAlertInputWrapper');
-
-    if (titleEl) titleEl.textContent = title;
-    if (msgEl) msgEl.textContent = msg;
-    if (okBtn) okBtn.textContent = btnText;
-    if (inputWrapper) inputWrapper.style.display = 'none';
-
-    if (cancelBtn) {
-        cancelBtn.style.display = isConfirm ? 'inline-block' : 'none';
-        cancelBtn.onclick = () => {
-            modal.classList.add('hidden');
-            if (typeof onCancel === 'function') onCancel();
-        };
-    }
-
-    if (iconContainer) {
-        if (type === 'success') {
-            iconContainer.style.background = 'rgba(46, 196, 182, 0.15)';
-            iconContainer.style.borderColor = 'rgba(46, 196, 182, 0.4)';
-            iconContainer.style.color = '#2ec4b6';
-            iconContainer.innerHTML = '<i data-lucide="check-circle" style="width: 30px; height: 30px;"></i>';
-        } else if (type === 'warning' || type === 'danger') {
-            iconContainer.style.background = 'rgba(230, 57, 70, 0.15)';
-            iconContainer.style.borderColor = 'rgba(230, 57, 70, 0.4)';
-            iconContainer.style.color = '#ff6b6b';
-            iconContainer.innerHTML = '<i data-lucide="alert-circle" style="width: 30px; height: 30px;"></i>';
-        } else {
-            iconContainer.style.background = 'rgba(255, 190, 11, 0.15)';
-            iconContainer.style.borderColor = 'rgba(255, 190, 11, 0.4)';
-            iconContainer.style.color = 'var(--primary)';
-            iconContainer.innerHTML = '<i data-lucide="info" style="width: 30px; height: 30px;"></i>';
+        const modal = document.getElementById('uiAlertModal');
+        if (!modal) {
+            console.log(title, msg);
+            if (onConfirm) onConfirm(isPrompt ? defaultValue : true);
+            resolve(isPrompt ? defaultValue : true);
+            return;
         }
-    }
 
-    modal.classList.remove('hidden');
-    if (window.lucide) window.lucide.createIcons();
+        const titleEl = document.getElementById('uiAlertTitle');
+        const msgEl = document.getElementById('uiAlertMessage');
+        const iconContainer = document.getElementById('uiAlertIconContainer');
+        const okBtn = document.getElementById('uiAlertOkBtn');
+        const cancelBtn = document.getElementById('uiAlertCancelBtn');
+        const inputWrapper = document.getElementById('uiAlertInputWrapper');
+        const inputEl = document.getElementById('uiAlertInput');
 
-    function closeModal() {
-        modal.classList.add('hidden');
-        if (typeof onConfirm === 'function') onConfirm();
-        if (okBtn) okBtn.onclick = null;
-        document.removeEventListener('keydown', handleKey);
-    }
+        if (titleEl) titleEl.textContent = title;
+        if (msgEl) msgEl.textContent = msg;
+        if (okBtn) {
+            okBtn.textContent = btnText;
+            const isDanger = type === 'danger' || (isConfirm && (title.toLowerCase().includes('delete') || title.toLowerCase().includes('cancel') || title.toLowerCase().includes('clear') || msg.toLowerCase().includes('cancel')));
+            if (isDanger) {
+                okBtn.style.background = 'linear-gradient(135deg, #e63946, #c1121f)';
+                okBtn.style.boxShadow = '0 4px 16px rgba(230, 57, 70, 0.4)';
+                okBtn.style.color = '#ffffff';
+            } else {
+                okBtn.style.background = '';
+                okBtn.style.boxShadow = '0 4px 16px rgba(255, 190, 11, 0.3)';
+                okBtn.style.color = '';
+            }
+        }
 
-    function handleKey(e) {
-        if (e.key === 'Enter') {
-            closeModal();
-        } else if (e.key === 'Escape') {
+        if (isPrompt && inputWrapper && inputEl) {
+            inputWrapper.style.display = 'block';
+            inputEl.type = inputType;
+            inputEl.value = defaultValue;
+            setTimeout(() => {
+                inputEl.focus();
+                inputEl.select();
+            }, 60);
+        } else if (inputWrapper) {
+            inputWrapper.style.display = 'none';
+        }
+
+        if (cancelBtn) {
+            cancelBtn.style.display = (isConfirm || isPrompt) ? 'inline-block' : 'none';
+            cancelBtn.textContent = (options && options.cancelText) ? options.cancelText : 'Cancel';
+        }
+
+        if (iconContainer) {
+            if (type === 'success') {
+                iconContainer.style.background = 'rgba(46, 196, 182, 0.15)';
+                iconContainer.style.borderColor = 'rgba(46, 196, 182, 0.4)';
+                iconContainer.style.color = '#2ec4b6';
+                iconContainer.innerHTML = '<i data-lucide="check-circle" style="width: 32px; height: 32px;"></i>';
+            } else if (type === 'danger' || type === 'warning') {
+                iconContainer.style.background = 'rgba(230, 57, 70, 0.15)';
+                iconContainer.style.borderColor = 'rgba(230, 57, 70, 0.4)';
+                iconContainer.style.color = '#ff6b6b';
+                iconContainer.innerHTML = '<i data-lucide="alert-triangle" style="width: 32px; height: 32px;"></i>';
+            } else if (isConfirm) {
+                iconContainer.style.background = 'rgba(255, 190, 11, 0.15)';
+                iconContainer.style.borderColor = 'rgba(255, 190, 11, 0.4)';
+                iconContainer.style.color = 'var(--primary)';
+                iconContainer.innerHTML = '<i data-lucide="help-circle" style="width: 32px; height: 32px;"></i>';
+            } else {
+                iconContainer.style.background = 'rgba(255, 190, 11, 0.15)';
+                iconContainer.style.borderColor = 'rgba(255, 190, 11, 0.4)';
+                iconContainer.style.color = 'var(--primary)';
+                iconContainer.innerHTML = '<i data-lucide="info" style="width: 32px; height: 32px;"></i>';
+            }
+        }
+
+        modal.classList.remove('hidden');
+        if (window.lucide) window.lucide.createIcons();
+
+        function cleanup() {
             modal.classList.add('hidden');
-            if (isConfirm && typeof onCancel === 'function') onCancel();
+            if (okBtn) okBtn.onclick = null;
+            if (cancelBtn) cancelBtn.onclick = null;
             document.removeEventListener('keydown', handleKey);
         }
-    }
 
-    if (okBtn) okBtn.onclick = closeModal;
-    document.addEventListener('keydown', handleKey);
+        function handleConfirm() {
+            const val = (isPrompt && inputEl) ? inputEl.value : true;
+            cleanup();
+            if (typeof onConfirm === 'function') onConfirm(val);
+            resolve(val);
+        }
+
+        function handleCancel() {
+            cleanup();
+            if (typeof onCancel === 'function') onCancel();
+            resolve(isPrompt ? null : false);
+        }
+
+        function handleKey(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleConfirm();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                handleCancel();
+            }
+        }
+
+        if (okBtn) okBtn.onclick = handleConfirm;
+        if (cancelBtn) cancelBtn.onclick = handleCancel;
+        document.addEventListener('keydown', handleKey);
+    });
+};
+
+window.showConfirmModal = function(message, title = 'Please Confirm', options = {}) {
+    return window.showUiModal({
+        title: title,
+        message: message,
+        isConfirm: true,
+        type: options.type || (title.toLowerCase().includes('cancel') || title.toLowerCase().includes('delete') ? 'danger' : 'warning'),
+        confirmText: options.confirmText || (title.toLowerCase().includes('cancel') || title.toLowerCase().includes('delete') ? 'Yes, Proceed' : 'Yes, Confirm'),
+        cancelText: options.cancelText || 'Cancel',
+        onConfirm: options.onConfirm,
+        onCancel: options.onCancel
+    });
+};
+
+window.showPromptModal = function(message, defaultValue = '', title = 'Input Required', options = {}) {
+    return window.showUiModal({
+        title: title,
+        message: message,
+        isPrompt: true,
+        defaultValue: defaultValue,
+        type: 'info',
+        confirmText: options.confirmText || 'Submit',
+        cancelText: options.cancelText || 'Cancel',
+        onConfirm: options.onConfirm,
+        onCancel: options.onCancel
+    });
 };
 
 // Seamlessly route all window.alert calls to the center UI modal!
@@ -947,8 +1023,12 @@ function initForms() {
     
     const clearAllRequestsBtn = document.getElementById('clearAllRequestsBtn');
     if (clearAllRequestsBtn) {
-        clearAllRequestsBtn.addEventListener('click', () => {
-            if (confirm("Are you sure you want to clear all requests? This action cannot be undone.")) {
+        clearAllRequestsBtn.addEventListener('click', async () => {
+            const confirmed = await window.showConfirmModal("Are you sure you want to clear all requests? This action cannot be undone.", "Clear All Requests", {
+                type: 'danger',
+                confirmText: 'Clear All'
+            });
+            if (confirmed) {
                 if (currentUser.role === 'admin') {
                     requestsData.length = 0;
                 } else {
@@ -962,6 +1042,11 @@ function initForms() {
                 saveData();
                 loadRequestsData();
                 updateRequestsBadge();
+                window.showUiModal({
+                    title: "Requests Cleared",
+                    message: "All requests have been successfully cleared.",
+                    type: "info"
+                });
             }
         });
     }
@@ -1079,11 +1164,11 @@ function initForms() {
         }
     });
 
-    document.getElementById('btnRejectIndent')?.addEventListener('click', () => {
+    document.getElementById('btnRejectIndent')?.addEventListener('click', async () => {
         const indent = indentsData.find(i => i.id === activeReviewingIndentId);
         if (indent) {
-            const reason = prompt("Enter reason for rejection:", "Insufficient stock / revised plan");
-            if (reason !== null) {
+            const reason = await window.showPromptModal("Enter reason for rejection:", "Insufficient stock / revised plan", "Reject Indent");
+            if (reason !== null && reason !== false) {
                 indent.status = 'Rejected';
                 indent.rejectReason = reason;
                 // Linked requests become rejected as well
@@ -1094,7 +1179,11 @@ function initForms() {
                 });
                 saveData();
                 document.getElementById('modalIndentApproval')?.classList.add('hidden');
-                alert(`Indent ${indent.indentNumber || indent.id} has been rejected.`);
+                window.showUiModal({
+                    title: "Indent Rejected",
+                    message: `Indent ${indent.indentNumber || indent.id} has been rejected.`,
+                    type: "warning"
+                });
                 loadIndentsData();
             }
         }
@@ -1458,16 +1547,25 @@ function loadChefPortalData() {
 }
 window.loadChefPortalData = loadChefPortalData;
 
-window.deleteChefRequest = function(reqId) {
+window.deleteChefRequest = async function(reqId) {
     const reqIndex = requestsData.findIndex(r => r.id === reqId);
     if (reqIndex === -1 || requestsData[reqIndex].status !== 'Pending') return;
     
-    if (confirm("Are you sure you want to cancel this request?")) {
+    const confirmed = await window.showConfirmModal("Are you sure you want to cancel this request?", "Cancel Request", {
+        type: 'danger',
+        confirmText: 'Yes, Cancel Request'
+    });
+    if (confirmed) {
         requestsData.splice(reqIndex, 1);
         saveData();
         loadChefPortalData();
         if (typeof loadRequestsData === 'function') loadRequestsData();
         if (typeof updateRequestsBadge === 'function') updateRequestsBadge();
+        window.showUiModal({
+            title: "Request Cancelled",
+            message: "Your request has been cancelled.",
+            type: "info"
+        });
     }
 };
 
@@ -1477,13 +1575,22 @@ function loadStoreInventoryData() {}
 // ============================================================
 // ADMIN VIEWS
 // ============================================================
-window.deleteItem = function(itemId) {
-    if (confirm("Are you sure you want to delete this item? This action cannot be undone.")) {
+window.deleteItem = async function(itemId) {
+    const confirmed = await window.showConfirmModal("Are you sure you want to delete this item? This action cannot be undone.", "Delete Item", {
+        type: 'danger',
+        confirmText: 'Yes, Delete'
+    });
+    if (confirmed) {
         const itemIndex = masterItemsData.findIndex(i => i.id === itemId);
         if (itemIndex > -1) {
             masterItemsData.splice(itemIndex, 1);
             saveData();
             loadDashboardData();
+            window.showUiModal({
+                title: "Item Deleted",
+                message: "Master item removed successfully.",
+                type: "info"
+            });
         }
     }
 };
@@ -2536,13 +2643,17 @@ function openIndentApprovalModal(indentId) {
 window.openConsolidationModal = openConsolidationModal;
 window.openIndentApprovalModal = openIndentApprovalModal;
 
-window.approveRequest = function(reqId) {
+window.approveRequest = async function(reqId) {
     const req = requestsData.find(r => r.id === reqId);
     if (!req) return;
     
     const item = masterItemsData.find(i => i.id === req.itemId);
     if (!item) {
-        alert("Item no longer exists.");
+        window.showUiModal({
+            title: "Item Missing",
+            message: "Item no longer exists in inventory.",
+            type: "warning"
+        });
         return;
     }
     
@@ -2550,19 +2661,27 @@ window.approveRequest = function(reqId) {
     const currentTotal = getItemTotalQty(item);
     const available = (item.bought || 0) - currentTotal;
     
-    let approveQtyStr = prompt(`Requested: ${req.qty}. Available in stock: ${available}.\nEnter amount to allocate:`, Math.min(req.qty, available));
+    const approveQtyStr = await window.showPromptModal(`Requested: ${req.qty}. Available in stock: ${available}.\nEnter amount to allocate:`, Math.min(req.qty, available), "Allocate Stock");
     
-    if (approveQtyStr === null) return;
+    if (approveQtyStr === null || approveQtyStr === false) return;
     
     const approveQty = parseFloat(approveQtyStr);
     
     if (isNaN(approveQty) || approveQty <= 0) {
-        alert("Invalid quantity.");
+        window.showUiModal({
+            title: "Invalid Quantity",
+            message: "Please enter a valid positive number.",
+            type: "warning"
+        });
         return;
     }
     
     if (approveQty > available) {
-        alert(`Not enough stock. You only have ${available} available.`);
+        window.showUiModal({
+            title: "Insufficient Stock",
+            message: `Not enough stock available. You currently have ${available} ${item.unit || ''} in store.`,
+            type: "warning"
+        });
         return;
     }
     
@@ -2575,6 +2694,11 @@ window.approveRequest = function(reqId) {
     saveData();
     loadRequestsData();
     loadDashboardData();
+    window.showUiModal({
+        title: "Stock Allocated",
+        message: `Successfully allocated ${approveQty} ${item.unit || ''} of ${item.name} to outlet.`,
+        type: "success"
+    });
 };
 
 window.rejectRequest = function(reqId) {
@@ -2588,14 +2712,14 @@ window.rejectRequest = function(reqId) {
     }
 };
 
-window.sendRequestToAdmin = function(reqId) {
+window.sendRequestToAdmin = async function(reqId) {
     const req = requestsData.find(r => r.id === reqId);
     if (!req || req.status !== 'Pending') return;
     
     const chefDisplay = req.chefName || req.requestedBy || 'Chef';
-    const promptMsg = `Send "${req.itemName}" (${req.qty} ${req.unit || 'kg'}) from ${chefDisplay} to Admin for approval?\nClick OK to forward, or change quantity:`;
-    const newQtyStr = prompt(promptMsg, req.qty);
-    if (newQtyStr === null) return;
+    const promptMsg = `Send "${req.itemName}" (${req.qty} ${req.unit || 'kg'}) from ${chefDisplay} to Admin for approval?\nConfirm or modify the requested quantity:`;
+    const newQtyStr = await window.showPromptModal(promptMsg, req.qty, "Forward to Admin");
+    if (newQtyStr === null || newQtyStr === false) return;
     
     const newQty = parseFloat(newQtyStr);
     if (!isNaN(newQty) && newQty > 0) {
@@ -2611,7 +2735,11 @@ window.sendRequestToAdmin = function(reqId) {
     if (typeof loadChefPortalData === 'function') loadChefPortalData();
     updateRequestsBadge();
     
-    alert(`Request for ${req.itemName} (${req.qty} ${req.unit || 'kg'}) forwarded to Admin for approval!`);
+    window.showUiModal({
+        title: "Forwarded to Admin",
+        message: `Request for ${req.itemName} (${req.qty} ${req.unit || 'kg'}) forwarded to Admin for approval!`,
+        type: "success"
+    });
 };
 
 window.updateSectionItemQty = function(reqId, val) {
@@ -2704,7 +2832,7 @@ window.sendAllSectionsToAdmin = function() {
     alert(`Successfully submitted ${pendingReqs.length} section item requests from ${outlet.name} to Admin for approval!`);
 };
 
-window.adminApproveAllSections = function() {
+window.adminApproveAllSections = async function() {
     const filterOutlet = document.getElementById('filterOutlet')?.value || 'all';
     const targetReqs = requestsData.filter(r => {
         if (r.status !== 'Sent to Admin' && r.status !== 'Pending') return false;
@@ -2713,11 +2841,18 @@ window.adminApproveAllSections = function() {
     });
     
     if (targetReqs.length === 0) {
-        alert("No pending section requests to approve.");
+        window.showUiModal({
+            title: "No Requests",
+            message: "No pending section requests to approve.",
+            type: "warning"
+        });
         return;
     }
     
-    if (!confirm(`Approve all ${targetReqs.length} section requests and allocate stock to the respective outlets?`)) return;
+    const confirmed = await window.showConfirmModal(`Approve all ${targetReqs.length} section requests and allocate stock to the respective outlets?`, "Approve All Requests", {
+        confirmText: 'Approve All'
+    });
+    if (!confirmed) return;
     
     targetReqs.forEach(req => {
         const item = masterItemsData.find(i => i.id === req.itemId);
@@ -2746,19 +2881,27 @@ window.adminApproveAllSections = function() {
     updateRequestsBadge();
     updateIndentsBadge();
     
-    alert(`Successfully approved all ${targetReqs.length} section requests! Stock allocated to outlets.`);
+    window.showUiModal({
+        title: "Requests Approved",
+        message: `Successfully approved all ${targetReqs.length} section requests! Stock allocated to outlets.`,
+        type: "success"
+    });
 };
 
-window.editRequest = function(reqId) {
+window.editRequest = async function(reqId) {
     const req = requestsData.find(r => r.id === reqId);
     if (!req || req.status !== 'Pending') return;
     
-    let newQtyStr = prompt("Enter new quantity for this request:", req.qty);
-    if (newQtyStr === null) return;
+    const newQtyStr = await window.showPromptModal("Enter new quantity for this request:", req.qty, "Edit Quantity");
+    if (newQtyStr === null || newQtyStr === false) return;
     
     const newQty = parseFloat(newQtyStr);
     if (isNaN(newQty) || newQty <= 0) {
-        alert("Invalid quantity.");
+        window.showUiModal({
+            title: "Invalid Quantity",
+            message: "Please enter a valid numeric quantity.",
+            type: "warning"
+        });
         return;
     }
     
@@ -2767,15 +2910,24 @@ window.editRequest = function(reqId) {
     loadRequestsData();
 };
 
-window.deleteRequest = function(reqId) {
+window.deleteRequest = async function(reqId) {
     const reqIndex = requestsData.findIndex(r => r.id === reqId);
     if (reqIndex === -1 || requestsData[reqIndex].status !== 'Pending') return;
     
-    if (confirm("Are you sure you want to delete this request?")) {
+    const confirmed = await window.showConfirmModal("Are you sure you want to delete this request?", "Delete Request", {
+        type: 'danger',
+        confirmText: 'Delete'
+    });
+    if (confirmed) {
         requestsData.splice(reqIndex, 1);
         saveData();
         loadRequestsData();
         updateRequestsBadge();
+        window.showUiModal({
+            title: "Request Deleted",
+            message: "The request has been deleted.",
+            type: "info"
+        });
     }
 };
 

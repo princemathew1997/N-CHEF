@@ -630,3 +630,37 @@ tbody tr:hover {
 .fade-in-page.show {
     opacity: 1;
 }
+
+/* Centered Custom UI Alert / Confirm / Prompt Modal */
+#uiAlertModal {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background: rgba(0, 0, 0, 0.8) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    z-index: 9999999 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    animation: fadeInModalBg 0.2s ease-out;
+}
+
+#uiAlertModal.hidden {
+    display: none !important;
+}
+
+#uiAlertModal .panel {
+    animation: centerModalScale 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeInModalBg {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes centerModalScale {
+    from { transform: scale(0.92); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
