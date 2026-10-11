@@ -1018,8 +1018,7 @@ function updateFormSelects(visibleOutlets) {
             displayEl.style.border = '1px solid rgba(255, 190, 11, 0.25)';
             displayEl.style.borderRadius = '8px';
             displayEl.style.fontSize = '0.88rem';
-            displayEl.style.color = 'var(--text-main)';
-            displayEl.innerHTML = `<span>${label}: <strong style="color: var(--primary); font-weight: 600;">${singleOutlet.name}</strong></span><span style="font-size: 0.72rem; color: var(--primary); background: rgba(255,190,11,0.15); padding: 2px 7px; border-radius: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Allocated</span>`;
+            displayEl.innerHTML = `<span>${label}: <strong style="color: var(--primary); font-weight: 600;">${singleOutlet.name}</strong></span>`;
         } else {
             sel.style.display = '';
             if (displayEl) {
