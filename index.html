@@ -93,9 +93,24 @@
                 <a href="#" class="nav-item admin-only" id="navLocations">
                     <i data-lucide="map-pin"></i> Locations
                 </a>
-                <a href="#" class="nav-item admin-only" id="navUsers">
-                    <i data-lucide="users"></i> Users
-                </a>
+                <div class="nav-group admin-only" id="navGroupUsers">
+                    <a href="#" class="nav-item" id="navUsers">
+                        <i data-lucide="users"></i>
+                        <span>Users</span>
+                        <i data-lucide="chevron-down" id="navUsersChevron" style="width: 14px; height: 14px; margin-left: auto; transition: transform 0.25s ease;"></i>
+                    </a>
+                    <div class="nav-submenu" id="navUsersSubmenu">
+                        <a href="#" class="nav-subitem" id="navSubSupervisors">
+                            <i data-lucide="user-check" style="width: 14px; height: 14px;"></i> Supervisors
+                        </a>
+                        <a href="#" class="nav-subitem" id="navSubChefs">
+                            <i data-lucide="chef-hat" style="width: 14px; height: 14px;"></i> Chefs
+                        </a>
+                        <a href="#" class="nav-subitem" id="navSubAdmins">
+                            <i data-lucide="shield" style="width: 14px; height: 14px;"></i> Admins
+                        </a>
+                    </div>
+                </div>
             </nav>
             <div class="user-profile">
                 <div class="user-avatar" id="userInitial">U</div>
@@ -611,74 +626,302 @@
 
             <!-- USERS VIEW (Admin Only) -->
             <div id="viewUsers" class="hidden">
-                <header class="dash-header">
+                <header class="dash-header" style="margin-bottom: 22px;">
                     <div class="header-title">
                         <h1>Manage <span class="text-primary">Users</span></h1>
-                        <p>View and manage supervisors.</p>
+                        <p>Configure credentials, outlets, and roles across your organization.</p>
+                    </div>
+                    <!-- Subdivisions Tab Pills -->
+                    <div style="display: flex; gap: 6px; background: rgba(0,0,0,0.45); padding: 5px; border-radius: 12px; border: 1px solid var(--border);">
+                        <button type="button" class="user-sub-tab active" id="tabUserSupervisors" data-sub="supervisor">
+                            <i data-lucide="user-check" style="width: 15px; height: 15px;"></i> Supervisors
+                            <span id="badgeCountSupervisors">0</span>
+                        </button>
+                        <button type="button" class="user-sub-tab" id="tabUserChefs" data-sub="chef">
+                            <i data-lucide="chef-hat" style="width: 15px; height: 15px;"></i> Chefs
+                            <span id="badgeCountChefs">0</span>
+                        </button>
+                        <button type="button" class="user-sub-tab" id="tabUserAdmins" data-sub="admin">
+                            <i data-lucide="shield" style="width: 15px; height: 15px;"></i> Admins
+                            <span id="badgeCountAdmins">0</span>
+                        </button>
+                        <button type="button" class="user-sub-tab" id="tabUserAll" data-sub="all">
+                            <i data-lucide="users" style="width: 15px; height: 15px;"></i> All Users
+                            <span id="badgeCountAll">0</span>
+                        </button>
                     </div>
                 </header>
-                <div class="dash-grid">
-                    <div class="panel table-container">
-                        <table>
-                            <thead>
-                                <tr><th>Name</th><th>Username</th><th>Role</th><th>Assigned Locations</th><th>Actions</th></tr>
-                            </thead>
-                            <tbody id="usersTableBody"></tbody>
-                        </table>
-                    </div>
-                    <div class="sidebar-right">
-                        <div class="panel form-section">
-                            <h3 id="userFormTitle">Add User</h3>
-                            <input type="hidden" id="editUsername">
-                            <div class="input-group">
-                                <input type="text" id="newUserName" placeholder="Full Name">
+
+                <!-- 1. SUBDIVISION: SUPERVISORS -->
+                <div id="userSectionSupervisor" class="user-subdivision-content">
+                    <div class="dash-grid" style="grid-template-columns: 1fr 1.15fr; gap: 20px; align-items: start;">
+                        <!-- Add Supervisor Form -->
+                        <div class="panel form-section" style="background: rgba(20, 17, 10, 0.75); border: 1px solid var(--border-gold); border-radius: 16px; padding: 24px;">
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+                                <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(255,190,11,0.15); color: var(--primary); display: flex; align-items: center; justify-content: center;">
+                                    <i data-lucide="user-check" style="width: 24px; height: 24px;"></i>
+                                </div>
+                                <div>
+                                    <h3 id="supFormTitle" style="margin: 0; font-size: 1.2rem; color: #fff;">Add New Supervisor</h3>
+                                    <p style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">Create supervisor account & assign outlets</p>
+                                </div>
                             </div>
-                            <div class="input-group">
-                                <input type="text" id="newUserUsername" placeholder="Username">
+
+                            <input type="hidden" id="editSupervisorUsername">
+
+                            <div class="input-group" style="margin-bottom: 14px;">
+                                <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Supervisor Full Name</label>
+                                <input type="text" id="supFullName" placeholder="Enter supervisor full name" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
                             </div>
-                            <div class="input-group">
-                                <input type="password" id="newUserPassword" placeholder="Password (leave blank to keep current)">
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                                <div class="input-group">
+                                    <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Username (Login)</label>
+                                    <input type="text" id="supUsername" placeholder="Enter username" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
+                                </div>
+                                <div class="input-group">
+                                    <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Password</label>
+                                    <input type="password" id="supPassword" placeholder="Enter password" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
+                                </div>
                             </div>
-                            <div class="input-group">
-                                <select id="newUserRole">
-                                    <option value="supervisor">Supervisor</option>
-                                    <option value="admin">Admin</option>
-                                    <option value="chef">Chef</option>
-                                </select>
-                            </div>
-                            <div class="input-group">
-                                <label style="margin-bottom: 8px;">Assigned Locations</label>
-                                <div id="userLocationsCheckboxes" style="display: flex; flex-direction: column; gap: 8px; max-height: 150px; overflow-y: auto;">
+
+                            <div class="input-group" style="margin-bottom: 20px;">
+                                <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 8px; display: flex; justify-content: space-between; font-weight: 500;">
+                                    <span>Assigned Locations / Outlets</span>
+                                    <span style="font-size: 0.72rem; color: var(--primary);">Select outlets supervisor oversees</span>
+                                </label>
+                                <div id="supLocationsCheckboxes" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; background: rgba(0,0,0,0.35); padding: 14px; border: 1px solid var(--border); border-radius: 8px; max-height: 180px; overflow-y: auto;">
                                     <!-- Populated dynamically -->
                                 </div>
                             </div>
-                            <div class="input-group" id="userSectionsGroup" style="display: none;">
-                                <label style="margin-bottom: 8px;">Assigned Cuisines</label>
-                                <div id="userSectionsCheckboxes" style="display: flex; flex-direction: column; gap: 8px; max-height: 150px; overflow-y: auto;">
-                                    <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                        <input type="checkbox" value="Indian" class="section-checkbox"> Indian
-                                    </label>
-                                    <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                        <input type="checkbox" value="Continental" class="section-checkbox"> Continental
-                                    </label>
-                                    <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                        <input type="checkbox" value="Tandoor" class="section-checkbox"> Tandoor
-                                    </label>
-                                    <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                        <input type="checkbox" value="Chinese" class="section-checkbox"> Chinese
-                                    </label>
-                                    <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                        <input type="checkbox" value="Arabic" class="section-checkbox"> Arabic
-                                    </label>
-                                    <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                        <input type="checkbox" value="Kerala" class="section-checkbox"> Kerala
-                                    </label>
+
+                            <div style="display: flex; gap: 10px;">
+                                <button class="btn btn-primary" id="btnSaveSupervisorSubmit" style="flex: 1; padding: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.95rem;">
+                                    <i data-lucide="user-plus" style="width: 16px; height: 16px;"></i> Save & Register Supervisor
+                                </button>
+                                <button class="btn btn-outline hidden" id="btnCancelEditSupervisor" style="padding: 12px 20px; font-size: 0.9rem;">Cancel</button>
+                            </div>
+                        </div>
+
+                        <!-- Supervisors Table -->
+                        <div class="panel table-container" style="background: rgba(20, 17, 10, 0.75); border: 1px solid var(--border); border-radius: 16px; padding: 22px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                                <div>
+                                    <h3 style="margin: 0; font-size: 1.15rem; color: #fff; display: flex; align-items: center; gap: 8px;">
+                                        <i data-lucide="user-check" style="width: 18px; height: 18px; color: var(--primary);"></i> Supervisors
+                                    </h3>
+                                    <p style="margin: 2px 0 0 0; font-size: 0.78rem; color: var(--text-muted);">Active outlet supervisors</p>
+                                </div>
+                                <span id="supCountBadge" style="background: rgba(255,190,11,0.15); color: var(--primary); padding: 4px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 700;">0 Supervisors</span>
+                            </div>
+                            <div style="overflow-x: auto;">
+                                <table style="width: 100%; font-size: 0.85rem;">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Username</th>
+                                            <th>Assigned Outlets</th>
+                                            <th style="text-align: left; padding-left: 12px;">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="supervisorsTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. SUBDIVISION: CHEFS -->
+                <div id="userSectionChef" class="user-subdivision-content hidden">
+                    <div class="dash-grid" style="grid-template-columns: 1fr 1.15fr; gap: 20px; align-items: start;">
+                        <!-- Add Chef Form -->
+                        <div class="panel form-section" style="background: rgba(20, 17, 10, 0.75); border: 1px solid var(--border-gold); border-radius: 16px; padding: 24px;">
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+                                <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(255,190,11,0.15); color: var(--primary); display: flex; align-items: center; justify-content: center;">
+                                    <i data-lucide="chef-hat" style="width: 24px; height: 24px;"></i>
+                                </div>
+                                <div>
+                                    <h3 id="adminChefFormTitle" style="margin: 0; font-size: 1.2rem; color: #fff;">Add Kitchen Chef</h3>
+                                    <p style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">Assign outlet and kitchen cuisine sections</p>
                                 </div>
                             </div>
-                            <div style="display: flex; gap: 8px; margin-top: 12px;">
-                                <button class="btn btn-primary" style="flex: 1;" id="saveUserBtn">Save</button>
-                                <button class="btn btn-outline hidden" style="flex: 1;" id="cancelEditUserBtn">Cancel</button>
+
+                            <input type="hidden" id="editAdminChefUsername">
+
+                            <div class="input-group" style="margin-bottom: 14px;">
+                                <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Chef Full Name</label>
+                                <input type="text" id="adminChefFullName" placeholder="Enter chef full name" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
                             </div>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+                                <div class="input-group">
+                                    <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Username (Login)</label>
+                                    <input type="text" id="adminChefUsername" placeholder="Enter username" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
+                                </div>
+                                <div class="input-group">
+                                    <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Password</label>
+                                    <input type="password" id="adminChefPassword" placeholder="Enter password" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
+                                </div>
+                            </div>
+
+                            <!-- Assigned Outlet -->
+                            <div class="input-group" style="margin-bottom: 16px;">
+                                <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Assigned Outlet</label>
+                                <select id="adminChefOutletSelect" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
+                                    <!-- Populated dynamically -->
+                                </select>
+                            </div>
+
+                            <!-- Assigned Cuisines -->
+                            <div class="input-group" style="margin-bottom: 20px;">
+                                <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 8px; display: flex; justify-content: space-between; font-weight: 500;">
+                                    <span>Assign Kitchen Cuisines / Sections</span>
+                                    <span style="font-size: 0.72rem; color: var(--primary);">Select all sections chef handles</span>
+                                </label>
+                                <div id="adminChefCuisinesCheckboxes" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; background: rgba(0,0,0,0.35); padding: 14px; border: 1px solid var(--border); border-radius: 8px;">
+                                    <!-- Populated dynamically -->
+                                </div>
+                            </div>
+
+                            <div style="display: flex; gap: 10px;">
+                                <button class="btn btn-primary" id="btnSaveAdminChefSubmit" style="flex: 1; padding: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.95rem;">
+                                    <i data-lucide="user-plus" style="width: 16px; height: 16px;"></i> Save & Register Chef
+                                </button>
+                                <button class="btn btn-outline hidden" id="btnCancelEditAdminChef" style="padding: 12px 20px; font-size: 0.9rem;">Cancel</button>
+                            </div>
+                        </div>
+
+                        <!-- Chefs Table -->
+                        <div class="panel table-container" style="background: rgba(20, 17, 10, 0.75); border: 1px solid var(--border); border-radius: 16px; padding: 22px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                                <div>
+                                    <h3 style="margin: 0; font-size: 1.15rem; color: #fff; display: flex; align-items: center; gap: 8px;">
+                                        <i data-lucide="chef-hat" style="width: 18px; height: 18px; color: var(--primary);"></i> Kitchen Chefs
+                                    </h3>
+                                    <p style="margin: 2px 0 0 0; font-size: 0.78rem; color: var(--text-muted);">All registered chefs across outlets</p>
+                                </div>
+                                <span id="adminChefCountBadge" style="background: rgba(255,190,11,0.15); color: var(--primary); padding: 4px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 700;">0 Chefs</span>
+                            </div>
+                            <div style="overflow-x: auto;">
+                                <table style="width: 100%; font-size: 0.85rem;">
+                                    <thead>
+                                        <tr>
+                                            <th>Chef Name</th>
+                                            <th>Username</th>
+                                            <th>Outlet</th>
+                                            <th>Cuisines</th>
+                                            <th style="text-align: left; padding-left: 12px;">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="adminChefsTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. SUBDIVISION: ADMINS -->
+                <div id="userSectionAdmin" class="user-subdivision-content hidden">
+                    <div class="dash-grid" style="grid-template-columns: 1fr 1.15fr; gap: 20px; align-items: start;">
+                        <!-- Add Admin Form -->
+                        <div class="panel form-section" style="background: rgba(20, 17, 10, 0.75); border: 1px solid var(--border-gold); border-radius: 16px; padding: 24px;">
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+                                <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(255,190,11,0.15); color: var(--primary); display: flex; align-items: center; justify-content: center;">
+                                    <i data-lucide="shield" style="width: 24px; height: 24px;"></i>
+                                </div>
+                                <div>
+                                    <h3 id="adminUserFormTitle" style="margin: 0; font-size: 1.2rem; color: #fff;">Add System Admin</h3>
+                                    <p style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">Create administrator account with full privileges</p>
+                                </div>
+                            </div>
+
+                            <input type="hidden" id="editAdminUserUsername">
+
+                            <div class="input-group" style="margin-bottom: 14px;">
+                                <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Admin Full Name</label>
+                                <input type="text" id="adminUserFullName" placeholder="Enter admin full name" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                                <div class="input-group">
+                                    <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Username (Login)</label>
+                                    <input type="text" id="adminUserUsername" placeholder="Enter username" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
+                                </div>
+                                <div class="input-group">
+                                    <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Password</label>
+                                    <input type="password" id="adminUserPassword" placeholder="Enter password" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
+                                </div>
+                            </div>
+
+                            <div class="input-group" style="margin-bottom: 20px;">
+                                <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">System Access Privileges</label>
+                                <div style="background: rgba(255,190,11,0.06); border: 1px solid rgba(255,190,11,0.25); border-radius: 8px; padding: 12px 14px; display: flex; align-items: center; gap: 10px;">
+                                    <i data-lucide="check-circle" style="width: 18px; height: 18px; color: var(--primary);"></i>
+                                    <span style="font-size: 0.85rem; color: #fff;">Full Administrative Access &mdash; All Outlets, Stock, Approvals & Settings</span>
+                                </div>
+                            </div>
+
+                            <div style="display: flex; gap: 10px;">
+                                <button class="btn btn-primary" id="btnSaveAdminUserSubmit" style="flex: 1; padding: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.95rem;">
+                                    <i data-lucide="user-plus" style="width: 16px; height: 16px;"></i> Save & Register Admin
+                                </button>
+                                <button class="btn btn-outline hidden" id="btnCancelEditAdminUser" style="padding: 12px 20px; font-size: 0.9rem;">Cancel</button>
+                            </div>
+                        </div>
+
+                        <!-- Admins Table -->
+                        <div class="panel table-container" style="background: rgba(20, 17, 10, 0.75); border: 1px solid var(--border); border-radius: 16px; padding: 22px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                                <div>
+                                    <h3 style="margin: 0; font-size: 1.15rem; color: #fff; display: flex; align-items: center; gap: 8px;">
+                                        <i data-lucide="shield" style="width: 18px; height: 18px; color: var(--primary);"></i> System Administrators
+                                    </h3>
+                                    <p style="margin: 2px 0 0 0; font-size: 0.78rem; color: var(--text-muted);">Active administrators</p>
+                                </div>
+                                <span id="adminUserCountBadge" style="background: rgba(255,190,11,0.15); color: var(--primary); padding: 4px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 700;">0 Admins</span>
+                            </div>
+                            <div style="overflow-x: auto;">
+                                <table style="width: 100%; font-size: 0.85rem;">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Username</th>
+                                            <th>Privileges</th>
+                                            <th style="text-align: left; padding-left: 12px;">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="adminsTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. SUBDIVISION: ALL USERS OVERVIEW -->
+                <div id="userSectionAll" class="user-subdivision-content hidden">
+                    <div class="panel table-container" style="background: rgba(20, 17, 10, 0.75); border: 1px solid var(--border); border-radius: 16px; padding: 24px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
+                            <div>
+                                <h3 style="margin: 0; font-size: 1.15rem; color: #fff; display: flex; align-items: center; gap: 8px;">
+                                    <i data-lucide="users" style="width: 18px; height: 18px; color: var(--primary);"></i> All System Users
+                                </h3>
+                                <p style="margin: 2px 0 0 0; font-size: 0.78rem; color: var(--text-muted);">Master roster of all registered system accounts</p>
+                            </div>
+                            <span id="allUsersCountBadge" style="background: rgba(255,190,11,0.15); color: var(--primary); padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; font-weight: 700;">0 Users</span>
+                        </div>
+                        <div style="overflow-x: auto;">
+                            <table style="width: 100%; font-size: 0.85rem;">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Username</th>
+                                        <th>Role</th>
+                                        <th>Assigned Outlets & Sections</th>
+                                        <th style="text-align: left; padding-left: 12px;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="allUsersTableBody"></tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -759,16 +1002,10 @@
                             </div>
                         </div>
 
-                        <!-- Supervisor who is adding him (pre-filled by default) & Outlet -->
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
-                            <div class="input-group">
-                                <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Adding Supervisor</label>
-                                <input type="text" id="chefSupervisorDisplay" readonly style="background: rgba(255,190,11,0.08); color: var(--primary); font-weight: 600; padding: 11px 14px; border: 1px solid rgba(255,190,11,0.3); border-radius: 8px; cursor: not-allowed; width: 100%;">
-                            </div>
-                            <div class="input-group">
-                                <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Assigned Outlet</label>
-                                <input type="text" id="chefOutletDisplay" readonly style="background: rgba(255,190,11,0.08); color: var(--primary); font-weight: 600; padding: 11px 14px; border: 1px solid rgba(255,190,11,0.3); border-radius: 8px; cursor: not-allowed; width: 100%;">
-                            </div>
+                        <!-- Assigned Outlet -->
+                        <div class="input-group" style="margin-bottom: 16px;">
+                            <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Assigned Outlet</label>
+                            <input type="text" id="chefOutletDisplay" readonly style="background: rgba(255,190,11,0.08); color: var(--primary); font-weight: 600; padding: 11px 14px; border: 1px solid rgba(255,190,11,0.3); border-radius: 8px; cursor: not-allowed; width: 100%;">
                         </div>
 
                         <!-- Assigned Cuisines -->
@@ -807,9 +1044,8 @@
                                     <tr>
                                         <th>Chef Name</th>
                                         <th>Username</th>
-                                        <th>Added By</th>
                                         <th>Assigned Cuisines</th>
-                                        <th style="text-align: right;">Action</th>
+                                        <th style="text-align: left; padding-left: 12px;">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody id="chefsTableBody"></tbody>
@@ -822,9 +1058,9 @@
         </main>
     </div>
 
-    <script src="js/data.js?v=35"></script>
-    <script src="js/app.js?v=35"></script>
-    <script src="js/wizard.js?v=35"></script>
+    <script src="js/data.js?v=37"></script>
+    <script src="js/app.js?v=37"></script>
+    <script src="js/wizard.js?v=37"></script>
     <script>
         lucide.createIcons();
     </script>

@@ -541,6 +541,12 @@ function initNavigation() {
     const viewUsers = document.getElementById('viewUsers');
     const viewAddChef = document.getElementById('viewAddChef');
     
+    const navUsersSubmenu = document.getElementById('navUsersSubmenu');
+    const navUsersChevron = document.getElementById('navUsersChevron');
+    const navSubSupervisors = document.getElementById('navSubSupervisors');
+    const navSubChefs = document.getElementById('navSubChefs');
+    const navSubAdmins = document.getElementById('navSubAdmins');
+
     const hideAllViews = () => {
         viewMaster.classList.add('hidden');
         viewRequests.classList.add('hidden');
@@ -561,6 +567,9 @@ function initNavigation() {
         navVendors.classList.remove('active');
         navLocations.classList.remove('active');
         navUsers.classList.remove('active');
+        if (navSubSupervisors) navSubSupervisors.classList.remove('active');
+        if (navSubChefs) navSubChefs.classList.remove('active');
+        if (navSubAdmins) navSubAdmins.classList.remove('active');
         if (navAddChef) navAddChef.classList.remove('active');
     };
 
@@ -569,6 +578,8 @@ function initNavigation() {
         hideAllViews();
         if (navRequestsSubmenu) navRequestsSubmenu.classList.remove('open');
         if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(0deg)';
+        if (navUsersSubmenu) navUsersSubmenu.classList.remove('open');
+        if (navUsersChevron) navUsersChevron.style.transform = 'rotate(0deg)';
         viewMaster.classList.remove('hidden');
         navMaster.classList.add('active');
         currentView = 'viewMasterOrders';
@@ -585,6 +596,8 @@ function initNavigation() {
             if (navRequestsSubmenu) navRequestsSubmenu.classList.add('open');
             if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(180deg)';
         }
+        if (navUsersSubmenu) navUsersSubmenu.classList.remove('open');
+        if (navUsersChevron) navUsersChevron.style.transform = 'rotate(0deg)';
         
         // Default to Manage Request view
         hideAllViews();
@@ -631,6 +644,8 @@ function initNavigation() {
             hideAllViews();
             if (navRequestsSubmenu) navRequestsSubmenu.classList.remove('open');
             if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(0deg)';
+            if (navUsersSubmenu) navUsersSubmenu.classList.remove('open');
+            if (navUsersChevron) navUsersChevron.style.transform = 'rotate(0deg)';
             if (viewIndents) viewIndents.classList.remove('hidden');
             navIndents.classList.add('active');
             currentView = 'viewIndents';
@@ -652,6 +667,10 @@ function initNavigation() {
     navVendors.addEventListener('click', (e) => {
         e.preventDefault();
         hideAllViews();
+        if (navRequestsSubmenu) navRequestsSubmenu.classList.remove('open');
+        if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(0deg)';
+        if (navUsersSubmenu) navUsersSubmenu.classList.remove('open');
+        if (navUsersChevron) navUsersChevron.style.transform = 'rotate(0deg)';
         viewVendors.classList.remove('hidden');
         navVendors.classList.add('active');
         loadVendorsData();
@@ -660,6 +679,10 @@ function initNavigation() {
     navLocations.addEventListener('click', (e) => {
         e.preventDefault();
         hideAllViews();
+        if (navRequestsSubmenu) navRequestsSubmenu.classList.remove('open');
+        if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(0deg)';
+        if (navUsersSubmenu) navUsersSubmenu.classList.remove('open');
+        if (navUsersChevron) navUsersChevron.style.transform = 'rotate(0deg)';
         viewLocations.classList.remove('hidden');
         navLocations.classList.add('active');
         loadLocationsData();
@@ -667,11 +690,72 @@ function initNavigation() {
 
     navUsers.addEventListener('click', (e) => {
         e.preventDefault();
+        const isOpen = navUsersSubmenu && navUsersSubmenu.classList.contains('open');
+        if (isOpen && currentView === 'viewUsers') {
+            navUsersSubmenu.classList.remove('open');
+            if (navUsersChevron) navUsersChevron.style.transform = 'rotate(0deg)';
+        } else {
+            if (navUsersSubmenu) navUsersSubmenu.classList.add('open');
+            if (navUsersChevron) navUsersChevron.style.transform = 'rotate(180deg)';
+        }
+        if (navRequestsSubmenu) navRequestsSubmenu.classList.remove('open');
+        if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(0deg)';
+
         hideAllViews();
         viewUsers.classList.remove('hidden');
         navUsers.classList.add('active');
-        loadUsersData();
+        currentView = 'viewUsers';
+        if (typeof switchUserSubdivision === 'function') {
+            switchUserSubdivision('supervisor');
+        } else {
+            loadUsersData();
+        }
     });
+
+    if (navSubSupervisors) {
+        navSubSupervisors.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            hideAllViews();
+            viewUsers.classList.remove('hidden');
+            navUsers.classList.add('active');
+            if (navUsersSubmenu) navUsersSubmenu.classList.add('open');
+            if (navUsersChevron) navUsersChevron.style.transform = 'rotate(180deg)';
+            navSubSupervisors.classList.add('active');
+            currentView = 'viewUsers';
+            if (typeof switchUserSubdivision === 'function') switchUserSubdivision('supervisor');
+        });
+    }
+
+    if (navSubChefs) {
+        navSubChefs.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            hideAllViews();
+            viewUsers.classList.remove('hidden');
+            navUsers.classList.add('active');
+            if (navUsersSubmenu) navUsersSubmenu.classList.add('open');
+            if (navUsersChevron) navUsersChevron.style.transform = 'rotate(180deg)';
+            navSubChefs.classList.add('active');
+            currentView = 'viewUsers';
+            if (typeof switchUserSubdivision === 'function') switchUserSubdivision('chef');
+        });
+    }
+
+    if (navSubAdmins) {
+        navSubAdmins.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            hideAllViews();
+            viewUsers.classList.remove('hidden');
+            navUsers.classList.add('active');
+            if (navUsersSubmenu) navUsersSubmenu.classList.add('open');
+            if (navUsersChevron) navUsersChevron.style.transform = 'rotate(180deg)';
+            navSubAdmins.classList.add('active');
+            currentView = 'viewUsers';
+            if (typeof switchUserSubdivision === 'function') switchUserSubdivision('admin');
+        });
+    }
 
     if (navAddChef) {
         navAddChef.addEventListener('click', (e) => {
@@ -679,6 +763,8 @@ function initNavigation() {
             hideAllViews();
             if (navRequestsSubmenu) navRequestsSubmenu.classList.remove('open');
             if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(0deg)';
+            if (navUsersSubmenu) navUsersSubmenu.classList.remove('open');
+            if (navUsersChevron) navUsersChevron.style.transform = 'rotate(0deg)';
             if (viewAddChef) viewAddChef.classList.remove('hidden');
             navAddChef.classList.add('active');
             currentView = 'viewAddChef';
@@ -4154,199 +4240,694 @@ window.removeVendor = function(id) {
     }
 };
 
+// ============================================================
+// USER MANAGEMENT & SUBDIVISIONS (Supervisors, Chefs, Admins)
+// ============================================================
+let currentUserSubdivision = 'supervisor';
+let userEventsInitialized = false;
+
+function initUserManagementEvents() {
+    if (userEventsInitialized) return;
+    userEventsInitialized = true;
+
+    // Sub-tab switching
+    document.querySelectorAll('.user-sub-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            const sub = tab.dataset.sub;
+            if (sub) switchUserSubdivision(sub);
+        });
+    });
+
+    // 1. Supervisor Form Listeners
+    const btnSaveSup = document.getElementById('btnSaveSupervisorSubmit');
+    if (btnSaveSup) btnSaveSup.addEventListener('click', saveSupervisorUser);
+    const btnCancelSup = document.getElementById('btnCancelEditSupervisor');
+    if (btnCancelSup) btnCancelSup.addEventListener('click', resetSupervisorForm);
+
+    // 2. Admin Chef Form Listeners
+    const btnSaveAdminChef = document.getElementById('btnSaveAdminChefSubmit');
+    if (btnSaveAdminChef) btnSaveAdminChef.addEventListener('click', saveAdminChefUser);
+    const btnCancelAdminChef = document.getElementById('btnCancelEditAdminChef');
+    if (btnCancelAdminChef) btnCancelAdminChef.addEventListener('click', resetAdminChefForm);
+
+    const adminChefOutletSel = document.getElementById('adminChefOutletSelect');
+    if (adminChefOutletSel) {
+        adminChefOutletSel.addEventListener('change', () => {
+            updateAdminChefSupervisorSelect();
+        });
+    }
+
+    // 3. Admin User Form Listeners
+    const btnSaveAdminUser = document.getElementById('btnSaveAdminUserSubmit');
+    if (btnSaveAdminUser) btnSaveAdminUser.addEventListener('click', saveAdminUser);
+    const btnCancelAdminUser = document.getElementById('btnCancelEditAdminUser');
+    if (btnCancelAdminUser) btnCancelAdminUser.addEventListener('click', resetAdminUserForm);
+}
+
+function switchUserSubdivision(subKey) {
+    currentUserSubdivision = subKey;
+    initUserManagementEvents();
+
+    // Update Tab Buttons
+    document.querySelectorAll('.user-sub-tab').forEach(tab => {
+        if (tab.dataset.sub === subKey) {
+            tab.classList.add('active');
+        } else {
+            tab.classList.remove('active');
+        }
+    });
+
+    // Update Sidebar Sub-items if open
+    const navSubSupervisors = document.getElementById('navSubSupervisors');
+    const navSubChefs = document.getElementById('navSubChefs');
+    const navSubAdmins = document.getElementById('navSubAdmins');
+    if (navSubSupervisors) navSubSupervisors.classList.toggle('active', subKey === 'supervisor');
+    if (navSubChefs) navSubChefs.classList.toggle('active', subKey === 'chef');
+    if (navSubAdmins) navSubAdmins.classList.toggle('active', subKey === 'admin');
+
+    // Toggle Content Sections
+    const secSup = document.getElementById('userSectionSupervisor');
+    const secChef = document.getElementById('userSectionChef');
+    const secAdmin = document.getElementById('userSectionAdmin');
+    const secAll = document.getElementById('userSectionAll');
+
+    if (secSup) secSup.classList.toggle('hidden', subKey !== 'supervisor');
+    if (secChef) secChef.classList.toggle('hidden', subKey !== 'chef');
+    if (secAdmin) secAdmin.classList.toggle('hidden', subKey !== 'admin');
+    if (secAll) secAll.classList.toggle('hidden', subKey !== 'all');
+
+    loadUsersData();
+}
+
 function loadUsersData() {
-    const cbContainer = document.getElementById('userLocationsCheckboxes');
+    initUserManagementEvents();
+
+    // 1. Calculate & Render Counts
+    const supervisors = usersData.filter(u => u.role === 'supervisor');
+    const chefs = usersData.filter(u => u.role === 'chef');
+    const admins = usersData.filter(u => u.role === 'admin');
+    const totalUsers = usersData.length;
+
+    const bSup = document.getElementById('badgeCountSupervisors');
+    if (bSup) bSup.textContent = supervisors.length;
+    const bChef = document.getElementById('badgeCountChefs');
+    if (bChef) bChef.textContent = chefs.length;
+    const bAdm = document.getElementById('badgeCountAdmins');
+    if (bAdm) bAdm.textContent = admins.length;
+    const bAll = document.getElementById('badgeCountAll');
+    if (bAll) bAll.textContent = totalUsers;
+
+    const supCountBadge = document.getElementById('supCountBadge');
+    if (supCountBadge) supCountBadge.textContent = `${supervisors.length} Supervisor${supervisors.length === 1 ? '' : 's'}`;
+
+    const adminChefCountBadge = document.getElementById('adminChefCountBadge');
+    if (adminChefCountBadge) adminChefCountBadge.textContent = `${chefs.length} Chef${chefs.length === 1 ? '' : 's'}`;
+
+    const adminUserCountBadge = document.getElementById('adminUserCountBadge');
+    if (adminUserCountBadge) adminUserCountBadge.textContent = `${admins.length} Admin${admins.length === 1 ? '' : 's'}`;
+
+    const allUsersCountBadge = document.getElementById('allUsersCountBadge');
+    if (allUsersCountBadge) allUsersCountBadge.textContent = `${totalUsers} Users`;
+
+    // 2. Render each section
+    renderSupervisorsSection(supervisors);
+    renderAdminChefsSection(chefs);
+    renderAdminsSection(admins);
+    renderAllUsersSection(usersData);
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// ------------------------------------------------------------
+// 1. SUPERVISORS SUBDIVISION
+// ------------------------------------------------------------
+function renderSupervisorsSection(supervisors) {
+    // Populate locations checkboxes
+    const cbContainer = document.getElementById('supLocationsCheckboxes');
     if (cbContainer && cbContainer.children.length === 0) {
-        let html = `<label style="display:flex; align-items:center; gap:8px; font-weight: 500;"><input type="checkbox" class="user-loc-cb" value="all"> All Locations</label>`;
+        let html = `
+            <label style="display:flex; align-items:center; gap:8px; font-weight: 600; color: #fff; cursor: pointer; background: rgba(255,255,255,0.04); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08);">
+                <input type="checkbox" class="sup-loc-cb" value="all" style="accent-color: var(--primary);"> All Locations
+            </label>
+        `;
         outletsData.forEach(o => {
-            html += `<label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" class="user-loc-cb" value="${o.id}"> ${o.name}</label>`;
+            html += `
+                <label style="display:flex; align-items:center; gap:8px; font-size: 0.85rem; color: #fff; cursor: pointer; background: rgba(255,255,255,0.03); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+                    <input type="checkbox" class="sup-loc-cb" value="${o.id}" style="accent-color: var(--primary);"> ${o.name}
+                </label>
+            `;
         });
         cbContainer.innerHTML = html;
     }
 
-    const secContainer = document.getElementById('userSectionsCheckboxes');
-    if (secContainer && secContainer.children.length === 0) {
-        const cuisines = (typeof cuisinesData !== 'undefined' && cuisinesData.length > 0) ? cuisinesData : [
-            { id: 'c_01', name: 'Indian' },
-            { id: 'c_02', name: 'Continental' },
-            { id: 'c_03', name: 'Tandoor' },
-            { id: 'c_04', name: 'Chinese' },
-            { id: 'c_05', name: 'Arabic' },
-            { id: 'c_06', name: 'Kerala' }
-        ];
-        secContainer.innerHTML = cuisines.map(c => `
-            <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                <input type="checkbox" value="${c.name}" class="section-checkbox"> ${c.name}
-            </label>
-        `).join('');
+    const tbody = document.getElementById('supervisorsTableBody');
+    if (!tbody) return;
+
+    if (supervisors.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 24px;">No supervisors registered yet. Use the form to add a supervisor.</td></tr>`;
+        return;
     }
 
-    const tbody = document.getElementById('usersTableBody');
-    tbody.innerHTML = usersData.map(u => {
-        const assignedCuisines = u.assignedSections || u.assignedCuisines || [];
-        const cuisinesDisplay = (u.role === 'chef' && assignedCuisines.length > 0)
-            ? `<div style="font-size: 0.72rem; color: var(--primary); font-weight: 600; margin-top: 3px;">Cuisines: ${assignedCuisines.join(', ')}</div>`
-            : '';
+    tbody.innerHTML = supervisors.map(s => {
+        const locs = s.assignedLocations || [];
+        const locBadges = locs.map(l => {
+            const outletObj = outletsData.find(o => o.id === l);
+            const label = l === 'all' ? 'All Outlets' : (outletObj ? outletObj.name : l.toUpperCase());
+            return `<span style="background: rgba(255,190,11,0.12); color: var(--primary); border: 1px solid rgba(255,190,11,0.25); padding: 2px 7px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; margin: 2px; display: inline-block;">${label}</span>`;
+        }).join('');
+
         return `
             <tr>
-                <td><strong>${u.name}</strong></td>
-                <td>${u.username}</td>
-                <td><span class="status ok">${u.role}</span></td>
-                <td class="text-muted">
-                    <div>${u.assignedLocations.join(', ')}</div>
-                    ${cuisinesDisplay}
-                </td>
-                <td style="display: flex; gap: 4px;">
-                    <button class="icon-btn" onclick="editUser('${u.username}')" title="Edit"><i data-lucide="edit"></i></button>
-                    <button class="icon-btn text-danger" onclick="removeUser('${u.username}')" title="Remove"><i data-lucide="trash-2"></i></button>
+                <td><strong style="color: var(--text-main); font-size: 0.9rem;">${s.name}</strong></td>
+                <td><span style="font-family: monospace; color: var(--text-muted); font-size: 0.82rem;">${s.username}</span></td>
+                <td><div>${locBadges || '<span style="color: var(--text-muted);">None</span>'}</div></td>
+                <td style="text-align: left; padding-left: 12px; white-space: nowrap;">
+                    <div style="display: inline-flex; align-items: center; gap: 8px;">
+                        <button type="button" class="btn btn-outline" onclick="editSupervisorUser('${s.username}')" title="Edit Supervisor" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(255,190,11,0.5); color: var(--primary); background: rgba(255,190,11,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
+                            <i data-lucide="edit" style="width: 13px; height: 13px;"></i> Edit
+                        </button>
+                        <button type="button" class="btn btn-outline" onclick="removeSupervisorUser('${s.username}')" title="Remove Supervisor" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(239,71,111,0.5); color: #ef476f; background: rgba(239,71,111,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
+                            <i data-lucide="trash-2" style="width: 13px; height: 13px;"></i> Delete
+                        </button>
+                    </div>
                 </td>
             </tr>
         `;
     }).join('');
-    lucide.createIcons();
 }
 
-function saveUser() {
-    const editUsername = document.getElementById('editUsername').value;
-    const name = document.getElementById('newUserName').value.trim();
-    const username = document.getElementById('newUserUsername').value.trim();
-    const password = document.getElementById('newUserPassword').value.trim();
-    const role = document.getElementById('newUserRole').value;
-    
-    const checkboxes = document.querySelectorAll('.user-loc-cb');
-    const assignedLocations = [];
-    checkboxes.forEach(cb => {
-        if(cb.checked) assignedLocations.push(cb.value);
-    });
-    
-    const sectionCbs = document.querySelectorAll('.section-checkbox');
-    const assignedSections = [];
-    sectionCbs.forEach(cb => {
-        if(cb.checked) assignedSections.push(cb.value);
-    });
-    
-    if(!name || !username) {
-        alert("Name and username are required.");
+function saveSupervisorUser() {
+    const editUsername = document.getElementById('editSupervisorUsername')?.value;
+    const name = document.getElementById('supFullName')?.value.trim();
+    const username = document.getElementById('supUsername')?.value.trim();
+    const password = document.getElementById('supPassword')?.value.trim();
+
+    const checkedBoxes = document.querySelectorAll('.sup-loc-cb:checked');
+    const assignedLocations = Array.from(checkedBoxes).map(cb => cb.value);
+
+    if (!name) {
+        window.showToast("Please enter the supervisor's full name.", "warning");
         return;
     }
-    
+    if (!username) {
+        window.showToast("Please enter a username.", "warning");
+        return;
+    }
+    if (!editUsername && !password) {
+        window.showToast("Please enter a password for the new supervisor.", "warning");
+        return;
+    }
+    if (assignedLocations.length === 0) {
+        window.showToast("Please assign at least one location/outlet to the supervisor.", "warning");
+        return;
+    }
+
     if (editUsername) {
-        const user = usersData.find(u => u.username === editUsername);
-        if (user) {
-            user.name = name;
-            user.username = username;
-            if(password) user.password = password;
-            user.role = role;
-            user.assignedLocations = assignedLocations;
-            if (role === 'chef') {
-                user.assignedSections = assignedSections;
-                user.assignedCuisines = assignedSections;
-            }
-            if (currentUser && currentUser.username === user.username) {
-                currentUser.assignedLocations = assignedLocations;
-                if (role === 'chef') {
-                    currentUser.assignedSections = assignedSections;
-                    currentUser.assignedCuisines = assignedSections;
-                }
-            }
+        const sup = usersData.find(u => u.username === editUsername);
+        if (sup) {
+            sup.name = name;
+            sup.username = username;
+            if (password) sup.password = password;
+            sup.assignedLocations = assignedLocations;
+            window.showToast(`Supervisor ${name} updated successfully!`, "success");
         }
     } else {
-        if(!password) {
-            alert("Password is required for new users.");
+        if (usersData.some(u => u.username.toLowerCase() === username.toLowerCase())) {
+            window.showToast("Username already exists. Please choose another.", "warning");
             return;
         }
-        if(usersData.find(u => u.username === username)) {
-            alert("Username already exists.");
-            return;
-        }
-        const newUser = {
-            name, 
-            username, 
-            password, 
-            role, 
-            assignedLocations, 
-            assignedSections: role === 'chef' ? assignedSections : [],
-            assignedCuisines: role === 'chef' ? assignedSections : [],
-            title: role === 'admin' ? 'Manager' : (role === 'chef' ? 'Store Chef' : 'Supervisor')
+        const newSup = {
+            username,
+            password: password || '123',
+            role: 'supervisor',
+            name,
+            title: 'Supervisor',
+            salary: '-',
+            assignedLocations
         };
-        usersData.push(newUser);
+        usersData.push(newSup);
+        window.showToast(`Supervisor ${name} registered successfully!`, "success");
     }
-    
+
     saveData();
-    resetUserForm();
+    resetSupervisorForm();
     loadUsersData();
 }
 
-function resetUserForm() {
-    document.getElementById('userFormTitle').textContent = 'Add User';
-    document.getElementById('editUsername').value = '';
-    document.getElementById('newUserName').value = '';
-    document.getElementById('newUserUsername').value = '';
-    document.getElementById('newUserPassword').value = '';
-    document.getElementById('newUserRole').value = 'supervisor';
-    document.getElementById('cancelEditUserBtn').classList.add('hidden');
-    document.querySelectorAll('.user-loc-cb').forEach(cb => cb.checked = false);
-    
-    const secGroup = document.getElementById('userSectionsGroup');
-    if (secGroup) secGroup.style.display = 'none';
-    document.querySelectorAll('.section-checkbox').forEach(cb => cb.checked = false);
+function resetSupervisorForm() {
+    document.getElementById('editSupervisorUsername').value = '';
+    document.getElementById('supFullName').value = '';
+    document.getElementById('supUsername').value = '';
+    document.getElementById('supPassword').value = '';
+    document.getElementById('supFormTitle').textContent = 'Add New Supervisor';
+    document.getElementById('btnCancelEditSupervisor')?.classList.add('hidden');
+    document.querySelectorAll('.sup-loc-cb').forEach(cb => cb.checked = false);
 }
 
-window.editUser = function(username) {
-    const user = usersData.find(u => u.username === username);
-    if (!user) return;
-    
-    document.getElementById('userFormTitle').textContent = 'Edit User';
-    document.getElementById('editUsername').value = user.username;
-    document.getElementById('newUserName').value = user.name;
-    document.getElementById('newUserUsername').value = user.username;
-    document.getElementById('newUserPassword').value = '';
-    document.getElementById('newUserRole').value = user.role;
-    
-    document.querySelectorAll('.user-loc-cb').forEach(cb => {
-        cb.checked = user.assignedLocations.includes('all') || user.assignedLocations.includes(cb.value);
+window.editSupervisorUser = function(username) {
+    const sup = usersData.find(u => u.username === username);
+    if (!sup) return;
+
+    document.getElementById('editSupervisorUsername').value = sup.username;
+    document.getElementById('supFullName').value = sup.name || '';
+    document.getElementById('supUsername').value = sup.username || '';
+    document.getElementById('supPassword').value = '';
+    document.getElementById('supFormTitle').textContent = `Edit Supervisor: ${sup.name}`;
+    document.getElementById('btnCancelEditSupervisor')?.classList.remove('hidden');
+
+    const locs = sup.assignedLocations || [];
+    document.querySelectorAll('.sup-loc-cb').forEach(cb => {
+        cb.checked = locs.includes('all') || locs.includes(cb.value);
     });
-    
-    const secGroup = document.getElementById('userSectionsGroup');
-    if (secGroup) {
-        secGroup.style.display = (user.role === 'chef') ? 'block' : 'none';
-        const assigned = (user.assignedSections || user.assignedCuisines || []).map(s => String(s).toLowerCase());
-        document.querySelectorAll('.section-checkbox').forEach(cb => {
-            cb.checked = assigned.includes(cb.value.toLowerCase());
-        });
-    }
-    
-    document.getElementById('cancelEditUserBtn').classList.remove('hidden');
 };
 
-window.removeUser = function(username) {
-    if(currentUser && username === currentUser.username) {
-        alert("You cannot remove yourself while logged in.");
+window.removeSupervisorUser = async function(username) {
+    if (currentUser && currentUser.username === username) {
+        window.showToast("You cannot remove yourself while logged in.", "warning");
         return;
     }
+    const sup = usersData.find(u => u.username === username);
+    if (!sup) return;
+
+    const confirmed = await window.showConfirmModal(`Are you sure you want to remove supervisor "${sup.name}" (${sup.username})?`, "Remove Supervisor", {
+        danger: true,
+        confirmText: "Remove"
+    });
+    if (!confirmed) return;
+
     const idx = usersData.findIndex(u => u.username === username);
     if (idx > -1) {
         usersData.splice(idx, 1);
         saveData();
         loadUsersData();
+        window.showToast(`Supervisor ${sup.name} removed.`, "info");
     }
 };
+
+// ------------------------------------------------------------
+// 2. CHEFS SUBDIVISION (Admin Manage Chefs)
+// ------------------------------------------------------------
+function renderAdminChefsSection(chefs) {
+    // Populate Outlet Select
+    const outletSel = document.getElementById('adminChefOutletSelect');
+    if (outletSel && outletSel.options.length === 0) {
+        outletSel.innerHTML = outletsData.map(o => `<option value="${o.id}">${o.name}</option>`).join('');
+    }
+
+    // Populate Cuisines Checkboxes
+    const cuisinesContainer = document.getElementById('adminChefCuisinesCheckboxes');
+    if (cuisinesContainer && cuisinesContainer.children.length === 0) {
+        const availableCuisines = [
+            { id: 'Indian', name: 'Indian', icon: '🍛' },
+            { id: 'Continental', name: 'Continental', icon: '🥗' },
+            { id: 'Tandoor', name: 'Tandoor', icon: '🍢' },
+            { id: 'Chinese', name: 'Chinese', icon: '🍲' },
+            { id: 'Arabic', name: 'Arabic', icon: '🫓' },
+            { id: 'Kerala', name: 'Kerala', icon: '🥥' }
+        ];
+        cuisinesContainer.innerHTML = availableCuisines.map(c => `
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #fff; cursor: pointer; background: rgba(255,255,255,0.03); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08);">
+                <input type="checkbox" value="${c.name}" class="admin-chef-cuisine-cb" style="accent-color: var(--primary); cursor: pointer;">
+                <span>${c.icon} ${c.name}</span>
+            </label>
+        `).join('');
+    }
+
+    const tbody = document.getElementById('adminChefsTableBody');
+    if (!tbody) return;
+
+    if (chefs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 24px;">No kitchen chefs registered yet. Use the form to add a chef.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = chefs.map(c => {
+        const outletId = (c.assignedLocations && c.assignedLocations[0]) || 'brigade';
+        const outletObj = outletsData.find(o => o.id === outletId);
+        const outletName = outletObj ? outletObj.name : outletId.toUpperCase();
+
+        const cuisines = c.assignedSections || c.assignedCuisines || ['Indian'];
+        const cuisinesBadges = cuisines.map(cs => `<span style="background: rgba(255,190,11,0.12); color: var(--primary); border: 1px solid rgba(255,190,11,0.25); padding: 2px 7px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; margin: 2px; display: inline-block;">${cs}</span>`).join('');
+
+        return `
+            <tr>
+                <td><strong style="color: var(--text-main); font-size: 0.9rem;">${c.name}</strong></td>
+                <td><span style="font-family: monospace; color: var(--text-muted); font-size: 0.82rem;">${c.username}</span></td>
+                <td><span style="color: var(--primary); font-weight: 600; font-size: 0.82rem;">${outletName}</span></td>
+                <td><div>${cuisinesBadges}</div></td>
+                <td style="text-align: left; padding-left: 12px; white-space: nowrap;">
+                    <div style="display: inline-flex; align-items: center; gap: 8px;">
+                        <button type="button" class="btn btn-outline" onclick="editAdminChefUser('${c.username}')" title="Edit Chef" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(255,190,11,0.5); color: var(--primary); background: rgba(255,190,11,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
+                            <i data-lucide="edit" style="width: 13px; height: 13px;"></i> Edit
+                        </button>
+                        <button type="button" class="btn btn-outline" onclick="removeAdminChefUser('${c.username}')" title="Remove Chef" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(239,71,111,0.5); color: #ef476f; background: rgba(239,71,111,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
+                            <i data-lucide="trash-2" style="width: 13px; height: 13px;"></i> Delete
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function saveAdminChefUser() {
+    const editUsername = document.getElementById('editAdminChefUsername')?.value;
+    const name = document.getElementById('adminChefFullName')?.value.trim();
+    const username = document.getElementById('adminChefUsername')?.value.trim();
+    const password = document.getElementById('adminChefPassword')?.value.trim();
+    const outletId = document.getElementById('adminChefOutletSelect')?.value || 'brigade';
+
+    const checkedBoxes = document.querySelectorAll('.admin-chef-cuisine-cb:checked');
+    const selectedCuisines = Array.from(checkedBoxes).map(cb => cb.value);
+
+    if (!name) {
+        window.showToast("Please enter the chef's full name.", "warning");
+        return;
+    }
+    if (!username) {
+        window.showToast("Please enter a username.", "warning");
+        return;
+    }
+    if (!editUsername && !password) {
+        window.showToast("Please enter a password for the new chef.", "warning");
+        return;
+    }
+    if (selectedCuisines.length === 0) {
+        window.showToast("Please assign at least one cuisine section to the chef.", "warning");
+        return;
+    }
+
+    if (editUsername) {
+        const chef = usersData.find(u => u.username === editUsername);
+        if (chef) {
+            chef.name = name;
+            chef.username = username;
+            if (password) chef.password = password;
+            chef.assignedLocations = [outletId];
+            chef.assignedSections = selectedCuisines;
+            chef.assignedCuisines = selectedCuisines;
+            window.showToast(`Chef ${name} updated successfully!`, "success");
+        }
+    } else {
+        if (usersData.some(u => u.username.toLowerCase() === username.toLowerCase())) {
+            window.showToast("Username already exists. Please choose another.", "warning");
+            return;
+        }
+        const newChef = {
+            username,
+            password: password || '123',
+            role: 'chef',
+            name,
+            title: 'Store Chef',
+            salary: '-',
+            assignedLocations: [outletId],
+            addedBySupervisor: 'Administrator',
+            assignedSections: selectedCuisines,
+            assignedCuisines: selectedCuisines
+        };
+        usersData.push(newChef);
+        window.showToast(`Chef ${name} registered successfully!`, "success");
+    }
+
+    saveData();
+    resetAdminChefForm();
+    loadUsersData();
+    if (typeof renderChefsTable === 'function') renderChefsTable();
+}
+
+function resetAdminChefForm() {
+    document.getElementById('editAdminChefUsername').value = '';
+    document.getElementById('adminChefFullName').value = '';
+    document.getElementById('adminChefUsername').value = '';
+    document.getElementById('adminChefPassword').value = '';
+    document.getElementById('adminChefFormTitle').textContent = 'Add Kitchen Chef';
+    document.getElementById('btnCancelEditAdminChef')?.classList.add('hidden');
+    document.querySelectorAll('.admin-chef-cuisine-cb').forEach(cb => cb.checked = false);
+}
+
+window.editAdminChefUser = function(username) {
+    const chef = usersData.find(u => u.username === username);
+    if (!chef) return;
+
+    document.getElementById('editAdminChefUsername').value = chef.username;
+    document.getElementById('adminChefFullName').value = chef.name || '';
+    document.getElementById('adminChefUsername').value = chef.username || '';
+    document.getElementById('adminChefPassword').value = '';
+    document.getElementById('adminChefFormTitle').textContent = `Edit Chef: ${chef.name}`;
+    document.getElementById('btnCancelEditAdminChef')?.classList.remove('hidden');
+
+    const outletSel = document.getElementById('adminChefOutletSelect');
+    const chefOutlet = (chef.assignedLocations && chef.assignedLocations[0]) || 'brigade';
+    if (outletSel) outletSel.value = chefOutlet;
+
+    const cuisines = chef.assignedSections || chef.assignedCuisines || [];
+    document.querySelectorAll('.admin-chef-cuisine-cb').forEach(cb => {
+        cb.checked = cuisines.includes(cb.value);
+    });
+};
+
+window.removeAdminChefUser = async function(username) {
+    const chef = usersData.find(u => u.username === username);
+    if (!chef) return;
+
+    const confirmed = await window.showConfirmModal(`Are you sure you want to remove chef "${chef.name}" (${chef.username})?`, "Remove Chef", {
+        danger: true,
+        confirmText: "Remove"
+    });
+    if (!confirmed) return;
+
+    const idx = usersData.findIndex(u => u.username === username);
+    if (idx > -1) {
+        usersData.splice(idx, 1);
+        saveData();
+        loadUsersData();
+        if (typeof renderChefsTable === 'function') renderChefsTable();
+        window.showToast(`Chef ${chef.name} removed.`, "info");
+    }
+};
+
+// ------------------------------------------------------------
+// 3. ADMINS SUBDIVISION
+// ------------------------------------------------------------
+function renderAdminsSection(admins) {
+    const tbody = document.getElementById('adminsTableBody');
+    if (!tbody) return;
+
+    if (admins.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 24px;">No administrators registered yet.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = admins.map(a => `
+        <tr>
+            <td><strong style="color: var(--text-main); font-size: 0.9rem;">${a.name}</strong></td>
+            <td><span style="font-family: monospace; color: var(--text-muted); font-size: 0.82rem;">${a.username}</span></td>
+            <td><span style="background: rgba(46,196,182,0.15); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600;">Full System Access</span></td>
+            <td style="text-align: left; padding-left: 12px; white-space: nowrap;">
+                <div style="display: inline-flex; align-items: center; gap: 8px;">
+                    <button type="button" class="btn btn-outline" onclick="editAdminUser('${a.username}')" title="Edit Admin" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(255,190,11,0.5); color: var(--primary); background: rgba(255,190,11,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
+                        <i data-lucide="edit" style="width: 13px; height: 13px;"></i> Edit
+                    </button>
+                    <button type="button" class="btn btn-outline" onclick="removeAdminUser('${a.username}')" title="Remove Admin" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(239,71,111,0.5); color: #ef476f; background: rgba(239,71,111,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
+                        <i data-lucide="trash-2" style="width: 13px; height: 13px;"></i> Delete
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function saveAdminUser() {
+    const editUsername = document.getElementById('editAdminUserUsername')?.value;
+    const name = document.getElementById('adminUserFullName')?.value.trim();
+    const username = document.getElementById('adminUserUsername')?.value.trim();
+    const password = document.getElementById('adminUserPassword')?.value.trim();
+
+    if (!name) {
+        window.showToast("Please enter the administrator's full name.", "warning");
+        return;
+    }
+    if (!username) {
+        window.showToast("Please enter a username.", "warning");
+        return;
+    }
+    if (!editUsername && !password) {
+        window.showToast("Please enter a password for the new admin.", "warning");
+        return;
+    }
+
+    if (editUsername) {
+        const admin = usersData.find(u => u.username === editUsername);
+        if (admin) {
+            admin.name = name;
+            admin.username = username;
+            if (password) admin.password = password;
+            window.showToast(`Admin ${name} updated successfully!`, "success");
+        }
+    } else {
+        if (usersData.some(u => u.username.toLowerCase() === username.toLowerCase())) {
+            window.showToast("Username already exists. Please choose another.", "warning");
+            return;
+        }
+        const newAdmin = {
+            username,
+            password: password || '123',
+            role: 'admin',
+            name,
+            title: 'Administrator',
+            salary: '-',
+            assignedLocations: ['all']
+        };
+        usersData.push(newAdmin);
+        window.showToast(`Admin ${name} registered successfully!`, "success");
+    }
+
+    saveData();
+    resetAdminUserForm();
+    loadUsersData();
+}
+
+function resetAdminUserForm() {
+    document.getElementById('editAdminUserUsername').value = '';
+    document.getElementById('adminUserFullName').value = '';
+    document.getElementById('adminUserUsername').value = '';
+    document.getElementById('adminUserPassword').value = '';
+    document.getElementById('adminUserFormTitle').textContent = 'Add System Admin';
+    document.getElementById('btnCancelEditAdminUser')?.classList.add('hidden');
+}
+
+window.editAdminUser = function(username) {
+    const admin = usersData.find(u => u.username === username);
+    if (!admin) return;
+
+    document.getElementById('editAdminUserUsername').value = admin.username;
+    document.getElementById('adminUserFullName').value = admin.name || '';
+    document.getElementById('adminUserUsername').value = admin.username || '';
+    document.getElementById('adminUserPassword').value = '';
+    document.getElementById('adminUserFormTitle').textContent = `Edit Admin: ${admin.name}`;
+    document.getElementById('btnCancelEditAdminUser')?.classList.remove('hidden');
+};
+
+window.removeAdminUser = async function(username) {
+    if (currentUser && currentUser.username === username) {
+        window.showToast("You cannot remove yourself while logged in.", "warning");
+        return;
+    }
+    const admin = usersData.find(u => u.username === username);
+    if (!admin) return;
+
+    const confirmed = await window.showConfirmModal(`Are you sure you want to remove administrator "${admin.name}" (${admin.username})?`, "Remove Admin", {
+        danger: true,
+        confirmText: "Remove"
+    });
+    if (!confirmed) return;
+
+    const idx = usersData.findIndex(u => u.username === username);
+    if (idx > -1) {
+        usersData.splice(idx, 1);
+        saveData();
+        loadUsersData();
+        window.showToast(`Admin ${admin.name} removed.`, "info");
+    }
+};
+
+// ------------------------------------------------------------
+// 4. ALL USERS MASTER ROSTER
+// ------------------------------------------------------------
+function renderAllUsersSection(allUsers) {
+    const tbody = document.getElementById('allUsersTableBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = allUsers.map(u => {
+        let roleBadge = `<span class="status ok" style="text-transform: capitalize;">${u.role}</span>`;
+        if (u.role === 'admin') roleBadge = `<span style="background: rgba(46,196,182,0.15); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600;">Admin</span>`;
+        if (u.role === 'supervisor') roleBadge = `<span style="background: rgba(255,190,11,0.15); color: var(--primary); border: 1px solid rgba(255,190,11,0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600;">Supervisor</span>`;
+        if (u.role === 'chef') roleBadge = `<span style="background: rgba(255,100,50,0.15); color: #ff6432; border: 1px solid rgba(255,100,50,0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600;">Chef</span>`;
+
+        let details = '';
+        if (u.role === 'admin') {
+            details = `<span class="text-muted" style="font-size: 0.8rem;">All Outlets (Full Privileges)</span>`;
+        } else if (u.role === 'supervisor') {
+            const locs = (u.assignedLocations || []).map(l => {
+                const outletObj = outletsData.find(o => o.id === l);
+                return l === 'all' ? 'All Outlets' : (outletObj ? outletObj.name : l.toUpperCase());
+            }).join(', ');
+            details = `<span style="color: var(--text-muted); font-size: 0.8rem;">Outlets: ${locs || 'None'}</span>`;
+        } else if (u.role === 'chef') {
+            const outletId = (u.assignedLocations && u.assignedLocations[0]) || 'brigade';
+            const outletObj = outletsData.find(o => o.id === outletId);
+            const outletName = outletObj ? outletObj.name : outletId.toUpperCase();
+            const cuisines = (u.assignedSections || u.assignedCuisines || []).join(', ');
+            details = `
+                <div style="font-size: 0.8rem; color: var(--text-muted);">
+                    Outlet: <span style="color: var(--primary); font-weight: 500;">${outletName}</span> &bull; 
+                    Cuisines: <span style="color: #fff;">${cuisines || 'All'}</span>
+                </div>
+            `;
+        }
+
+        const editFn = u.role === 'supervisor' ? `editSupervisorUser('${u.username}')` : (u.role === 'chef' ? `editAdminChefUser('${u.username}')` : `editAdminUser('${u.username}')`);
+        const removeFn = u.role === 'supervisor' ? `removeSupervisorUser('${u.username}')` : (u.role === 'chef' ? `removeAdminChefUser('${u.username}')` : `removeAdminUser('${u.username}')`);
+
+        return `
+            <tr>
+                <td><strong style="color: var(--text-main); font-size: 0.9rem;">${u.name}</strong></td>
+                <td><span style="font-family: monospace; color: var(--text-muted); font-size: 0.82rem;">${u.username}</span></td>
+                <td>${roleBadge}</td>
+                <td>${details}</td>
+                <td style="text-align: left; padding-left: 12px; white-space: nowrap;">
+                    <div style="display: inline-flex; align-items: center; gap: 8px;">
+                        <button type="button" class="btn btn-outline" onclick="${editFn}" title="Edit User" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(255,190,11,0.5); color: var(--primary); background: rgba(255,190,11,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
+                            <i data-lucide="edit" style="width: 13px; height: 13px;"></i> Edit
+                        </button>
+                        <button type="button" class="btn btn-outline" onclick="${removeFn}" title="Remove User" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(239,71,111,0.5); color: #ef476f; background: rgba(239,71,111,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
+                            <i data-lucide="trash-2" style="width: 13px; height: 13px;"></i> Delete
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
 
 // ============================================================
 // SUPERVISOR CHEF MANAGEMENT (Add Chef)
 // ============================================================
 function loadAddChefView() {
     const supervisorInput = document.getElementById('chefSupervisorDisplay');
+    const supervisorSelect = document.getElementById('chefSupervisorSelect');
     const outletInput = document.getElementById('chefOutletDisplay');
-    
-    const supervisorName = currentUser ? currentUser.name : 'Supervisor';
-    if (supervisorInput) supervisorInput.value = supervisorName;
     
     const visibleOutlets = (typeof getVisibleOutlets === 'function') ? getVisibleOutlets() : outletsData;
     const currentOutlet = (visibleOutlets && visibleOutlets.length > 0) ? visibleOutlets[0] : (outletsData[0] || { id: 'brigade', name: 'BRIGADE' });
     if (outletInput) {
         outletInput.value = currentOutlet.name || 'BRIGADE';
         outletInput.dataset.outletId = currentOutlet.id || 'brigade';
+    }
+
+    // Check supervisors for this outlet
+    const outletSupervisors = usersData.filter(u => 
+        u.role === 'supervisor' && 
+        (u.assignedLocations && (u.assignedLocations.includes(currentOutlet.id) || u.assignedLocations.includes('all')))
+    );
+
+    if (outletSupervisors.length > 1) {
+        // Multiple supervisors exist for this outlet -> show dropdown
+        if (supervisorInput) supervisorInput.classList.add('hidden');
+        if (supervisorSelect) {
+            supervisorSelect.classList.remove('hidden');
+            supervisorSelect.innerHTML = outletSupervisors.map(s => 
+                `<option value="${s.name}" ${(currentUser && currentUser.name === s.name) ? 'selected' : ''}>${s.name} (${s.username})</option>`
+            ).join('');
+        }
+    } else {
+        // Only one (or 0) supervisor -> show default
+        if (supervisorSelect) supervisorSelect.classList.add('hidden');
+        if (supervisorInput) {
+            supervisorInput.classList.remove('hidden');
+            const defaultName = (outletSupervisors.length === 1) ? outletSupervisors[0].name : (currentUser ? currentUser.name : 'Supervisor');
+            supervisorInput.value = defaultName;
+        }
     }
 
     // Populate Cuisines Checkboxes
@@ -4392,24 +4973,28 @@ function renderChefsTable() {
     if (badge) badge.textContent = `${outletChefs.length} Chef${outletChefs.length === 1 ? '' : 's'}`;
 
     if (outletChefs.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 28px;">No chefs registered yet. Use the form to add your kitchen chefs.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 28px;">No chefs registered yet. Use the form to add your kitchen chefs.</td></tr>`;
         return;
     }
 
     tbody.innerHTML = outletChefs.map(chef => {
         const cuisines = chef.assignedSections || chef.assignedCuisines || ['Indian'];
         const cuisinesBadges = cuisines.map(cs => `<span style="background: rgba(255,190,11,0.12); color: var(--primary); border: 1px solid rgba(255,190,11,0.25); padding: 2px 7px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; margin: 2px; display: inline-block;">${cs}</span>`).join('');
-        const addedBy = chef.addedBySupervisor || 'Supervisor';
 
         return `
             <tr>
                 <td><strong style="color: var(--text-main); font-size: 0.9rem;">${chef.name}</strong></td>
                 <td><span style="font-family: monospace; color: var(--text-muted); font-size: 0.82rem;">${chef.username}</span></td>
-                <td><span style="color: var(--text-muted); font-size: 0.8rem;">${addedBy}</span></td>
                 <td><div>${cuisinesBadges}</div></td>
-                <td style="text-align: right; white-space: nowrap;">
-                    <button class="icon-btn" onclick="editChefUser('${chef.username}')" title="Edit Chef" style="margin-right: 4px;"><i data-lucide="edit" style="width: 14px; height: 14px;"></i></button>
-                    <button class="icon-btn text-danger" onclick="removeChefUser('${chef.username}')" title="Remove Chef"><i data-lucide="trash-2" style="width: 14px; height: 14px;"></i></button>
+                <td style="text-align: left; padding-left: 12px; white-space: nowrap;">
+                    <div style="display: inline-flex; align-items: center; gap: 8px;">
+                        <button type="button" class="btn btn-outline" onclick="editChefUser('${chef.username}')" title="Edit Chef" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(255,190,11,0.5); color: var(--primary); background: rgba(255,190,11,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
+                            <i data-lucide="edit" style="width: 13px; height: 13px;"></i> Edit
+                        </button>
+                        <button type="button" class="btn btn-outline" onclick="removeChefUser('${chef.username}')" title="Remove Chef" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(239,71,111,0.5); color: #ef476f; background: rgba(239,71,111,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
+                            <i data-lucide="trash-2" style="width: 13px; height: 13px;"></i> Delete
+                        </button>
+                    </div>
                 </td>
             </tr>
         `;
@@ -4423,7 +5008,15 @@ function saveChefUser() {
     const name = document.getElementById('chefFullName')?.value.trim();
     const username = document.getElementById('chefUsername')?.value.trim();
     const password = document.getElementById('chefPassword')?.value.trim();
-    const supervisorName = currentUser ? currentUser.name : 'Supervisor';
+    
+    const supervisorSelect = document.getElementById('chefSupervisorSelect');
+    const supervisorDisplay = document.getElementById('chefSupervisorDisplay');
+    let supervisorName = currentUser ? currentUser.name : 'Supervisor';
+    if (supervisorSelect && !supervisorSelect.classList.contains('hidden') && supervisorSelect.value) {
+        supervisorName = supervisorSelect.value;
+    } else if (supervisorDisplay && supervisorDisplay.value) {
+        supervisorName = supervisorDisplay.value;
+    }
     
     const outletInput = document.getElementById('chefOutletDisplay');
     const outletId = (outletInput && outletInput.dataset.outletId) ? outletInput.dataset.outletId : primaryOutlet.id;
@@ -4456,6 +5049,7 @@ function saveChefUser() {
             if (password) existingChef.password = password;
             existingChef.assignedSections = selectedCuisines;
             existingChef.assignedCuisines = selectedCuisines;
+            existingChef.addedBySupervisor = supervisorName;
             window.showToast(`Chef ${name} updated successfully!`, "success");
         }
     } else {
@@ -4494,6 +5088,7 @@ function resetChefForm() {
     document.getElementById('chefFormTitle').textContent = 'Add New Chef';
     document.getElementById('btnCancelEditChef')?.classList.add('hidden');
     document.querySelectorAll('.chef-cuisine-cb').forEach(cb => cb.checked = false);
+    loadAddChefView();
 }
 
 window.editChefUser = function(username) {
@@ -4506,6 +5101,14 @@ window.editChefUser = function(username) {
     document.getElementById('chefPassword').value = '';
     document.getElementById('chefFormTitle').textContent = `Edit Chef: ${chef.name}`;
     document.getElementById('btnCancelEditChef')?.classList.remove('hidden');
+
+    const supSel = document.getElementById('chefSupervisorSelect');
+    const supDis = document.getElementById('chefSupervisorDisplay');
+    if (supSel && !supSel.classList.contains('hidden') && chef.addedBySupervisor) {
+        supSel.value = chef.addedBySupervisor;
+    } else if (supDis && chef.addedBySupervisor) {
+        supDis.value = chef.addedBySupervisor;
+    }
 
     const cuisines = chef.assignedSections || chef.assignedCuisines || [];
     document.querySelectorAll('.chef-cuisine-cb').forEach(cb => {
