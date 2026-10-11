@@ -241,12 +241,14 @@ function renderWizardItems() {
         const isSelected = !!selData;
         const assignedCuisine = (typeof selData === 'object' && selData?.cuisine) ? selData.cuisine : '';
         
-        return `<div class="panel" style="cursor:pointer; display:flex; flex-direction:column; justify-content:space-between; align-items:center; text-align:center; padding:16px; border: 2px solid ${isSelected ? 'var(--primary)' : 'rgba(255,255,255,0.06)'}; transition:all 0.2s; position:relative; min-height:130px; background:${isSelected ? 'rgba(255,190,11,0.06)' : 'var(--card-bg, #1a1a1a)'};" onclick="toggleWizardItem('${item.id}')">
-            ${isSelected && assignedCuisine ? `<span style="position:absolute; top:8px; right:8px; font-size:0.68rem; font-weight:700; background:rgba(255,190,11,0.22); color:var(--primary); padding:2px 7px; border-radius:4px; border:1px solid rgba(255,190,11,0.4); text-transform:uppercase; letter-spacing:0.5px;">${assignedCuisine}</span>` : ''}
-            <strong style="margin-bottom:6px; margin-top:${isSelected && assignedCuisine ? '12px' : '0'}; font-size: 0.95rem;">${item.name}</strong>
-            <span style="font-size:0.8rem; color:var(--text-muted);">${item.unit}</span>
-            <div style="margin-top:12px; width:24px; height:24px; border-radius:50%; background:${isSelected ? 'var(--primary)' : 'rgba(255,255,255,0.1)'}; display:flex; align-items:center; justify-content:center;">
-                <i data-lucide="check" style="width:14px; height:14px; color:${isSelected ? '#000' : 'transparent'};"></i>
+        return `<div class="panel" style="cursor:pointer; display:flex; flex-direction:column; justify-content:space-between; align-items:center; text-align:center; padding: 22px 10px 14px 10px; border: 2px solid ${isSelected ? 'var(--primary)' : 'rgba(255,255,255,0.06)'}; transition:all 0.2s; position:relative; min-height:125px; background:${isSelected ? 'rgba(255,190,11,0.04)' : 'var(--card-bg, #1a1a1a)'};" onclick="toggleWizardItem('${item.id}')">
+            ${isSelected && assignedCuisine ? `<span style="position:absolute; top:6px; right:6px; font-size:0.58rem; font-weight:600; background:rgba(255,190,11,0.12); color:var(--primary); padding:1px 6px; border-radius:4px; border:1px solid rgba(255,190,11,0.22); letter-spacing:0.3px;">${assignedCuisine}</span>` : ''}
+            <div>
+                <strong style="display:block; font-size:0.92rem; line-height:1.2; margin-bottom:4px;">${item.name}</strong>
+                <span style="font-size:0.75rem; color:var(--text-muted);">${item.unit}</span>
+            </div>
+            <div style="margin-top:10px; width:22px; height:22px; border-radius:50%; background:${isSelected ? 'var(--primary)' : 'rgba(255,255,255,0.08)'}; display:flex; align-items:center; justify-content:center;">
+                <i data-lucide="check" style="width:13px; height:13px; color:${isSelected ? '#000' : 'transparent'};"></i>
             </div>
         </div>`;
     }).join('');
