@@ -384,7 +384,7 @@
                     <div style="display: grid; grid-template-columns: 2fr 1fr 2fr auto; gap: 10px; align-items: center;">
                         <select id="wsStockItemSelect" style="padding: 8px 12px; background: var(--dark); color: white; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem;"></select>
                         <input type="number" id="wsStockItemQty" min="0.1" step="any" placeholder="Quantity" style="padding: 8px 12px; background: var(--dark); color: white; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem;">
-                        <input type="text" id="wsStockItemReason" placeholder="Reason (e.g., Weekend buffer, Event)" style="padding: 8px 12px; background: var(--dark); color: white; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem;">
+                        <input type="text" id="wsStockItemReason" placeholder="Reason / Comment" style="padding: 8px 12px; background: var(--dark); color: white; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem;">
                         <button class="btn btn-primary" id="btnWsAddStockConfirm" style="padding: 8px 16px; font-size: 0.85rem;">Add to Request</button>
                     </div>
                 </div>
@@ -745,17 +745,17 @@
 
                         <div class="input-group" style="margin-bottom: 14px;">
                             <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Chef Full Name</label>
-                            <input type="text" id="chefFullName" placeholder="e.g. Chef Sanjay" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
+                            <input type="text" id="chefFullName" placeholder="Enter chef full name" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
                         </div>
 
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
                             <div class="input-group">
                                 <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Username (Login)</label>
-                                <input type="text" id="chefUsername" placeholder="e.g. chef_sanjay" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
+                                <input type="text" id="chefUsername" placeholder="Enter username" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
                             </div>
                             <div class="input-group">
                                 <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Password</label>
-                                <input type="password" id="chefPassword" placeholder="e.g. 123" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
+                                <input type="password" id="chefPassword" placeholder="Enter password" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
                             </div>
                         </div>
 
@@ -822,9 +822,9 @@
         </main>
     </div>
 
-    <script src="js/data.js?v=34"></script>
-    <script src="js/app.js?v=34"></script>
-    <script src="js/wizard.js?v=34"></script>
+    <script src="js/data.js?v=35"></script>
+    <script src="js/app.js?v=35"></script>
+    <script src="js/wizard.js?v=35"></script>
     <script>
         lucide.createIcons();
     </script>
@@ -935,7 +935,7 @@
                             <!-- populated -->
                         </select>
                         <input type="number" id="supervisorNewStockQty" placeholder="Quantity" min="1" style="padding: 8px; border-radius: 6px; background: var(--dark); color: var(--text-main); border: 1px solid var(--border);">
-                        <input type="text" id="supervisorNewStockReason" placeholder="Reason / Comment (e.g. Extra weekend demand)" style="padding: 8px; border-radius: 6px; background: var(--dark); color: var(--text-main); border: 1px solid var(--border);">
+                        <input type="text" id="supervisorNewStockReason" placeholder="Reason / Comment" style="padding: 8px; border-radius: 6px; background: var(--dark); color: var(--text-main); border: 1px solid var(--border);">
                         <button class="btn btn-primary" id="btnConfirmAddStockItem" style="padding: 8px 14px; font-size: 0.85rem;">Add</button>
                     </div>
                 </div>
@@ -1121,7 +1121,7 @@
 
             <div style="margin-bottom: 20px;">
                 <label style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; display: block;">PO Notes / Instructions</label>
-                <input type="text" id="poNotesInput" placeholder="e.g., Deliver by 7:00 AM, Quality grade A required" style="background: var(--dark); color: #fff; padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem;">
+                <input type="text" id="poNotesInput" placeholder="Delivery instructions / notes" style="background: var(--dark); color: #fff; padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem;">
             </div>
 
             <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); padding-top: 14px;">

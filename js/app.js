@@ -418,9 +418,13 @@ function initLogin() {
             if (user.role === 'admin') {
                 adminEls.forEach(el => el.classList.remove('hidden'));
                 superEls.forEach(el => el.classList.add('hidden'));
-            } else {
+            } else if (user.role === 'supervisor') {
                 adminEls.forEach(el => el.classList.add('hidden'));
                 superEls.forEach(el => el.classList.remove('hidden'));
+            } else {
+                // Chef and any other role: hide both admin and supervisor elements
+                adminEls.forEach(el => el.classList.add('hidden'));
+                superEls.forEach(el => el.classList.add('hidden'));
             }
             
             if (user.role === 'chef') {
