@@ -2364,7 +2364,17 @@ function openIndentApprovalModal(indentId) {
     document.getElementById('apprModalIndentId').textContent = indent.indentNumber || indent.id;
     document.getElementById('apprModalOutlet').textContent = indent.outletName || '-';
     document.getElementById('apprModalSupervisor').textContent = indent.supervisorName || '-';
-    document.getElementById('apprModalDate').textContent = indent.date || '-';
+    
+    // Format submission date nicely
+    const rawDate = indent.createdAt || indent.date || new Date().toISOString();
+    let dateDisplay = '-';
+    try {
+        const d = new Date(rawDate);
+        dateDisplay = !isNaN(d) ? d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : rawDate;
+    } catch(e) {
+        dateDisplay = rawDate;
+    }
+    document.getElementById('apprModalDate').textContent = dateDisplay;
     
     let statusBadge = `<span class="status ${indent.status === 'Approved' ? 'ok' : (indent.status === 'Rejected' ? 'low' : 'pending')}">${indent.status}</span>`;
     document.getElementById('apprModalStatus').innerHTML = statusBadge;
@@ -2379,79 +2389,95 @@ function openIndentApprovalModal(indentId) {
         }
     }
     
-    // Render each ingredient with Cuisine Breakdown Table (APR-05)
+    // Render each ingredient with Cuisine Breakdown Table
     const container = document.getElementById('apprModalIngredientsContainer');
     container.innerHTML = indent.items.map(item => {
-        // Compute total quantity for this ingredient breakdown
         const breakdown = item.cuisineBreakdown || [];
         const totalIngredientQty = breakdown.reduce((sum, b) => sum + (parseFloat(b.qty) || 0), 0) || item.originalQty || item.revisedQty || 1;
         
+        const origQ = parseFloat(item.originalQty) || 0;
+        const revQ = parseFloat(item.revisedQty) || 0;
+        const isAdjusted = Math.abs(revQ - origQ) > 0.001;
+        const hasCustomComment = item.comment && item.comment !== 'Consolidated from kitchen sections';
+        
         let alterationHtml = '';
-        if (item.originalQty !== item.revisedQty || item.comment) {
-            const diff = item.revisedQty - item.originalQty;
+        if (isAdjusted) {
+            const diff = revQ - origQ;
             alterationHtml = `
-                <div style="background: rgba(255,190,11,0.07); border: 1px solid rgba(255,190,11,0.25); border-radius: 6px; padding: 6px 12px; margin-top: 8px; font-size: 0.8rem; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                <div style="background: rgba(255,190,11,0.08); border: 1px solid rgba(255,190,11,0.3); border-radius: 6px; padding: 7px 12px; margin-top: 10px; font-size: 0.82rem; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
                     <div>
-                        <span style="color: var(--text-muted);">Supervisor Adjustment:</span>
-                        <strong style="margin-left: 4px;">Original ${item.originalQty} ${item.unit} &rarr; Revised ${item.revisedQty} ${item.unit}</strong>
-                        ${diff < 0 ? `<span style="color: var(--danger); font-weight: 600; margin-left: 4px;">(${diff} ${item.unit})</span>` : (diff > 0 ? `<span style="color: var(--success); font-weight: 600; margin-left: 4px;">(+${diff} ${item.unit})</span>` : '')}
+                        <span style="color: var(--primary); font-weight: 700;">⚠️ Supervisor Adjusted:</span>
+                        <span style="color: var(--text-muted); text-decoration: line-through; margin-left: 6px;">${item.originalQty} ${item.unit}</span>
+                        <strong style="color: var(--text-main); margin-left: 6px;">&rarr; ${item.revisedQty} ${item.unit}</strong>
+                        ${diff < 0 ? `<span style="color: var(--danger); font-weight: 700; margin-left: 6px;">(${diff.toFixed(1)} ${item.unit})</span>` : `<span style="color: var(--success); font-weight: 700; margin-left: 6px;">(+${diff.toFixed(1)} ${item.unit})</span>`}
                     </div>
-                    ${item.comment ? `<div><span style="color: var(--text-muted);">Reason:</span> <em style="color: var(--text-main);">"${item.comment}"</em></div>` : ''}
+                    ${hasCustomComment ? `<div><span style="color: var(--text-muted);">Note:</span> <em style="color: var(--text-main); font-weight: 500;">"${item.comment}"</em></div>` : ''}
+                </div>
+            `;
+        } else {
+            alterationHtml = `
+                <div style="margin-top: 6px; display: flex; align-items: center; gap: 8px;">
+                    <span style="background: rgba(46,196,182,0.12); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.25); padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600;">✓ Exact Chef Indent (No supervisor alteration)</span>
+                    ${hasCustomComment ? `<span style="font-size: 0.76rem; color: var(--text-muted);">Note: "${item.comment}"</span>` : ''}
                 </div>
             `;
         }
         
-        // Cuisine breakdown rows with percentage share (APR-05)
+        // Cuisine breakdown rows with percentage share
         const breakdownRows = breakdown.map(b => {
             const qty = parseFloat(b.qty) || 0;
             const sharePct = ((qty / totalIngredientQty) * 100).toFixed(1);
             return `
                 <tr>
-                    <td><strong style="color: var(--primary);">${b.cuisine}</strong></td>
-                    <td>${b.chef || 'Chef'}</td>
+                    <td><strong style="color: var(--primary);">${b.cuisine} Section</strong></td>
+                    <td><strong style="color: var(--text-main);">${b.chef || 'Chef'}</strong></td>
                     <td style="text-align: right;"><strong>${qty}</strong> ${item.unit}</td>
-                    <td style="text-align: right;"><span style="font-weight: 700; color: var(--primary); font-size: 0.95rem;">${sharePct}%</span></td>
+                    <td style="text-align: right;"><span style="font-weight: 700; color: var(--primary); font-size: 0.92rem;">${sharePct}%</span></td>
                 </tr>
             `;
         }).join('');
+
+        const totalRowHtml = breakdown.length > 1 ? `
+            <tr style="border-top: 2px solid var(--border); background: rgba(255,255,255,0.02); font-weight: bold;">
+                <td>Total Across Sections</td>
+                <td>-</td>
+                <td style="text-align: right;">${totalIngredientQty} ${item.unit}</td>
+                <td style="text-align: right; color: var(--primary);">100.0%</td>
+            </tr>
+        ` : '';
         
         return `
             <div class="panel" style="padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: rgba(0,0,0,0.25);">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
                     <div>
-                        <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-main);">${item.itemName}</h3>
-                        <span style="font-size: 0.75rem; color: var(--text-muted);">${item.category || 'General'}</span>
+                        <h3 style="margin: 0; font-size: 1.15rem; color: var(--text-main);">${item.itemName}</h3>
+                        <span style="background: rgba(255,255,255,0.06); padding: 2px 7px; border-radius: 4px; font-size: 0.72rem; color: var(--text-muted); display: inline-block; margin-top: 4px;">${item.category || 'Kitchen Ingredient'}</span>
                     </div>
                     <div style="text-align: right;">
-                        <span style="font-size: 0.75rem; color: var(--text-muted);">Consolidated Request:</span>
-                        <div style="font-size: 1.15rem; font-weight: bold; color: var(--primary);">${item.revisedQty} ${item.unit}</div>
+                        <span style="font-size: 0.75rem; color: var(--text-muted);">Consolidated Indent Qty:</span>
+                        <div style="font-size: 1.25rem; font-weight: 800; color: var(--primary);">${item.revisedQty} ${item.unit}</div>
                     </div>
                 </div>
                 
                 ${alterationHtml}
                 
-                <div style="margin-top: 12px;">
-                    <div style="font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 6px;">
-                        Cuisine Breakdown & Share of ${item.itemName} Request
+                <div style="margin-top: 14px;">
+                    <div style="font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 6px;">
+                        Kitchen Section Breakdown
                     </div>
                     <div class="table-container" style="background: rgba(0,0,0,0.2); border-radius: 6px;">
                         <table style="width: 100%; font-size: 0.85rem;">
                             <thead>
                                 <tr>
-                                    <th style="width: 28%;">Cuisine</th>
-                                    <th style="width: 28%;">Chef</th>
-                                    <th style="width: 22%; text-align: right;">Quantity</th>
-                                    <th style="width: 22%; text-align: right;">Share of ${item.itemName} Request</th>
+                                    <th style="width: 30%;">Cuisine Section</th>
+                                    <th style="width: 30%;">Requesting Chef</th>
+                                    <th style="width: 20%; text-align: right;">Quantity</th>
+                                    <th style="width: 20%; text-align: right;">% Share</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 ${breakdownRows}
-                                <tr style="border-top: 2px solid var(--border); background: rgba(255,255,255,0.02); font-weight: bold;">
-                                    <td>Total</td>
-                                    <td>-</td>
-                                    <td style="text-align: right;">${totalIngredientQty} ${item.unit}</td>
-                                    <td style="text-align: right; color: var(--primary);">100.0%</td>
-                                </tr>
+                                ${totalRowHtml}
                             </tbody>
                         </table>
                     </div>
@@ -2588,7 +2614,7 @@ window.sendAllSectionsToAdmin = function() {
                 unit: masterItem.unit || 'kg',
                 originalQty: 0,
                 revisedQty: 0,
-                comment: 'Consolidated from kitchen sections',
+                comment: '',
                 cuisineBreakdown: []
             };
         }
@@ -2602,6 +2628,7 @@ window.sendAllSectionsToAdmin = function() {
         });
     });
     
+    const nowIso = new Date().toISOString();
     const newIndent = {
         id: indentId,
         indentNumber: indentNumber,
@@ -2610,7 +2637,8 @@ window.sendAllSectionsToAdmin = function() {
         supervisorName: currentUser.name || 'Supervisor',
         status: 'Pending Approval',
         items: Object.values(grouped),
-        createdAt: new Date().toISOString()
+        date: new Date().toLocaleDateString(),
+        createdAt: nowIso
     };
     
     indentsData.unshift(newIndent);
