@@ -2113,19 +2113,115 @@ function addSupervisorNewStockItem() {
 // ============================================================
 // INDENTS VIEW & APPROVAL LOGIC (APR-05)
 // ============================================================
+// Helper to format indent date consistently for table display
+function formatIndentTableDate(indent) {
+    if (indent.date && indent.date !== 'undefined' && String(indent.date).trim() !== '') {
+        return indent.date;
+    }
+    if (indent.createdAt) {
+        try {
+            const d = new Date(indent.createdAt);
+            if (!isNaN(d.getTime())) {
+                const day = String(d.getDate()).padStart(2, '0');
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const year = d.getFullYear();
+                return `${day}/${month}/${year}`;
+            }
+        } catch(e) {}
+    }
+    const today = new Date();
+    return `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
+}
+
+// Helper to extract a standard YYYY-MM-DD key from indent for date comparisons
+function getIndentDateKey(indent) {
+    if (indent.createdAt) {
+        try {
+            const d = new Date(indent.createdAt);
+            if (!isNaN(d.getTime())) {
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${y}-${m}-${day}`;
+            }
+        } catch(e) {}
+    }
+    const dStr = formatIndentTableDate(indent);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dStr)) return dStr;
+    const parts = dStr.split('/');
+    if (parts.length === 3 && parts[2].length === 4) {
+        return `${parts[2]}-${String(parts[1]).padStart(2, '0')}-${String(parts[0]).padStart(2, '0')}`;
+    }
+    return '';
+}
+
 function loadIndentsData() {
     updateIndentsBadge();
     const tbody = document.getElementById('indentsTableBody');
     if (!tbody) return;
     
+    // Normalize any legacy missing or undefined dates
+    indentsData.forEach(ind => {
+        if (!ind.date || ind.date === 'undefined') {
+            ind.date = formatIndentTableDate(ind);
+        }
+    });
+
+    // Populate outlet filter options if needed
+    const outletFilter = document.getElementById('filterIndentsOutlet');
+    if (outletFilter && outletFilter.options.length <= 1) {
+        const vis = (typeof getVisibleOutlets === 'function') ? getVisibleOutlets() : outletsData;
+        outletFilter.innerHTML = '<option value="all">All Outlets</option>' + vis.map(o => `<option value="${o.id}">${o.name}</option>`).join('');
+    }
+    
+    // Attach filter listeners once
+    if (!window._indentsFilterListenersAttached) {
+        window._indentsFilterListenersAttached = true;
+        document.getElementById('filterIndentsOutlet')?.addEventListener('change', loadIndentsData);
+        document.getElementById('filterIndentsStatus')?.addEventListener('change', loadIndentsData);
+        document.getElementById('filterIndentsDate')?.addEventListener('change', loadIndentsData);
+        document.getElementById('clearIndentsDateBtn')?.addEventListener('click', () => {
+            const dInput = document.getElementById('filterIndentsDate');
+            if (dInput) dInput.value = '';
+            loadIndentsData();
+        });
+    }
+    
     let viewableIndents = indentsData;
-    if (currentUser.role === 'supervisor') {
-        const vis = getVisibleOutlets().map(o => o.id);
-        viewableIndents = indentsData.filter(ind => vis.includes(ind.outletId));
+    if (currentUser && currentUser.role === 'supervisor') {
+        const vis = (typeof getVisibleOutlets === 'function') ? getVisibleOutlets().map(o => o.id) : [];
+        if (vis.length > 0) {
+            viewableIndents = indentsData.filter(ind => vis.includes(ind.outletId));
+        }
+    }
+
+    // Filter by Outlet
+    const selectedOutlet = document.getElementById('filterIndentsOutlet')?.value || 'all';
+    if (selectedOutlet !== 'all') {
+        viewableIndents = viewableIndents.filter(ind => ind.outletId === selectedOutlet);
+    }
+
+    // Filter by Status
+    const selectedStatus = document.getElementById('filterIndentsStatus')?.value || 'all';
+    if (selectedStatus !== 'all') {
+        viewableIndents = viewableIndents.filter(ind => ind.status === selectedStatus);
+    }
+
+    // Filter by Date (input type="date" returns YYYY-MM-DD)
+    const selectedDate = document.getElementById('filterIndentsDate')?.value;
+    if (selectedDate) {
+        viewableIndents = viewableIndents.filter(ind => {
+            const indKey = getIndentDateKey(ind);
+            if (indKey === selectedDate) return true;
+            const [selY, selM, selD] = selectedDate.split('-');
+            const dmy = `${selD}/${selM}/${selY}`;
+            const mdy = `${selM}/${selD}/${selY}`;
+            return ind.date === dmy || ind.date === mdy || ind.date === selectedDate;
+        });
     }
     
     if (viewableIndents.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 28px;">No consolidated indents found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 28px;">No matching consolidated indents found.</td></tr>`;
         return;
     }
     
@@ -2135,22 +2231,24 @@ function loadIndentsData() {
         else if (indent.status === 'Approved') statusHtml = `<span class="status ok">Approved</span>`;
         else statusHtml = `<span class="status low">Rejected</span>`;
         
-        const totalQty = indent.items.reduce((sum, item) => sum + (parseFloat(item.revisedQty) || 0), 0);
+        const totalQty = (indent.items || []).reduce((sum, item) => sum + (parseFloat(item.revisedQty) || parseFloat(item.originalQty) || 0), 0);
         
         let actionBtn = '';
-        if (currentUser.role === 'admin') {
+        if (currentUser && currentUser.role === 'admin') {
             actionBtn = `<button class="btn btn-primary" style="padding: 4px 12px; font-size: 0.75rem;" onclick="openIndentApprovalModal('${indent.id}')">Review & Approve</button>`;
         } else {
             actionBtn = `<button class="btn btn-outline" style="padding: 4px 12px; font-size: 0.75rem;" onclick="openIndentApprovalModal('${indent.id}')">View Breakdown</button>`;
         }
         
+        const displayDate = formatIndentTableDate(indent);
+        
         return `
             <tr>
                 <td><strong style="color: var(--primary);">${indent.indentNumber || indent.id}</strong></td>
-                <td>${indent.date}</td>
+                <td>${displayDate}</td>
                 <td><strong>${indent.outletName || 'Outlet'}</strong></td>
                 <td>${indent.supervisorName || 'Supervisor'}</td>
-                <td>${indent.items.length} items</td>
+                <td>${(indent.items || []).length} items</td>
                 <td><strong>${totalQty}</strong></td>
                 <td>${statusHtml}</td>
                 <td>${actionBtn}</td>

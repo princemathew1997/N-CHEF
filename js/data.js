@@ -93,6 +93,29 @@ requestsData.forEach(r => {
     }
 });
 
+// Normalize any indents with missing or undefined dates
+indentsData.forEach(ind => {
+    if (!ind.date || ind.date === 'undefined') {
+        if (ind.createdAt) {
+            try {
+                const d = new Date(ind.createdAt);
+                if (!isNaN(d.getTime())) {
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const year = d.getFullYear();
+                    ind.date = `${day}/${month}/${year}`;
+                } else {
+                    ind.date = new Date().toLocaleDateString();
+                }
+            } catch(e) {
+                ind.date = new Date().toLocaleDateString();
+            }
+        } else {
+            ind.date = new Date().toLocaleDateString();
+        }
+    }
+});
+
 const cuisinesData = [
     { id: 'c_01', name: 'Indian' },
     { id: 'c_02', name: 'Continental' },

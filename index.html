@@ -427,6 +427,22 @@
                           <h1>Manage <span class="text-primary">Indents</span></h1>
                           <p>Review and approve consolidated outlet indents.</p>
                       </div>
+                      <div class="header-actions" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                          <select id="filterIndentsOutlet" style="background: var(--dark); color: var(--text-main); width: auto; padding: 7px 12px; font-size: 0.82rem; border-radius: 6px; cursor: pointer; border: 1px solid var(--border);">
+                              <option value="all">All Outlets</option>
+                          </select>
+                          <select id="filterIndentsStatus" style="background: var(--dark); color: var(--text-main); width: auto; padding: 7px 12px; font-size: 0.82rem; border-radius: 6px; cursor: pointer; border: 1px solid var(--border);">
+                              <option value="all">All Statuses</option>
+                              <option value="Pending Approval">Pending Approval</option>
+                              <option value="Approved">Approved</option>
+                              <option value="Rejected">Rejected</option>
+                          </select>
+                          <div style="display: flex; align-items: center; gap: 6px; background: rgba(0,0,0,0.25); padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border);">
+                              <span style="font-size: 0.8rem; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px;"><i data-lucide="calendar" style="width: 14px; height: 14px; color: var(--primary);"></i> Date:</span>
+                              <input type="date" id="filterIndentsDate" style="background: var(--dark); color: var(--text-main); padding: 4px 8px; font-size: 0.82rem; border-radius: 4px; border: 1px solid var(--border); outline: none; cursor: pointer;">
+                              <button type="button" class="btn btn-outline" id="clearIndentsDateBtn" style="padding: 3px 8px; font-size: 0.74rem; border-radius: 4px; border-color: rgba(255,255,255,0.2); cursor: pointer;" title="Clear date filter">Clear</button>
+                          </div>
+                      </div>
                   </header>
                   <div class="dash-grid">
                       <div class="panel table-container" style="grid-column: span 12;">
@@ -581,9 +597,9 @@
         </main>
     </div>
 
-    <script src="js/data.js?v=19"></script>
-    <script src="js/app.js?v=19"></script>
-    <script src="js/wizard.js?v=19"></script>
+    <script src="js/data.js?v=20"></script>
+    <script src="js/app.js?v=20"></script>
+    <script src="js/wizard.js?v=20"></script>
     <script>
         lucide.createIcons();
     </script>
