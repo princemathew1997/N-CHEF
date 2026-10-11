@@ -2992,18 +2992,22 @@ window.loadConsolidateWorkspace = function() {
             masterItemsData.map(item => `<option value="${item.id}">${item.name} (${item.unit || 'kg'} - ${item.category || 'General'})</option>`).join('');
     }
     
-    // Wire up events once
-    const btnSubmit = document.getElementById('btnWsSubmitIndent');
-    if (btnSubmit && !btnSubmit.dataset.bound) {
-        btnSubmit.addEventListener('click', window.submitWorkspaceConsolidatedIndent);
-        btnSubmit.dataset.bound = 'true';
-    }
+    // Wire up top & bottom events once
+    ['btnWsSubmitIndent', 'btnWsSubmitIndentTop'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn && !btn.dataset.bound) {
+            btn.addEventListener('click', window.submitWorkspaceConsolidatedIndent);
+            btn.dataset.bound = 'true';
+        }
+    });
 
-    const btnExportPdf = document.getElementById('btnWsExportPdf');
-    if (btnExportPdf && !btnExportPdf.dataset.bound) {
-        btnExportPdf.addEventListener('click', window.exportConsolidationToPdf);
-        btnExportPdf.dataset.bound = 'true';
-    }
+    ['btnWsExportPdf', 'btnWsExportPdfTop'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn && !btn.dataset.bound) {
+            btn.addEventListener('click', window.exportConsolidationToPdf);
+            btn.dataset.bound = 'true';
+        }
+    });
     
     const btnToggleAdd = document.getElementById('btnWsToggleAddStock');
     const panelAddStock = document.getElementById('wsAddStockPanel');
@@ -3444,8 +3448,17 @@ window.submitWorkspaceConsolidatedIndent = async function() {
         return;
     }
     
+    // Count how many items have adjustments or notes
+    const adjustedItems = items.filter(it => Math.abs((parseFloat(it.revisedQty) || 0) - (parseFloat(it.originalQty) || 0)) > 0.001 || (it.comment && it.comment.trim()));
+    const grandUnits = items.reduce((sum, it) => sum + (parseFloat(it.revisedQty) || 0), 0);
+    
+    let confirmPrompt = `Send consolidated indent with ${items.length} ingredients (${grandUnits.toFixed(1)} total units) to Admin for approval?`;
+    if (adjustedItems.length > 0) {
+        confirmPrompt += `\n\nNote: ${adjustedItems.length} item(s) have supervisor quantity modifications or notes that will be included in the request.`;
+    }
+    
     const confirmed = await window.showConfirmModal(
-        `Submit consolidated indent with ${items.length} ingredient items to Admin for approval?`,
+        confirmPrompt,
         "Send Request To Admin",
         { confirmText: "Send Request To Admin" }
     );
@@ -3456,7 +3469,7 @@ window.submitWorkspaceConsolidatedIndent = async function() {
     const indentId = 'ind_' + Date.now();
     
     const formattedItems = items.map(entry => {
-        const breakdown = entry.chefRequests.map(cr => ({
+        const breakdown = (entry.chefRequests || []).map(cr => ({
             cuisine: cr.cuisine || 'Cuisine Section',
             chef: cr.chefName || cr.requestedBy || 'Chef',
             qty: parseFloat(cr.qty) || 0
@@ -3467,8 +3480,8 @@ window.submitWorkspaceConsolidatedIndent = async function() {
             category: entry.category,
             unit: entry.unit,
             originalQty: entry.originalQty,
-            revisedQty: entry.revisedQty,
-            comment: entry.comment,
+            revisedQty: parseFloat(entry.revisedQty) || 0,
+            comment: entry.comment || '',
             cuisineBreakdown: breakdown
         };
     });
@@ -3487,18 +3500,49 @@ window.submitWorkspaceConsolidatedIndent = async function() {
     
     indentsData.unshift(newIndent);
     
-    // Mark source requests as Consolidated
-    const sourceReqIds = [];
-    items.forEach(it => {
-        it.chefRequests.forEach(cr => sourceReqIds.push(cr.id));
-    });
+    // Update underlying chef requests with revised quantities & supervisor notes
+    const nowIso = new Date().toISOString();
+    const supName = currentUser.name || 'Supervisor';
     
-    requestsData.forEach(r => {
-        if (sourceReqIds.includes(r.id)) {
-            r.status = 'Consolidated';
-            r.indentId = indentId;
-            r.forwardedBy = currentUser.name || 'Supervisor';
-            r.forwardedAt = new Date().toISOString();
+    items.forEach(entry => {
+        if (entry.chefRequests && entry.chefRequests.length > 0) {
+            entry.chefRequests.forEach(cr => {
+                const targetReq = requestsData.find(r => r.id === cr.id);
+                if (targetReq) {
+                    targetReq.status = 'Consolidated';
+                    targetReq.indentId = indentId;
+                    targetReq.forwardedBy = supName;
+                    targetReq.forwardedAt = nowIso;
+                    targetReq.revisedQty = parseFloat(entry.revisedQty) || targetReq.qty;
+                    if (entry.comment) {
+                        targetReq.supervisorNote = entry.comment;
+                    }
+                    // If single request for this ingredient, update targetReq.qty to revisedQty
+                    if (entry.chefRequests.length === 1) {
+                        targetReq.qty = parseFloat(entry.revisedQty) || targetReq.qty;
+                    }
+                }
+            });
+        } else if (entry.originalQty === 0) {
+            // Extra stock item added by supervisor directly in this workspace
+            requestsData.push({
+                id: 'req_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+                itemId: entry.itemId,
+                itemName: entry.itemName,
+                qty: parseFloat(entry.revisedQty) || 0,
+                revisedQty: parseFloat(entry.revisedQty) || 0,
+                unit: entry.unit,
+                outletId: activeWorkspaceConsolidation.outletId,
+                outletName: activeWorkspaceConsolidation.outletName,
+                requestedBy: supName,
+                chefName: supName,
+                cuisine: 'Supervisor Buffer',
+                status: 'Consolidated',
+                indentId: indentId,
+                date: today,
+                timestamp: nowIso,
+                supervisorNote: entry.comment || 'Supervisor Buffer'
+            });
         }
     });
     
@@ -3510,14 +3554,13 @@ window.submitWorkspaceConsolidatedIndent = async function() {
     updateIndentsBadge();
     
     window.showUiModal({
-        title: "Indent Submitted",
-        message: `Consolidated Indent <strong>${indentNumber}</strong> submitted successfully! Routed to Admin / Owner for approval.`,
+        title: "Request Sent to Admin",
+        message: `Consolidated Indent <strong>${indentNumber}</strong> (${items.length} items, ${grandUnits.toFixed(1)} units) has been sent to Admin for approval with your updated quantities and notes!`,
         type: "success"
     });
     
-    // Switch to Indents view to see newly submitted indent
-    const navIndents = document.getElementById('navIndents');
-    if (navIndents) navIndents.click();
+    // Refresh consolidate workspace table to reflect submitted state
+    window.loadConsolidateWorkspace();
 };
 
 window.sendAllSectionsToAdmin = function() {
