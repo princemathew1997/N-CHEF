@@ -67,9 +67,6 @@
                 <a href="#" class="nav-item no-chef" id="navIndents">
                     <i data-lucide="file-check"></i> Indents <span id="pendingIndentsBadge" class="hidden" style="background: var(--primary); color: var(--dark); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 0.7rem; margin-left: auto; font-weight: bold; line-height: 1;">0</span>
                 </a>
-                <a href="#" class="nav-item no-chef" id="navStoreInventory">
-                    <i data-lucide="package"></i> Store Inventory
-                </a>
                 <a href="#" class="nav-item chef-only-bg hidden" id="navChefPortal">
                     <i data-lucide="clipboard-list"></i> My Requests
                 </a>
@@ -318,89 +315,6 @@
                             </thead>
                             <tbody id="requestsTableBody"></tbody>
                         </table>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- STORE INVENTORY VIEW -->
-            <div id="viewStoreInventory" class="hidden no-chef">
-                <header class="dash-header">
-                    <div class="header-title">
-                        <h1>Store <span class="text-primary">Inventory</span></h1>
-                        <p>Track daily consumption and remaining stock per outlet.</p>
-                    </div>
-                    <div>
-                        <select id="storeInventoryOutletFilter" style="background: rgba(0,0,0,0.2); color: var(--text-main); padding: 8px 12px; font-size: 0.9rem; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; outline: none; min-width: 180px;">
-                            <!-- Populated dynamically -->
-                        </select>
-                    </div>
-                </header>
-                <div class="dash-grid" id="storeInventoryGrid">
-                    <div class="panel table-container">
-                        <table>
-                            <thead>
-                                <tr><th>Item</th><th class="no-chef">Allocated</th><th>Consumed</th><th>Balance</th><th class="no-chef">Last Logged</th></tr>
-                            </thead>
-                            <tbody id="storeInventoryTableBody"></tbody>
-                        </table>
-                    </div>
-                    <div class="sidebar-right no-chef supervisor-only" id="storeInventorySidebar" style="overflow: visible;">
-                        <div class="panel form-section">
-                            <h3>Daily Checkout (Issue)</h3>
-                            <div class="input-group">
-                                <select id="consumeItem">
-                                    <option value="" disabled selected>Select Item</option>
-                                    <!-- Populated dynamically -->
-                                </select>
-                            </div>
-                            <div class="input-group">
-                                <select id="consumeOutlet">
-                                    <option value="" disabled selected>Select Outlet</option>
-                                    <!-- Populated dynamically -->
-                                </select>
-                            </div>
-                            <div id="consumeAvailableMsg" style="display: none; align-items: center; justify-content: space-between; padding: 8px 12px; background: rgba(0,0,0,0.2); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 12px;"></div>
-                            <div class="input-group">
-                                  <select id="consumeCuisine">
-                                      <option value="c_01">Tandoor</option>
-                                      <option value="c_02">Chinese</option>
-                                      <option value="c_03">Arabic</option>
-                                      <option value="c_04">Kerala</option>
-                                  </select>
-                              </div>
-                              <div class="custom-datepicker" id="consumeCustomDate" style="position: relative; width: 100%; margin-bottom: 12px; z-index: 50;">
-                                <div class="datepicker-input panel" id="c_dpInputTrigger" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; padding: 10px 14px; font-size: 0.9rem; border-radius: 8px; border: 1px solid var(--border); width: 100%; background: rgba(0,0,0,0.2);">
-                                    <span id="c_dpSelectedText" style="color: var(--text-main);">Select Date</span>
-                                    <i data-lucide="calendar" style="width: 16px; height: 16px; color: var(--text-muted);"></i>
-                                </div>
-                                <div class="datepicker-popup panel hidden" id="c_dpPopup" style="position: absolute; top: calc(100% + 8px); right: 0; bottom: auto; left: auto; z-index: 100; min-width: 240px; background: #1a160b; box-shadow: 0 20px 50px rgba(0,0,0,0.9); border: 1px solid var(--border); padding: 12px;">
-                                    <div class="dp-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                                        <button class="icon-btn" id="c_dpPrev" style="padding: 2px;"><i data-lucide="chevron-left" style="width:16px; height:16px;"></i></button>
-                                        <div class="dp-selects" style="display: flex; gap: 4px;">
-                                            <select id="c_dpMonth" style="padding: 2px 4px; font-size: 0.75rem; border-radius: 4px; cursor: pointer; background: var(--dark); color: var(--text-main); border: 1px solid var(--border);"></select>
-                                            <select id="c_dpYear" style="padding: 2px 4px; font-size: 0.75rem; border-radius: 4px; cursor: pointer; background: var(--dark); color: var(--text-main); border: 1px solid var(--border);"></select>
-                                        </div>
-                                        <button class="icon-btn" id="c_dpNext" style="padding: 2px;"><i data-lucide="chevron-right" style="width:16px; height:16px;"></i></button>
-                                    </div>
-                                    <div class="dp-days-header">
-                                        <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
-                                    </div>
-                                    <div class="dp-grid" id="c_dpGrid"></div>
-                                    <div class="dp-footer" style="display: flex; gap: 8px; margin-top: 12px; justify-content: center;">
-                                        <button class="btn btn-outline" id="c_dpClear" style="padding: 6px 16px; font-size: 0.75rem; flex: 1;">Clear</button>
-                                        <button class="btn btn-primary" id="c_dpConfirm" style="padding: 6px 16px; font-size: 0.75rem; flex: 1;">Today</button>
-                                    </div>
-                                </div>
-                                <input type="hidden" id="consumeDate">
-                            </div>
-                            <div class="input-group">
-                                <input type="text" id="consumePerson" placeholder="Consumed By (Name)" readonly style="background: rgba(0,0,0,0.4); color: var(--text-muted); cursor: not-allowed;">
-                            </div>
-                            <div class="input-group">
-                                <input type="number" id="consumeQty" placeholder="Quantity Used">
-                            </div>
-                            <button class="btn btn-primary" style="width: 100%;" id="consumeBtn">Daily Checkout (Issue)</button>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -667,9 +581,9 @@
         </main>
     </div>
 
-    <script src="js/data.js?v=15"></script>
-    <script src="js/app.js?v=15"></script>
-    <script src="js/wizard.js?v=15"></script>
+    <script src="js/data.js?v=16"></script>
+    <script src="js/app.js?v=16"></script>
+    <script src="js/wizard.js?v=16"></script>
     <script>
         lucide.createIcons();
     </script>

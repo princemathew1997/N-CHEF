@@ -207,11 +207,6 @@ function initLogin() {
                 document.getElementById('viewMasterOrders').classList.add('hidden');
                 document.getElementById('navMasterOrders').classList.remove('active');
                 
-                const viewStore = document.getElementById('viewStoreInventory');
-                const navStore = document.getElementById('navStoreInventory');
-                if (viewStore) viewStore.classList.add('hidden');
-                if (navStore) navStore.classList.remove('active');
-                
                 const viewChef = document.getElementById('viewChefPortal');
                 const navChef = document.getElementById('navChefPortal');
                 if (viewChef) viewChef.classList.remove('hidden');
@@ -282,7 +277,6 @@ function initNavigation() {
     const navMaster = document.getElementById('navMasterOrders');
     const navRequests = document.getElementById('navRequests');
     const navIndents = document.getElementById('navIndents');
-    const navStoreInventory = document.getElementById('navStoreInventory');
     const navChef = document.getElementById('navChefPortal');
     const navVendors = document.getElementById('navVendors');
     const navLocations = document.getElementById('navLocations');
@@ -291,7 +285,6 @@ function initNavigation() {
     const viewMaster = document.getElementById('viewMasterOrders');
     const viewRequests = document.getElementById('viewRequests');
     const viewIndents = document.getElementById('viewIndents');
-    const viewStoreInventory = document.getElementById('viewStoreInventory');
     const viewChef = document.getElementById('viewChefPortal');
     const viewVendors = document.getElementById('viewVendors');
     const viewLocations = document.getElementById('viewLocations');
@@ -301,7 +294,6 @@ function initNavigation() {
         viewMaster.classList.add('hidden');
         viewRequests.classList.add('hidden');
         if (viewIndents) viewIndents.classList.add('hidden');
-        if (viewStoreInventory) viewStoreInventory.classList.add('hidden');
         if (viewChef) viewChef.classList.add('hidden');
         viewVendors.classList.add('hidden');
         viewLocations.classList.add('hidden');
@@ -310,7 +302,6 @@ function initNavigation() {
         navMaster.classList.remove('active');
         navRequests.classList.remove('active');
         if (navIndents) navIndents.classList.remove('active');
-        if (navStoreInventory) navStoreInventory.classList.remove('active');
         if (navChef) navChef.classList.remove('active');
         navVendors.classList.remove('active');
         navLocations.classList.remove('active');
@@ -343,17 +334,6 @@ function initNavigation() {
             navIndents.classList.add('active');
             currentView = 'viewIndents';
             loadIndentsData();
-        });
-    }
-
-    if (navStoreInventory) {
-        navStoreInventory.addEventListener('click', (e) => {
-            e.preventDefault();
-            hideAllViews();
-            viewStoreInventory.classList.remove('hidden');
-            navStoreInventory.classList.add('active');
-            currentView = 'viewStoreInventory';
-            loadStoreInventoryData();
         });
     }
 
@@ -910,71 +890,6 @@ function initForms() {
         });
     }
     
-    const consumeBtn = document.getElementById('consumeBtn');
-    if (consumeBtn) {
-        // Set default date to today
-        const dateInput = document.getElementById('consumeDate');
-        if (dateInput) {
-            dateInput.value = new Date().toISOString().split('T')[0];
-        }
-        
-        consumeBtn.addEventListener('click', () => {
-            const itemId = document.getElementById('consumeItem').value;
-            const outletId = document.getElementById('consumeOutlet').value;
-            const qty = parseInt(document.getElementById('consumeQty').value) || 0;
-            const logDate = document.getElementById('consumeDate')?.value || new Date().toISOString().split('T')[0];
-            const logPersonInput = document.getElementById('consumePerson')?.value.trim();
-            const logPerson = logPersonInput ? logPersonInput : currentUser.name;
-            
-            const item = masterItemsData.find(i => i.id === itemId);
-            if (item && outletId && qty > 0) {
-                item.consumed = item.consumed || {};
-                item.lastConsumed = item.lastConsumed || {};
-                item.lastConsumedBy = item.lastConsumedBy || {};
-                
-                const allocated = item.allocations[outletId] || 0;
-                const currentConsumed = item.consumed[outletId] || 0;
-                const remaining = allocated - currentConsumed;
-                
-                if (qty > remaining) {
-                    alert(`Cannot consume ${qty} ${item.unit}. Only ${remaining} ${item.unit} available at this outlet.`);
-                    return;
-                }
-                
-                item.consumed[outletId] = currentConsumed + qty;
-                item.lastConsumed[outletId] = logDate;
-                item.lastConsumedBy[outletId] = logPerson;
-                saveData();
-                loadStoreInventoryData();
-                
-                // Clear form
-                document.getElementById('consumeItem').value = '';
-                const visOutlets = getVisibleOutlets();
-                if (visOutlets.length > 1) {
-                    document.getElementById('consumeOutlet').value = '';
-                } else if (visOutlets.length === 1) {
-                    document.getElementById('consumeOutlet').value = visOutlets[0].id;
-                }
-                document.getElementById('consumeQty').value = '';
-                if (document.getElementById('consumePerson')) document.getElementById('consumePerson').value = currentUser.name;
-                
-                const hiddenDateInput = document.getElementById('consumeDate');
-                const dpSelectedText = document.getElementById('c_dpSelectedText');
-                if (hiddenDateInput && dpSelectedText) {
-                    let today = new Date();
-                    hiddenDateInput.value = today.toISOString().split('T')[0];
-                    dpSelectedText.textContent = today.toLocaleDateString();
-                }
-                
-                const msg = document.getElementById('consumeAvailableMsg');
-                if (msg) {
-                    msg.style.display = 'none';
-                    msg.innerHTML = '';
-                }
-            }
-        });
-    }
-    
     const saveUserBtn = document.getElementById('saveUserBtn');
     if(saveUserBtn) {
         saveUserBtn.addEventListener('click', saveUser);
@@ -1149,55 +1064,6 @@ function updateFormSelects(visibleOutlets) {
     }
     if (reqItemSel) {
         reqItemSel.innerHTML = itemsOptions;
-    }
-    
-    const storeInvFilter = document.getElementById('storeInventoryOutletFilter');
-    if (storeInvFilter) {
-        let storeFilterDisplay = document.getElementById('storeInvFilterSingleDisplay');
-        const isChef = currentUser && currentUser.role === 'chef';
-        if (isSingleOutlet || isChef) {
-            let allocated = singleOutlet;
-            if (isChef && currentUser.assignedLocations && !currentUser.assignedLocations.includes('all')) {
-                allocated = outletsData.find(o => currentUser.assignedLocations.includes(o.id));
-            }
-            if (!allocated) {
-                allocated = visibleOutlets[0] || outletsData[0] || { id: 'brigade', name: 'BRIGADE' };
-            }
-            
-            storeInvFilter.innerHTML = `<option value="${allocated.id}" selected>${allocated.name}</option>`;
-            storeInvFilter.value = allocated.id;
-            storeInvFilter.style.display = 'none';
-            if (!storeFilterDisplay) {
-                storeFilterDisplay = document.createElement('div');
-                storeFilterDisplay.id = 'storeInvFilterSingleDisplay';
-                storeInvFilter.parentNode.insertBefore(storeFilterDisplay, storeInvFilter);
-            }
-            storeFilterDisplay.style.display = 'flex';
-            storeFilterDisplay.style.alignItems = 'center';
-            storeFilterDisplay.style.gap = '8px';
-            storeFilterDisplay.style.padding = '8px 14px';
-            storeFilterDisplay.style.background = 'rgba(255, 190, 11, 0.08)';
-            storeFilterDisplay.style.border = '1px solid rgba(255, 190, 11, 0.25)';
-            storeFilterDisplay.style.borderRadius = '8px';
-            storeFilterDisplay.style.fontSize = '0.88rem';
-            storeFilterDisplay.style.color = 'var(--text-main)';
-            storeFilterDisplay.innerHTML = `<i data-lucide="map-pin" style="width: 14px; height: 14px; color: var(--primary);"></i><span>Outlet: <strong style="color: var(--primary); font-weight: 600;">${allocated.name}</strong></span><span style="font-size: 0.72rem; color: var(--primary); background: rgba(255,190,11,0.15); padding: 2px 7px; border-radius: 4px; font-weight: 600; text-transform: uppercase;">Allocated</span>`;
-        } else {
-            storeInvFilter.style.display = '';
-            if (storeFilterDisplay) storeFilterDisplay.style.display = 'none';
-            const currentStoreInvVal = storeInvFilter.value || (visibleOutlets.length > 0 ? visibleOutlets[0].id : '');
-            storeInvFilter.innerHTML = visibleOutlets.map(o => `<option value="${o.id}">${o.name}</option>`).join('');
-            if ([...storeInvFilter.options].some(opt => opt.value === currentStoreInvVal)) {
-                storeInvFilter.value = currentStoreInvVal;
-            } else if (storeInvFilter.options.length > 0) {
-                storeInvFilter.value = storeInvFilter.options[0].value;
-            }
-        }
-        
-        if (!storeInvFilter.dataset.bound) {
-            storeInvFilter.addEventListener('change', loadStoreInventoryData);
-            storeInvFilter.dataset.bound = "true";
-        }
     }
     
     // Add real-time hints for available quantity
@@ -1493,64 +1359,8 @@ window.deleteChefRequest = function(reqId) {
     }
 };
 
-// ============================================================
-// STORE INVENTORY LOGIC
-// ============================================================
-function loadStoreInventoryData() {
-    const visibleOutlets = getVisibleOutlets();
-    
-    // First, populate the filter dropdown so we have a value to read
-    updateFormSelects(visibleOutlets);
-    
-    const grid = document.getElementById('storeInventoryGrid');
-    const sidebar = document.getElementById('storeInventorySidebar');
-    if (currentUser && currentUser.role === 'chef') {
-        if (sidebar) sidebar.classList.add('hidden');
-        if (grid) grid.style.gridTemplateColumns = '1fr';
-    } else {
-        if (sidebar) sidebar.classList.remove('hidden');
-        if (grid) grid.style.gridTemplateColumns = '1fr 240px';
-    }
-    
-    const tbody = document.getElementById('storeInventoryTableBody');
-    const storeInvFilter = document.getElementById('storeInventoryOutletFilter');
-    
-    if (!tbody || !storeInvFilter) return;
-    
-    const selectedOutletId = storeInvFilter.value;
-    const selectedOutlet = outletsData.find(o => o.id === selectedOutletId);
-    
-    tbody.innerHTML = '';
-    
-    if (!selectedOutlet) return;
-    
-    masterItemsData.forEach(item => {
-        const allocated = item.allocations[selectedOutlet.id] || 0;
-        if (allocated > 0) {
-            item.consumed = item.consumed || {};
-            item.lastConsumed = item.lastConsumed || {};
-            const consumed = item.consumed[selectedOutlet.id] || 0;
-            const lastDate = item.lastConsumed[selectedOutlet.id] || '-';
-            const lastPerson = (item.lastConsumedBy && item.lastConsumedBy[selectedOutlet.id]) ? item.lastConsumedBy[selectedOutlet.id] : '';
-            const logDisplay = lastDate !== '-' ? `${lastDate}(<span style="color: var(--primary); text-shadow: 0 0 5px var(--primary); font-weight: bold;">${lastPerson}</span>)` : '-';
-            const balance = allocated - consumed;
-            
-            let balanceColor = 'var(--text-main)';
-            if (balance === 0) balanceColor = 'var(--text-muted)';
-            else if (balance <= 5) balanceColor = 'var(--warning)';
-            
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td><strong>${item.name}</strong> <span class="text-muted" style="font-size: 0.75rem;">(${item.unit})</span></td>
-                <td class="no-chef ${currentUser.role === 'chef' ? 'hidden' : ''}">${allocated}</td>
-                <td><span class="text-danger">${consumed}</span></td>
-                <td><strong style="color: ${balanceColor}">${balance}</strong></td>
-                <td class="no-chef ${currentUser.role === 'chef' ? 'hidden' : ''}"><span style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.2; display: inline-block;">${logDisplay}</span></td>
-            `;
-            tbody.appendChild(tr);
-        }
-    });
-}
+// Store inventory removed per user request
+function loadStoreInventoryData() {}
 
 // ============================================================
 // ADMIN VIEWS
