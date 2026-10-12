@@ -8,7 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <link rel="stylesheet" href="css/styles.css?v=45">
+    <link rel="stylesheet" href="css/styles.css?v=46">
     <!-- NUNIT-INJECT: CATCH JS ERRORS -->
     <script>
         window.addEventListener('error', function(e) { 
@@ -111,7 +111,11 @@
                         </a>
                     </div>
                 </div>
-            </nav>
+            <div style="padding: 0 16px; margin-bottom: 8px;">
+                <button type="button" class="btn btn-outline" id="btnRestoreDemoData" onclick="window.resetToDemoData()" style="width: 100%; padding: 7px 10px; font-size: 0.78rem; font-weight: 600; border-color: rgba(255,190,11,0.25); color: var(--primary); display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 8px; cursor: pointer; background: rgba(255,190,11,0.05);">
+                    <i data-lucide="database" style="width: 13px; height: 13px;"></i> Reset / Seed Demo Data
+                </button>
+            </div>
             <div class="user-profile">
                 <div class="user-avatar" id="userInitial">U</div>
                 <div class="user-info">
@@ -1108,9 +1112,9 @@
         </main>
     </div>
 
-    <script src="js/data.js?v=45"></script>
-    <script src="js/app.js?v=45"></script>
-    <script src="js/wizard.js?v=45"></script>
+    <script src="js/data.js?v=46"></script>
+    <script src="js/app.js?v=46"></script>
+    <script src="js/wizard.js?v=46"></script>
     <script>
         lucide.createIcons();
     </script>

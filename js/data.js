@@ -15,7 +15,7 @@ if (outletsData.length === 0) {
 }
 const primaryOutlet = outletsData[0] || defaultOutlets[0];
 
-const usersData = JSON.parse(localStorage.getItem('nchef_users')) || [
+const defaultUsers = [
     {
         username: 'admin',
         password: '123',
@@ -32,7 +32,9 @@ const usersData = JSON.parse(localStorage.getItem('nchef_users')) || [
         name: 'Prince',
         title: 'Store Chef',
         salary: '-',
-        assignedLocations: ['all']
+        assignedLocations: ['all'],
+        assignedSections: ['Indian', 'Tandoor'],
+        assignedCuisines: ['Indian', 'Tandoor']
     },
     {
         username: 'supervisor',
@@ -42,8 +44,61 @@ const usersData = JSON.parse(localStorage.getItem('nchef_users')) || [
         title: 'Supervisor',
         salary: '-',
         assignedLocations: [primaryOutlet.id]
+    },
+    {
+        username: 'chef_li',
+        password: '123',
+        role: 'chef',
+        name: 'Chef Li',
+        title: 'Section Chef',
+        salary: '-',
+        assignedLocations: ['brigade'],
+        assignedSections: ['Chinese'],
+        assignedCuisines: ['Chinese'],
+        addedBySupervisor: 'Supervisor'
+    },
+    {
+        username: 'chef_tariq',
+        password: '123',
+        role: 'chef',
+        name: 'Chef Tariq',
+        title: 'Section Chef',
+        salary: '-',
+        assignedLocations: ['brigade'],
+        assignedSections: ['Arabic'],
+        assignedCuisines: ['Arabic'],
+        addedBySupervisor: 'Supervisor'
+    },
+    {
+        username: 'chef_sasi',
+        password: '123',
+        role: 'chef',
+        name: 'Chef Sasi',
+        title: 'Section Chef',
+        salary: '-',
+        assignedLocations: ['brigade'],
+        assignedSections: ['Kerala'],
+        assignedCuisines: ['Kerala'],
+        addedBySupervisor: 'Supervisor'
+    },
+    {
+        username: 'chef_rahul',
+        password: '123',
+        role: 'chef',
+        name: 'Chef Rahul',
+        title: 'Section Chef',
+        salary: '-',
+        assignedLocations: ['brigade'],
+        assignedSections: ['Indian'],
+        assignedCuisines: ['Indian'],
+        addedBySupervisor: 'Supervisor'
     }
 ];
+
+const usersData = JSON.parse(localStorage.getItem('nchef_users')) || [];
+if (usersData.length === 0) {
+    usersData.push(...defaultUsers);
+}
 
 // Ensure supervisor user exists and has a valid assigned outlet from outletsData
 let supervisorUser = usersData.find(u => u.username === 'supervisor');
@@ -59,7 +114,6 @@ if (!supervisorUser) {
     };
     usersData.push(supervisorUser);
 } else {
-    // If supervisor's assigned location doesn't match any real outlet in outletsData, fix it to primary outlet
     if (!supervisorUser.assignedLocations || supervisorUser.assignedLocations.length === 0 || !supervisorUser.assignedLocations.some(id => id === 'all' || outletsData.some(o => o.id === id))) {
         supervisorUser.assignedLocations = [primaryOutlet.id];
     }
@@ -83,8 +137,175 @@ const vendorsData = JSON.parse(localStorage.getItem('nchef_vendors')) || [];
 if (vendorsData.length === 0) {
     vendorsData.push(...defaultVendors);
 }
+
+const defaultMasterItems = [
+    {
+        id: 'item_01',
+        name: 'Fresh Chicken (Curry Cut)',
+        category: 'Meat',
+        vendor: 'Prime Meats & Seafood',
+        unit: 'kg',
+        bought: 120,
+        allocations: { 'brigade': 35, 'vidyaranyapura': 25, 'yelahanka': 20, 'ms-palya': 20 },
+        consumed: { 'brigade': 15, 'vidyaranyapura': 10, 'yelahanka': 8, 'ms-palya': 5 }
+    },
+    {
+        id: 'item_02',
+        name: 'Fresh Farm Tomatoes',
+        category: 'Vegetables',
+        vendor: 'Fresh Farms Produce Ltd',
+        unit: 'kg',
+        bought: 90,
+        allocations: { 'brigade': 25, 'vidyaranyapura': 20, 'yelahanka': 18, 'ms-palya': 15 },
+        consumed: { 'brigade': 10, 'vidyaranyapura': 8, 'yelahanka': 5, 'ms-palya': 4 }
+    },
+    {
+        id: 'item_03',
+        name: 'Royal Basmati Rice',
+        category: 'Grains',
+        vendor: 'Metro Food Distributors',
+        unit: 'kg',
+        bought: 200,
+        allocations: { 'brigade': 60, 'vidyaranyapura': 45, 'yelahanka': 40, 'ms-palya': 35 },
+        consumed: { 'brigade': 25, 'vidyaranyapura': 15, 'yelahanka': 10, 'ms-palya': 10 }
+    },
+    {
+        id: 'item_04',
+        name: 'Red Onions',
+        category: 'Vegetables',
+        vendor: 'Fresh Farms Produce Ltd',
+        unit: 'kg',
+        bought: 100,
+        allocations: { 'brigade': 30, 'vidyaranyapura': 25, 'yelahanka': 20, 'ms-palya': 15 },
+        consumed: { 'brigade': 12, 'vidyaranyapura': 10, 'yelahanka': 8, 'ms-palya': 5 }
+    },
+    {
+        id: 'item_05',
+        name: 'Pure Dairy Paneer',
+        category: 'Dairy',
+        vendor: 'Global Dairy Supplies',
+        unit: 'kg',
+        bought: 45,
+        allocations: { 'brigade': 15, 'vidyaranyapura': 12, 'yelahanka': 8, 'ms-palya': 6 },
+        consumed: { 'brigade': 8, 'vidyaranyapura': 5, 'yelahanka': 4, 'ms-palya': 2 }
+    },
+    {
+        id: 'item_06',
+        name: 'Refined Sunflower Oil',
+        category: 'Dairy',
+        vendor: 'Global Dairy Supplies',
+        unit: 'L',
+        bought: 80,
+        allocations: { 'brigade': 25, 'vidyaranyapura': 20, 'yelahanka': 15, 'ms-palya': 12 },
+        consumed: { 'brigade': 10, 'vidyaranyapura': 8, 'yelahanka': 6, 'ms-palya': 4 }
+    },
+    {
+        id: 'item_07',
+        name: 'Ginger Garlic Paste',
+        category: 'Spices',
+        vendor: 'Metro Food Distributors',
+        unit: 'kg',
+        bought: 30,
+        allocations: { 'brigade': 10, 'vidyaranyapura': 8, 'yelahanka': 6, 'ms-palya': 4 },
+        consumed: { 'brigade': 4, 'vidyaranyapura': 3, 'yelahanka': 2, 'ms-palya': 2 }
+    },
+    {
+        id: 'item_08',
+        name: 'Mutton Curry Cut',
+        category: 'Meat',
+        vendor: 'Prime Meats & Seafood',
+        unit: 'kg',
+        bought: 50,
+        allocations: { 'brigade': 18, 'vidyaranyapura': 12, 'yelahanka': 10, 'ms-palya': 8 },
+        consumed: { 'brigade': 8, 'vidyaranyapura': 5, 'yelahanka': 4, 'ms-palya': 2 }
+    }
+];
+
+const defaultRequests = [
+    {
+        id: 'req_01',
+        itemId: 'item_01',
+        itemName: 'Fresh Chicken (Curry Cut)',
+        unit: 'kg',
+        outletId: 'brigade',
+        outletName: 'BRIGADE',
+        qty: 8,
+        cuisine: 'Tandoor',
+        chefName: 'Chef Prince',
+        requestedBy: 'Chef Prince',
+        status: 'Pending',
+        timestamp: new Date().toISOString()
+    },
+    {
+        id: 'req_02',
+        itemId: 'item_01',
+        itemName: 'Fresh Chicken (Curry Cut)',
+        unit: 'kg',
+        outletId: 'brigade',
+        outletName: 'BRIGADE',
+        qty: 5,
+        cuisine: 'Chinese',
+        chefName: 'Chef Li',
+        requestedBy: 'Chef Li',
+        status: 'Pending',
+        timestamp: new Date().toISOString()
+    },
+    {
+        id: 'req_03',
+        itemId: 'item_02',
+        itemName: 'Fresh Farm Tomatoes',
+        unit: 'kg',
+        outletId: 'brigade',
+        outletName: 'BRIGADE',
+        qty: 12,
+        cuisine: 'Kerala',
+        chefName: 'Chef Sasi',
+        requestedBy: 'Chef Sasi',
+        status: 'Pending',
+        timestamp: new Date().toISOString()
+    },
+    {
+        id: 'req_04',
+        itemId: 'item_03',
+        itemName: 'Royal Basmati Rice',
+        unit: 'kg',
+        outletId: 'brigade',
+        outletName: 'BRIGADE',
+        qty: 20,
+        cuisine: 'Indian',
+        chefName: 'Chef Rahul',
+        requestedBy: 'Chef Rahul',
+        status: 'Pending',
+        timestamp: new Date().toISOString()
+    },
+    {
+        id: 'req_05',
+        itemId: 'item_05',
+        itemName: 'Pure Dairy Paneer',
+        unit: 'kg',
+        outletId: 'brigade',
+        outletName: 'BRIGADE',
+        qty: 6,
+        cuisine: 'North Indian',
+        chefName: 'Chef Amit',
+        requestedBy: 'Chef Amit',
+        status: 'Accepted',
+        timestamp: new Date().toISOString()
+    }
+];
+
 let masterItemsData = JSON.parse(localStorage.getItem('nchef_items')) || [];
+if (masterItemsData.length === 0) {
+    masterItemsData.push(...defaultMasterItems);
+    localStorage.setItem('nchef_items', JSON.stringify(masterItemsData));
+}
+
 const requestsData = JSON.parse(localStorage.getItem('nchef_requests')) || [];
+if (requestsData.length === 0) {
+    requestsData.push(...defaultRequests);
+    localStorage.setItem('nchef_requests', JSON.stringify(requestsData));
+}
+
 const indentsData = JSON.parse(localStorage.getItem('nchef_indents')) || [];
 const purchaseOrdersData = JSON.parse(localStorage.getItem('nchef_purchase_orders')) || [];
 
@@ -222,26 +443,40 @@ function reloadDataFromStorage() {
     if (rawUsers) {
         usersData.length = 0;
         usersData.push(...JSON.parse(rawUsers));
+    } else if (usersData.length === 0) {
+        usersData.push(...defaultUsers);
     }
     const rawVendors = localStorage.getItem('nchef_vendors');
     if (rawVendors) {
         vendorsData.length = 0;
         vendorsData.push(...JSON.parse(rawVendors));
+    } else if (vendorsData.length === 0) {
+        vendorsData.push(...defaultVendors);
     }
     const rawOutlets = localStorage.getItem('nchef_outlets');
     if (rawOutlets) {
         outletsData.length = 0;
         outletsData.push(...JSON.parse(rawOutlets));
+    } else if (outletsData.length === 0) {
+        outletsData.push(...defaultOutlets);
     }
     const rawItems = localStorage.getItem('nchef_items');
     if (rawItems) {
         masterItemsData.length = 0;
         masterItemsData.push(...JSON.parse(rawItems));
     }
+    if (masterItemsData.length === 0) {
+        masterItemsData.push(...defaultMasterItems);
+        localStorage.setItem('nchef_items', JSON.stringify(masterItemsData));
+    }
     const rawRequests = localStorage.getItem('nchef_requests');
     if (rawRequests) {
         requestsData.length = 0;
         requestsData.push(...JSON.parse(rawRequests));
+    }
+    if (requestsData.length === 0) {
+        requestsData.push(...defaultRequests);
+        localStorage.setItem('nchef_requests', JSON.stringify(requestsData));
     }
     const rawIndents = localStorage.getItem('nchef_indents');
     if (rawIndents) {
@@ -281,77 +516,30 @@ function saveData() {
     }
 }
 
-function initSeedRequests() {
-    if (localStorage.getItem('nchef_requests') === null && requestsData.length === 0 && masterItemsData.length > 0) {
-        const chickenItem = masterItemsData.find(i => i.name.toLowerCase().includes('chicken')) || masterItemsData[0];
-        const outletId = primaryOutlet.id;
-        const outletName = primaryOutlet.name;
-        
-        if (chickenItem) {
-            requestsData.push(
-                {
-                    id: 'req_seed_1',
-                    itemId: chickenItem.id,
-                    itemName: chickenItem.name,
-                    unit: chickenItem.unit || 'kg',
-                    outletId: outletId,
-                    outletName: outletName,
-                    qty: 5,
-                    cuisine: 'Tandoor',
-                    chefName: 'Chef Prince',
-                    requestedBy: 'Chef Prince',
-                    status: 'Pending',
-                    timestamp: new Date().toISOString()
-                },
-                {
-                    id: 'req_seed_2',
-                    itemId: chickenItem.id,
-                    itemName: chickenItem.name,
-                    unit: chickenItem.unit || 'kg',
-                    outletId: outletId,
-                    outletName: outletName,
-                    qty: 2.5,
-                    cuisine: 'Chinese',
-                    chefName: 'Chef Li',
-                    requestedBy: 'Chef Li',
-                    status: 'Pending',
-                    timestamp: new Date().toISOString()
-                },
-                {
-                    id: 'req_seed_3',
-                    itemId: chickenItem.id,
-                    itemName: chickenItem.name,
-                    unit: chickenItem.unit || 'kg',
-                    outletId: outletId,
-                    outletName: outletName,
-                    qty: 2.5,
-                    cuisine: 'Arabic',
-                    chefName: 'Chef Tariq',
-                    requestedBy: 'Chef Tariq',
-                    status: 'Pending',
-                    timestamp: new Date().toISOString()
-                }
-            );
-        }
-        if (tomatoItem) {
-            requestsData.push({
-                id: 'req_seed_4',
-                itemId: tomatoItem.id,
-                itemName: tomatoItem.name,
-                unit: tomatoItem.unit || 'kg',
-                outletId: outletId,
-                outletName: outletName,
-                qty: 10,
-                cuisine: 'Kerala',
-                chefName: 'Chef Sasi',
-                requestedBy: 'Chef Sasi',
-                status: 'Pending',
-                timestamp: new Date().toISOString()
-            });
-        }
+window.resetToDemoData = function() {
+    usersData.length = 0;
+    usersData.push(...defaultUsers);
+    vendorsData.length = 0;
+    vendorsData.push(...defaultVendors);
+    outletsData.length = 0;
+    outletsData.push(...defaultOutlets);
+    masterItemsData.length = 0;
+    masterItemsData.push(...defaultMasterItems);
+    requestsData.length = 0;
+    requestsData.push(...defaultRequests);
+    indentsData.length = 0;
+    purchaseOrdersData.length = 0;
+    saveData();
+    if (typeof reloadDataFromStorage === 'function') reloadDataFromStorage();
+    if (typeof window.onLiveSyncReceived === 'function') window.onLiveSyncReceived();
+    if (typeof window.showToast === 'function') {
+        window.showToast("Demo data successfully restored!", "success");
     }
+};
+
+// First time auto-seed save if items or requests were empty
+if (localStorage.getItem('nchef_items') === null || localStorage.getItem('nchef_requests') === null) {
     saveData();
 }
-initSeedRequests();
 
 
