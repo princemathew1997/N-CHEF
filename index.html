@@ -8,7 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <link rel="stylesheet" href="css/styles.css?v=43">
+    <link rel="stylesheet" href="css/styles.css?v=44">
     <!-- NUNIT-INJECT: CATCH JS ERRORS -->
     <script>
         window.addEventListener('error', function(e) { 
@@ -416,24 +416,6 @@
                     </table>
                 </div>
 
-                <!-- Bottom Footer Bar: Export PDF & Send Request To Admin -->
-                <div class="panel" style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-radius: 12px; background: rgba(26,22,11,0.9); border: 1px solid var(--border); margin-bottom: 24px; flex-wrap: wrap; gap: 14px;">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <i data-lucide="layers" style="width: 20px; height: 20px; color: var(--primary);"></i>
-                        <div>
-                            <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-main);" id="wsFooterSummaryText">Ready to dispatch consolidated requirement</div>
-                            <div style="font-size: 0.76rem; color: var(--text-muted);">Review matrix quantities per section before dispatching to Admin.</div>
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-                        <button class="btn btn-outline" id="btnWsExportPdf" style="padding: 9px 18px; font-size: 0.88rem; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; border-color: rgba(255,255,255,0.25); color: #fff; cursor: pointer;">
-                            <i data-lucide="file-down" style="width: 16px; height: 16px; color: var(--primary);"></i> Export as PDF
-                        </button>
-                        <button class="btn btn-primary" id="btnWsSubmitIndent" style="padding: 9px 24px; font-size: 0.9rem; font-weight: 600; box-shadow: 0 4px 18px rgba(255,190,11,0.35); display: inline-flex; align-items: center; gap: 8px; cursor: pointer;">
-                            <i data-lucide="send" style="width: 16px; height: 16px;"></i> Send Request To Admin
-                        </button>
-                    </div>
-                </div>
             </div>
 
             <!-- CHEF PORTAL VIEW (Chef Only: Single Clean Raise Request Header Button, Metrics, & Full Requests Table) -->
@@ -1126,9 +1108,9 @@
         </main>
     </div>
 
-    <script src="js/data.js?v=43"></script>
-    <script src="js/app.js?v=43"></script>
-    <script src="js/wizard.js?v=43"></script>
+    <script src="js/data.js?v=44"></script>
+    <script src="js/app.js?v=44"></script>
+    <script src="js/wizard.js?v=44"></script>
     <script>
         lucide.createIcons();
     </script>
