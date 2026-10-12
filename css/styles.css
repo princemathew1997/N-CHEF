@@ -466,11 +466,20 @@ label {
     overflow: hidden;
 }
 
-#viewMasterOrders, #viewVendors, #viewUsers {
+#viewMasterOrders, #viewUsers {
     display: flex;
     flex-direction: column;
     height: 100%;
     overflow: hidden;
+}
+
+#viewLocations, #viewVendors {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow-y: auto;
+    padding-right: 4px;
+    padding-bottom: 30px;
 }
 
 /* Top Header */
@@ -533,6 +542,11 @@ label {
 .table-container {
     overflow-y: auto;
     height: 100%;
+}
+.table-container-compact {
+    overflow-y: auto;
+    height: auto !important;
+    max-height: 280px;
 }
 table {
     width: 100%;

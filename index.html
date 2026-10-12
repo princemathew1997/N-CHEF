@@ -8,7 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <link rel="stylesheet" href="css/styles.css?v=27">
+    <link rel="stylesheet" href="css/styles.css?v=40">
     <!-- NUNIT-INJECT: CATCH JS ERRORS -->
     <script>
         window.addEventListener('error', function(e) { 
@@ -581,12 +581,12 @@
                     </div>
                 </header>
 
-                <!-- Vendors Table (Full Width Panel) -->
-                <div class="panel table-container" style="background: rgba(20, 17, 10, 0.75); border: 1px solid var(--border); border-radius: 16px; padding: 22px; margin-bottom: 24px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <!-- Vendors Table (Compact Panel) -->
+                <div class="panel table-container-compact" style="background: rgba(20, 17, 10, 0.75); border: 1px solid var(--border); border-radius: 16px; padding: 20px; margin-bottom: 20px; flex-shrink: 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
                         <div>
-                            <h3 style="margin: 0; font-size: 1.15rem; color: #fff; display: flex; align-items: center; gap: 8px;">
-                                <i data-lucide="store" style="width: 18px; height: 18px; color: var(--primary);"></i> Registered Vendors
+                            <h3 style="margin: 0; font-size: 1.1rem; color: #fff; display: flex; align-items: center; gap: 8px;">
+                                <i data-lucide="store" style="width: 17px; height: 17px; color: var(--primary);"></i> Registered Vendors
                             </h3>
                             <p style="margin: 2px 0 0 0; font-size: 0.78rem; color: var(--text-muted);">Suppliers and vendors delivering ingredients across kitchen outlets</p>
                         </div>
@@ -596,8 +596,8 @@
                         <table style="width: 100%; font-size: 0.85rem;">
                             <thead>
                                 <tr>
-                                    <th>Vendor Name</th>
-                                    <th style="text-align: left; padding-left: 12px;">Action</th>
+                                    <th style="width: 65%;">Vendor Name</th>
+                                    <th style="text-align: left; padding-left: 12px; width: 35%;">Action</th>
                                 </tr>
                             </thead>
                             <tbody id="vendorsTableBody"></tbody>
@@ -606,42 +606,41 @@
                 </div>
 
                 <!-- Add / Edit Vendor Form (Centered below table) -->
-                <div style="display: flex; justify-content: center; margin-top: 10px; margin-bottom: 32px;">
-                    <div class="panel form-section" style="width: 100%; max-width: 520px; background: rgba(20, 17, 10, 0.85); border: 1px solid var(--border-gold); border-radius: 16px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
-                            <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(255,190,11,0.15); color: var(--primary); display: flex; align-items: center; justify-content: center;">
-                                <i data-lucide="truck" style="width: 22px; height: 22px;"></i>
+                <div style="display: flex; justify-content: center; margin-bottom: 24px; flex-shrink: 0;">
+                    <div class="panel form-section" style="width: 100%; max-width: 620px; background: rgba(20, 17, 10, 0.85); border: 1px solid var(--border-gold); border-radius: 16px; padding: 22px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                            <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(255,190,11,0.15); color: var(--primary); display: flex; align-items: center; justify-content: center;">
+                                <i data-lucide="truck" style="width: 20px; height: 20px;"></i>
                             </div>
                             <div>
-                                <h3 id="vendorFormTitle" style="margin: 0; font-size: 1.2rem; color: #fff;">Add Vendor</h3>
-                                <p style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">Register a new supplier or vendor into the system</p>
+                                <h3 id="vendorFormTitle" style="margin: 0; font-size: 1.15rem; color: #fff;">Add Vendor</h3>
+                                <p style="margin: 0; font-size: 0.78rem; color: var(--text-muted);">Register a new supplier or vendor into the system</p>
                             </div>
                         </div>
 
                         <input type="hidden" id="editVendorId">
 
-                        <div class="input-group" style="margin-bottom: 20px;">
-                            <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Vendor Name</label>
-                            <input type="text" id="newVendorName" placeholder="Enter vendor name" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
-                        </div>
-
-                        <div style="display: flex; gap: 10px;">
-                            <button class="btn btn-primary" id="addVendorBtn" style="flex: 1; padding: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.95rem;">
-                                <i data-lucide="plus-circle" style="width: 16px; height: 16px;"></i> Save Vendor
+                        <div style="display: flex; gap: 12px; align-items: flex-end;">
+                            <div style="flex: 1;">
+                                <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Vendor Name</label>
+                                <input type="text" id="newVendorName" placeholder="Enter vendor name" style="background: var(--dark); color: #fff; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
+                            </div>
+                            <button class="btn btn-primary" id="addVendorBtn" style="padding: 10px 20px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; font-size: 0.92rem; white-space: nowrap;">
+                                <i data-lucide="plus-circle" style="width: 15px; height: 15px;"></i> Save Vendor
                             </button>
-                            <button class="btn btn-outline hidden" id="cancelEditVendorBtn" style="padding: 12px 20px; font-size: 0.9rem;">Cancel</button>
+                            <button class="btn btn-outline hidden" id="cancelEditVendorBtn" style="padding: 10px 16px; font-size: 0.88rem;">Cancel</button>
                         </div>
                     </div>
                 </div>
 
                 <!-- Purchase Orders Raised to Vendors -->
-                <div style="margin-top: 24px;">
+                <div style="margin-top: 10px; margin-bottom: 24px; flex-shrink: 0;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                         <h3 style="margin: 0; font-size: 1.1rem; color: var(--primary); display: flex; align-items: center; gap: 8px;">
                             <i data-lucide="truck" style="width: 18px; height: 18px;"></i> Purchase Orders Raised to Vendors
                         </h3>
                     </div>
-                    <div class="panel table-container">
+                    <div class="panel table-container-compact" style="background: rgba(20, 17, 10, 0.75); border: 1px solid var(--border); border-radius: 16px; padding: 20px;">
                         <table>
                             <thead>
                                 <tr>
@@ -972,12 +971,12 @@
                     </div>
                 </header>
 
-                <!-- Locations Table (Full Width Panel) -->
-                <div class="panel table-container" style="background: rgba(20, 17, 10, 0.75); border: 1px solid var(--border); border-radius: 16px; padding: 22px; margin-bottom: 24px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <!-- Locations Table (Compact Panel) -->
+                <div class="panel table-container-compact" style="background: rgba(20, 17, 10, 0.75); border: 1px solid var(--border); border-radius: 16px; padding: 20px; margin-bottom: 20px; flex-shrink: 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
                         <div>
-                            <h3 style="margin: 0; font-size: 1.15rem; color: #fff; display: flex; align-items: center; gap: 8px;">
-                                <i data-lucide="map-pin" style="width: 18px; height: 18px; color: var(--primary);"></i> Active Outlets & Locations
+                            <h3 style="margin: 0; font-size: 1.1rem; color: #fff; display: flex; align-items: center; gap: 8px;">
+                                <i data-lucide="map-pin" style="width: 17px; height: 17px; color: var(--primary);"></i> Active Outlets & Locations
                             </h3>
                             <p style="margin: 2px 0 0 0; font-size: 0.78rem; color: var(--text-muted);">Configured kitchen branches and storage outlets across your organization</p>
                         </div>
@@ -987,9 +986,9 @@
                         <table style="width: 100%; font-size: 0.85rem;">
                             <thead>
                                 <tr>
-                                    <th>Location ID</th>
-                                    <th>Location Name</th>
-                                    <th style="text-align: left; padding-left: 12px;">Action</th>
+                                    <th style="width: 28%;">Location ID</th>
+                                    <th style="width: 44%;">Location Name</th>
+                                    <th style="text-align: left; padding-left: 12px; width: 28%;">Action</th>
                                 </tr>
                             </thead>
                             <tbody id="locationsTableBody"></tbody>
@@ -998,34 +997,36 @@
                 </div>
 
                 <!-- Add / Edit Location Form (Centered below table) -->
-                <div style="display: flex; justify-content: center; margin-top: 10px; margin-bottom: 32px;">
-                    <div class="panel form-section" style="width: 100%; max-width: 520px; background: rgba(20, 17, 10, 0.85); border: 1px solid var(--border-gold); border-radius: 16px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
-                            <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(255,190,11,0.15); color: var(--primary); display: flex; align-items: center; justify-content: center;">
-                                <i data-lucide="map-pin" style="width: 22px; height: 22px;"></i>
+                <div style="display: flex; justify-content: center; margin-bottom: 24px; flex-shrink: 0;">
+                    <div class="panel form-section" style="width: 100%; max-width: 620px; background: rgba(20, 17, 10, 0.85); border: 1px solid var(--border-gold); border-radius: 16px; padding: 22px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                            <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(255,190,11,0.15); color: var(--primary); display: flex; align-items: center; justify-content: center;">
+                                <i data-lucide="map-pin" style="width: 20px; height: 20px;"></i>
                             </div>
                             <div>
-                                <h3 id="locationFormTitle" style="margin: 0; font-size: 1.2rem; color: #fff;">Add Location</h3>
-                                <p style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">Register a new kitchen branch or storage outlet</p>
+                                <h3 id="locationFormTitle" style="margin: 0; font-size: 1.15rem; color: #fff;">Add Location</h3>
+                                <p style="margin: 0; font-size: 0.78rem; color: var(--text-muted);">Register a new kitchen branch or storage outlet</p>
                             </div>
                         </div>
 
                         <input type="hidden" id="editLocationId">
 
-                        <div class="input-group" style="margin-bottom: 14px;">
-                            <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Location ID</label>
-                            <input type="text" id="newLocationId" placeholder="Enter location ID" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
-                        </div>
-                        <div class="input-group" style="margin-bottom: 20px;">
-                            <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Location Name</label>
-                            <input type="text" id="newLocationName" placeholder="Enter location name" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px;">
+                            <div class="input-group">
+                                <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Location ID</label>
+                                <input type="text" id="newLocationId" placeholder="Enter location ID" style="background: var(--dark); color: #fff; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
+                            </div>
+                            <div class="input-group">
+                                <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Location Name</label>
+                                <input type="text" id="newLocationName" placeholder="Enter location name" style="background: var(--dark); color: #fff; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
+                            </div>
                         </div>
 
                         <div style="display: flex; gap: 10px;">
-                            <button class="btn btn-primary" id="saveLocationBtn" style="flex: 1; padding: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.95rem;">
-                                <i data-lucide="plus-circle" style="width: 16px; height: 16px;"></i> Save Location
+                            <button class="btn btn-primary" id="saveLocationBtn" style="flex: 1; padding: 11px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.92rem;">
+                                <i data-lucide="plus-circle" style="width: 15px; height: 15px;"></i> Save Location
                             </button>
-                            <button class="btn btn-outline hidden" id="cancelEditLocationBtn" style="padding: 12px 20px; font-size: 0.9rem;">Cancel</button>
+                            <button class="btn btn-outline hidden" id="cancelEditLocationBtn" style="padding: 11px 18px; font-size: 0.88rem;">Cancel</button>
                         </div>
                     </div>
                 </div>
@@ -1126,9 +1127,9 @@
         </main>
     </div>
 
-    <script src="js/data.js?v=39"></script>
-    <script src="js/app.js?v=39"></script>
-    <script src="js/wizard.js?v=39"></script>
+    <script src="js/data.js?v=40"></script>
+    <script src="js/app.js?v=40"></script>
+    <script src="js/wizard.js?v=40"></script>
     <script>
         lucide.createIcons();
     </script>
