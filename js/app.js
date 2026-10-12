@@ -4270,13 +4270,6 @@ function initUserManagementEvents() {
     const btnCancelAdminChef = document.getElementById('btnCancelEditAdminChef');
     if (btnCancelAdminChef) btnCancelAdminChef.addEventListener('click', resetAdminChefForm);
 
-    const adminChefOutletSel = document.getElementById('adminChefOutletSelect');
-    if (adminChefOutletSel) {
-        adminChefOutletSel.addEventListener('change', () => {
-            updateAdminChefSupervisorSelect();
-        });
-    }
-
     // 3. Admin User Form Listeners
     const btnSaveAdminUser = document.getElementById('btnSaveAdminUserSubmit');
     if (btnSaveAdminUser) btnSaveAdminUser.addEventListener('click', saveAdminUser);
