@@ -260,18 +260,29 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 window.addEventListener('load', () => {
-    setTimeout(() => {
-        const loader = document.getElementById('page-loader');
-        if (loader) {
-            loader.classList.add('hidden');
-            if (loaderInterval) clearInterval(loaderInterval);
-        }
-        
-        const loginPage = document.getElementById('page-login');
-        if (loginPage && loginPage.classList.contains('active')) {
-            loginPage.classList.add('show');
-        }
-    }, 2500);
+    const savedUsername = localStorage.getItem('nchef_logged_in_username');
+    if (savedUsername) {
+        setTimeout(() => {
+            const loader = document.getElementById('page-loader');
+            if (loader) {
+                loader.classList.add('hidden');
+                if (loaderInterval) clearInterval(loaderInterval);
+            }
+        }, 120);
+    } else {
+        setTimeout(() => {
+            const loader = document.getElementById('page-loader');
+            if (loader) {
+                loader.classList.add('hidden');
+                if (loaderInterval) clearInterval(loaderInterval);
+            }
+            
+            const loginPage = document.getElementById('page-login');
+            if (loginPage && loginPage.classList.contains('active')) {
+                loginPage.classList.add('show');
+            }
+        }, 2200);
+    }
 });
 
 // ============================================================
@@ -387,8 +398,87 @@ function initParticles() {
 }
 
 // ============================================================
-// LOGIN
+// LOGIN & SESSION MANAGEMENT
 // ============================================================
+function applyLoggedInUser(user, targetView = null) {
+    currentUser = user;
+    localStorage.setItem('nchef_logged_in_username', user.username);
+    
+    // Populate profile in sidebar
+    const nameEl = document.getElementById('userName');
+    const titleEl = document.getElementById('userTitle');
+    const initialEl = document.getElementById('userInitial');
+    if (nameEl) nameEl.textContent = user.name;
+    if (titleEl) titleEl.textContent = user.title;
+    if (initialEl) initialEl.textContent = user.name ? user.name.charAt(0) : 'U';
+    
+    // Adjust UI for roles
+    const adminEls = document.querySelectorAll('.admin-only');
+    const superEls = document.querySelectorAll('.supervisor-only');
+    const noChefEls = document.querySelectorAll('.no-chef');
+    
+    if (user.role === 'admin') {
+        adminEls.forEach(el => el.classList.remove('hidden'));
+        superEls.forEach(el => el.classList.add('hidden'));
+    } else if (user.role === 'supervisor') {
+        adminEls.forEach(el => el.classList.add('hidden'));
+        superEls.forEach(el => el.classList.remove('hidden'));
+    } else {
+        adminEls.forEach(el => el.classList.add('hidden'));
+        superEls.forEach(el => el.classList.add('hidden'));
+    }
+    
+    if (user.role === 'chef') {
+        noChefEls.forEach(el => el.classList.add('hidden'));
+        document.querySelectorAll('.chef-only-bg').forEach(el => el.classList.remove('hidden'));
+    } else {
+        noChefEls.forEach(el => el.classList.remove('hidden'));
+        document.querySelectorAll('.chef-only-bg').forEach(el => el.classList.add('hidden'));
+    }
+    
+    if (document.getElementById('consumePerson')) {
+        document.getElementById('consumePerson').value = user.name;
+    }
+    
+    if (typeof updateRequestsBadge === 'function') updateRequestsBadge();
+    if (typeof updateIndentsBadge === 'function') updateIndentsBadge();
+    
+    // Show dashboard page, hide login page
+    const pageLogin = document.getElementById('page-login');
+    const pageDashboard = document.getElementById('page-dashboard');
+    if (pageLogin) pageLogin.classList.remove('active', 'show');
+    if (pageDashboard) pageDashboard.classList.add('active');
+    
+    // Dismiss splash loader immediately
+    const loader = document.getElementById('page-loader');
+    if (loader) {
+        loader.classList.add('hidden');
+        if (loaderInterval) clearInterval(loaderInterval);
+    }
+    
+    // Restore preserved or requested view
+    const savedView = targetView || localStorage.getItem('nchef_active_view');
+    const savedSub = localStorage.getItem('nchef_active_subdivision');
+    
+    if (user.role === 'chef') {
+        window.switchToView('viewChefPortal');
+    } else if (user.role === 'admin') {
+        if (savedView && savedView !== 'viewRequests' && savedView !== 'viewChefPortal') {
+            window.switchToView(savedView, savedSub);
+        } else {
+            window.switchToView('viewMasterOrders');
+        }
+    } else {
+        // Supervisor or default
+        if (savedView && savedView !== 'viewChefPortal' && savedView !== 'viewVendors' && savedView !== 'viewLocations' && savedView !== 'viewUsers') {
+            window.switchToView(savedView, savedSub);
+        } else {
+            window.switchToView('viewMasterOrders');
+        }
+    }
+}
+window.applyLoggedInUser = applyLoggedInUser;
+
 function initLogin() {
     const loginBtn = document.getElementById('loginBtn');
     const userIn   = document.getElementById('username');
@@ -396,114 +486,42 @@ function initLogin() {
     const errDiv   = document.getElementById('loginError');
 
     const doLogin = () => {
-        const u = userIn.value.trim();
-        const p = passIn.value.trim();
+        const u = userIn ? userIn.value.trim() : '';
+        const p = passIn ? passIn.value.trim() : '';
         
-        const user = usersData.find(usr => usr.username === u && usr.password === p);
+        if (typeof reloadDataFromStorage === 'function') {
+            reloadDataFromStorage();
+        }
+        const user = usersData.find(usr => usr.username.toLowerCase() === u.toLowerCase() && usr.password === p);
         
         if (user) {
-            errDiv.classList.remove('active');
-            currentUser = user;
-            
-            // Populate profile
-            document.getElementById('userName').textContent = user.name;
-            document.getElementById('userTitle').textContent = user.title;
-            document.getElementById('userInitial').textContent = user.name.charAt(0);
-            
-            // Adjust UI for roles
-            const adminEls = document.querySelectorAll('.admin-only');
-            const superEls = document.querySelectorAll('.supervisor-only');
-            const noChefEls = document.querySelectorAll('.no-chef');
-            
-            if (user.role === 'admin') {
-                adminEls.forEach(el => el.classList.remove('hidden'));
-                superEls.forEach(el => el.classList.add('hidden'));
-            } else if (user.role === 'supervisor') {
-                adminEls.forEach(el => el.classList.add('hidden'));
-                superEls.forEach(el => el.classList.remove('hidden'));
-            } else {
-                // Chef and any other role: hide both admin and supervisor elements
-                adminEls.forEach(el => el.classList.add('hidden'));
-                superEls.forEach(el => el.classList.add('hidden'));
-            }
-            
-            if (user.role === 'chef') {
-                noChefEls.forEach(el => el.classList.add('hidden'));
-                document.querySelectorAll('.chef-only-bg').forEach(el => el.classList.remove('hidden'));
-            } else {
-                noChefEls.forEach(el => el.classList.remove('hidden'));
-                document.querySelectorAll('.chef-only-bg').forEach(el => el.classList.add('hidden'));
-            }
-            
-            if (document.getElementById('consumePerson')) {
-                document.getElementById('consumePerson').value = user.name;
-            }
-            
-            updateRequestsBadge();
-            updateIndentsBadge();
-            
-            // Show dashboard
-            document.getElementById('page-login').classList.remove('active');
-            document.getElementById('page-dashboard').classList.add('active');
-            
-            if (user.role === 'chef') {
-                document.getElementById('viewMasterOrders').classList.add('hidden');
-                document.getElementById('navMasterOrders').classList.remove('active');
-                
-                const viewChef = document.getElementById('viewChefPortal');
-                const navChef = document.getElementById('navChefPortal');
-                if (viewChef) viewChef.classList.remove('hidden');
-                if (navChef) navChef.classList.add('active');
-                
-                currentView = 'viewChefPortal';
-                loadChefPortalData();
-            } else {
-                const viewChef = document.getElementById('viewChefPortal');
-                const navChef = document.getElementById('navChefPortal');
-                if (viewChef) viewChef.classList.add('hidden');
-                if (navChef) navChef.classList.remove('active');
-                
-                // For Admin, Requests screen is hidden — use Indents or Master Orders
-                if (user.role === 'admin' && currentView === 'viewRequests') {
-                    document.getElementById('viewRequests')?.classList.add('hidden');
-                    document.getElementById('navRequests')?.classList.remove('active');
-                    const viewIndents = document.getElementById('viewIndents');
-                    const navIndents = document.getElementById('navIndents');
-                    if (viewIndents && navIndents) {
-                        viewIndents.classList.remove('hidden');
-                        navIndents.classList.add('active');
-                        currentView = 'viewIndents';
-                        loadIndentsData();
-                    } else {
-                        document.getElementById('viewMasterOrders').classList.remove('hidden');
-                        document.getElementById('navMasterOrders').classList.add('active');
-                        currentView = 'viewMasterOrders';
-                        loadDashboardData();
-                    }
-                } else {
-                    document.getElementById('viewMasterOrders').classList.remove('hidden');
-                    document.getElementById('navMasterOrders').classList.add('active');
-                    currentView = 'viewMasterOrders';
-                    loadDashboardData();
-                }
-            }
+            if (errDiv) errDiv.classList.remove('active');
+            applyLoggedInUser(user);
         } else {
-            errDiv.classList.add('active');
+            if (errDiv) errDiv.classList.add('active');
         }
     };
 
-    loginBtn.addEventListener('click', doLogin);
-    passIn.addEventListener('keyup', (e) => {
+    if (loginBtn) loginBtn.addEventListener('click', doLogin);
+    if (passIn) passIn.addEventListener('keyup', (e) => {
         if (e.key === 'Enter') doLogin();
     });
     
-    document.getElementById('logoutBtn').addEventListener('click', () => {
-        currentUser = null;
-        userIn.value = '';
-        passIn.value = '';
-        document.getElementById('page-dashboard').classList.remove('active');
-        document.getElementById('page-login').classList.add('active');
-    });
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+            currentUser = null;
+            localStorage.removeItem('nchef_logged_in_username');
+            localStorage.removeItem('nchef_active_view');
+            localStorage.removeItem('nchef_active_subdivision');
+            if (userIn) userIn.value = '';
+            if (passIn) passIn.value = '';
+            const pageDashboard = document.getElementById('page-dashboard');
+            const pageLogin = document.getElementById('page-login');
+            if (pageDashboard) pageDashboard.classList.remove('active');
+            if (pageLogin) pageLogin.classList.add('active', 'show');
+        });
+    }
     
     const backHomeBtn = document.getElementById('backHomeBtn');
     if (backHomeBtn) {
@@ -511,26 +529,42 @@ function initLogin() {
             window.location.reload();
         });
     }
+
+    // Auto-restore session on refresh if user is already logged in
+    const savedUsername = localStorage.getItem('nchef_logged_in_username');
+    if (savedUsername) {
+        if (typeof reloadDataFromStorage === 'function') {
+            reloadDataFromStorage();
+        }
+        const savedUser = usersData.find(u => u.username.toLowerCase() === savedUsername.toLowerCase());
+        if (savedUser) {
+            applyLoggedInUser(savedUser);
+        }
+    }
 }
 
 // ============================================================
-// NAVIGATION
+// NAVIGATION & VIEW SWITCHING
 // ============================================================
-function initNavigation() {
+window.switchToView = function(viewName, subDivision = null) {
     const navMaster = document.getElementById('navMasterOrders');
     const navRequests = document.getElementById('navRequests');
+    const navManageRequests = document.getElementById('navManageRequests');
+    const navConsolidateRequests = document.getElementById('navConsolidateRequests');
+    const navRequestsSubmenu = document.getElementById('navRequestsSubmenu');
+    const navRequestsChevron = document.getElementById('navRequestsChevron');
     const navIndents = document.getElementById('navIndents');
     const navChef = document.getElementById('navChefPortal');
     const navVendors = document.getElementById('navVendors');
     const navLocations = document.getElementById('navLocations');
     const navUsers = document.getElementById('navUsers');
+    const navUsersSubmenu = document.getElementById('navUsersSubmenu');
+    const navUsersChevron = document.getElementById('navUsersChevron');
+    const navSubSupervisors = document.getElementById('navSubSupervisors');
+    const navSubChefs = document.getElementById('navSubChefs');
+    const navSubAdmins = document.getElementById('navSubAdmins');
     const navAddChef = document.getElementById('navAddChef');
-    
-    const navManageRequests = document.getElementById('navManageRequests');
-    const navConsolidateRequests = document.getElementById('navConsolidateRequests');
-    const navRequestsSubmenu = document.getElementById('navRequestsSubmenu');
-    const navRequestsChevron = document.getElementById('navRequestsChevron');
-    
+
     const viewMaster = document.getElementById('viewMasterOrders');
     const viewRequests = document.getElementById('viewRequests');
     const viewConsolidateRequests = document.getElementById('viewConsolidateRequests');
@@ -540,86 +574,148 @@ function initNavigation() {
     const viewLocations = document.getElementById('viewLocations');
     const viewUsers = document.getElementById('viewUsers');
     const viewAddChef = document.getElementById('viewAddChef');
-    
+
+    // Hide all views & deactivate nav items
+    [viewMaster, viewRequests, viewConsolidateRequests, viewIndents, viewChef, viewVendors, viewLocations, viewUsers, viewAddChef].forEach(v => {
+        if (v) v.classList.add('hidden');
+    });
+    [navMaster, navRequests, navManageRequests, navConsolidateRequests, navIndents, navChef, navVendors, navLocations, navUsers, navSubSupervisors, navSubChefs, navSubAdmins, navAddChef].forEach(n => {
+        if (n) n.classList.remove('active');
+    });
+
+    if (viewName !== 'viewRequests' && viewName !== 'viewConsolidateRequests') {
+        if (navRequestsSubmenu) navRequestsSubmenu.classList.remove('open');
+        if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(0deg)';
+    }
+    if (viewName !== 'viewUsers') {
+        if (navUsersSubmenu) navUsersSubmenu.classList.remove('open');
+        if (navUsersChevron) navUsersChevron.style.transform = 'rotate(0deg)';
+    }
+
+    currentView = viewName;
+    localStorage.setItem('nchef_active_view', viewName);
+
+    switch(viewName) {
+        case 'viewMasterOrders':
+            if (viewMaster) viewMaster.classList.remove('hidden');
+            if (navMaster) navMaster.classList.add('active');
+            loadDashboardData();
+            break;
+            
+        case 'viewRequests':
+            if (viewRequests) viewRequests.classList.remove('hidden');
+            if (navRequests) navRequests.classList.add('active');
+            if (navManageRequests) navManageRequests.classList.add('active');
+            if (navRequestsSubmenu) navRequestsSubmenu.classList.add('open');
+            if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(180deg)';
+            loadRequestsData();
+            break;
+
+        case 'viewConsolidateRequests':
+            if (viewConsolidateRequests) viewConsolidateRequests.classList.remove('hidden');
+            if (navRequests) navRequests.classList.add('active');
+            if (navConsolidateRequests) navConsolidateRequests.classList.add('active');
+            if (navRequestsSubmenu) navRequestsSubmenu.classList.add('open');
+            if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(180deg)';
+            if (typeof loadConsolidateWorkspace === 'function') loadConsolidateWorkspace();
+            break;
+
+        case 'viewIndents':
+            if (viewIndents) viewIndents.classList.remove('hidden');
+            if (navIndents) navIndents.classList.add('active');
+            loadIndentsData();
+            break;
+
+        case 'viewChefPortal':
+            if (viewChef) viewChef.classList.remove('hidden');
+            if (navChef) navChef.classList.add('active');
+            loadChefPortalData();
+            break;
+
+        case 'viewVendors':
+            if (viewVendors) viewVendors.classList.remove('hidden');
+            if (navVendors) navVendors.classList.add('active');
+            loadVendorsData();
+            break;
+
+        case 'viewLocations':
+            if (viewLocations) viewLocations.classList.remove('hidden');
+            if (navLocations) navLocations.classList.add('active');
+            loadLocationsData();
+            break;
+
+        case 'viewUsers':
+            if (viewUsers) viewUsers.classList.remove('hidden');
+            if (navUsers) navUsers.classList.add('active');
+            if (navUsersSubmenu) navUsersSubmenu.classList.add('open');
+            if (navUsersChevron) navUsersChevron.style.transform = 'rotate(180deg)';
+            const sub = subDivision || currentUserSubdivision || 'supervisor';
+            if (typeof switchUserSubdivision === 'function') {
+                switchUserSubdivision(sub);
+            } else {
+                loadUsersData();
+            }
+            localStorage.setItem('nchef_active_subdivision', sub);
+            break;
+
+        case 'viewAddChef':
+            if (viewAddChef) viewAddChef.classList.remove('hidden');
+            if (navAddChef) navAddChef.classList.add('active');
+            if (typeof loadAddChefView === 'function') loadAddChefView();
+            break;
+
+        default:
+            if (viewMaster) viewMaster.classList.remove('hidden');
+            if (navMaster) navMaster.classList.add('active');
+            loadDashboardData();
+            break;
+    }
+};
+
+function initNavigation() {
+    const navMaster = document.getElementById('navMasterOrders');
+    const navRequests = document.getElementById('navRequests');
+    const navManageRequests = document.getElementById('navManageRequests');
+    const navConsolidateRequests = document.getElementById('navConsolidateRequests');
+    const navRequestsSubmenu = document.getElementById('navRequestsSubmenu');
+    const navRequestsChevron = document.getElementById('navRequestsChevron');
+    const navIndents = document.getElementById('navIndents');
+    const navChef = document.getElementById('navChefPortal');
+    const navVendors = document.getElementById('navVendors');
+    const navLocations = document.getElementById('navLocations');
+    const navUsers = document.getElementById('navUsers');
     const navUsersSubmenu = document.getElementById('navUsersSubmenu');
     const navUsersChevron = document.getElementById('navUsersChevron');
     const navSubSupervisors = document.getElementById('navSubSupervisors');
     const navSubChefs = document.getElementById('navSubChefs');
     const navSubAdmins = document.getElementById('navSubAdmins');
+    const navAddChef = document.getElementById('navAddChef');
 
-    const hideAllViews = () => {
-        viewMaster.classList.add('hidden');
-        viewRequests.classList.add('hidden');
-        if (viewConsolidateRequests) viewConsolidateRequests.classList.add('hidden');
-        if (viewIndents) viewIndents.classList.add('hidden');
-        if (viewChef) viewChef.classList.add('hidden');
-        viewVendors.classList.add('hidden');
-        viewLocations.classList.add('hidden');
-        viewUsers.classList.add('hidden');
-        if (viewAddChef) viewAddChef.classList.add('hidden');
-        
-        navMaster.classList.remove('active');
-        navRequests.classList.remove('active');
-        if (navManageRequests) navManageRequests.classList.remove('active');
-        if (navConsolidateRequests) navConsolidateRequests.classList.remove('active');
-        if (navIndents) navIndents.classList.remove('active');
-        if (navChef) navChef.classList.remove('active');
-        navVendors.classList.remove('active');
-        navLocations.classList.remove('active');
-        navUsers.classList.remove('active');
-        if (navSubSupervisors) navSubSupervisors.classList.remove('active');
-        if (navSubChefs) navSubChefs.classList.remove('active');
-        if (navSubAdmins) navSubAdmins.classList.remove('active');
-        if (navAddChef) navAddChef.classList.remove('active');
-    };
+    if (navMaster) {
+        navMaster.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.switchToView('viewMasterOrders');
+        });
+    }
 
-    navMaster.addEventListener('click', (e) => {
-        e.preventDefault();
-        hideAllViews();
-        if (navRequestsSubmenu) navRequestsSubmenu.classList.remove('open');
-        if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(0deg)';
-        if (navUsersSubmenu) navUsersSubmenu.classList.remove('open');
-        if (navUsersChevron) navUsersChevron.style.transform = 'rotate(0deg)';
-        viewMaster.classList.remove('hidden');
-        navMaster.classList.add('active');
-        currentView = 'viewMasterOrders';
-        loadDashboardData();
-    });
-
-    navRequests.addEventListener('click', (e) => {
-        e.preventDefault();
-        const isOpen = navRequestsSubmenu && navRequestsSubmenu.classList.contains('open');
-        if (isOpen && (currentView === 'viewRequests' || currentView === 'viewConsolidateRequests')) {
-            navRequestsSubmenu.classList.remove('open');
-            if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(0deg)';
-        } else {
-            if (navRequestsSubmenu) navRequestsSubmenu.classList.add('open');
-            if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(180deg)';
-        }
-        if (navUsersSubmenu) navUsersSubmenu.classList.remove('open');
-        if (navUsersChevron) navUsersChevron.style.transform = 'rotate(0deg)';
-        
-        // Default to Manage Request view
-        hideAllViews();
-        viewRequests.classList.remove('hidden');
-        navRequests.classList.add('active');
-        if (navManageRequests) navManageRequests.classList.add('active');
-        currentView = 'viewRequests';
-        loadRequestsData();
-    });
+    if (navRequests) {
+        navRequests.addEventListener('click', (e) => {
+            e.preventDefault();
+            const isOpen = navRequestsSubmenu && navRequestsSubmenu.classList.contains('open');
+            if (isOpen && (currentView === 'viewRequests' || currentView === 'viewConsolidateRequests')) {
+                navRequestsSubmenu.classList.remove('open');
+                if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(0deg)';
+            } else {
+                window.switchToView('viewRequests');
+            }
+        });
+    }
 
     if (navManageRequests) {
         navManageRequests.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            hideAllViews();
-            viewRequests.classList.remove('hidden');
-            navRequests.classList.add('active');
-            if (navRequestsSubmenu) navRequestsSubmenu.classList.add('open');
-            if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(180deg)';
-            navManageRequests.classList.add('active');
-            currentView = 'viewRequests';
-            loadRequestsData();
+            window.switchToView('viewRequests');
         });
     }
 
@@ -627,103 +723,56 @@ function initNavigation() {
         navConsolidateRequests.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            hideAllViews();
-            if (viewConsolidateRequests) viewConsolidateRequests.classList.remove('hidden');
-            navRequests.classList.add('active');
-            if (navRequestsSubmenu) navRequestsSubmenu.classList.add('open');
-            if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(180deg)';
-            navConsolidateRequests.classList.add('active');
-            currentView = 'viewConsolidateRequests';
-            if (typeof loadConsolidateWorkspace === 'function') loadConsolidateWorkspace();
+            window.switchToView('viewConsolidateRequests');
         });
     }
 
     if (navIndents) {
         navIndents.addEventListener('click', (e) => {
             e.preventDefault();
-            hideAllViews();
-            if (navRequestsSubmenu) navRequestsSubmenu.classList.remove('open');
-            if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(0deg)';
-            if (navUsersSubmenu) navUsersSubmenu.classList.remove('open');
-            if (navUsersChevron) navUsersChevron.style.transform = 'rotate(0deg)';
-            if (viewIndents) viewIndents.classList.remove('hidden');
-            navIndents.classList.add('active');
-            currentView = 'viewIndents';
-            loadIndentsData();
+            window.switchToView('viewIndents');
         });
     }
 
     if (navChef) {
         navChef.addEventListener('click', (e) => {
             e.preventDefault();
-            hideAllViews();
-            if (viewChef) viewChef.classList.remove('hidden');
-            navChef.classList.add('active');
-            currentView = 'viewChefPortal';
-            loadChefPortalData();
+            window.switchToView('viewChefPortal');
         });
     }
 
-    navVendors.addEventListener('click', (e) => {
-        e.preventDefault();
-        hideAllViews();
-        if (navRequestsSubmenu) navRequestsSubmenu.classList.remove('open');
-        if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(0deg)';
-        if (navUsersSubmenu) navUsersSubmenu.classList.remove('open');
-        if (navUsersChevron) navUsersChevron.style.transform = 'rotate(0deg)';
-        viewVendors.classList.remove('hidden');
-        navVendors.classList.add('active');
-        loadVendorsData();
-    });
+    if (navVendors) {
+        navVendors.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.switchToView('viewVendors');
+        });
+    }
 
-    navLocations.addEventListener('click', (e) => {
-        e.preventDefault();
-        hideAllViews();
-        if (navRequestsSubmenu) navRequestsSubmenu.classList.remove('open');
-        if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(0deg)';
-        if (navUsersSubmenu) navUsersSubmenu.classList.remove('open');
-        if (navUsersChevron) navUsersChevron.style.transform = 'rotate(0deg)';
-        viewLocations.classList.remove('hidden');
-        navLocations.classList.add('active');
-        loadLocationsData();
-    });
+    if (navLocations) {
+        navLocations.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.switchToView('viewLocations');
+        });
+    }
 
-    navUsers.addEventListener('click', (e) => {
-        e.preventDefault();
-        const isOpen = navUsersSubmenu && navUsersSubmenu.classList.contains('open');
-        if (isOpen && currentView === 'viewUsers') {
-            navUsersSubmenu.classList.remove('open');
-            if (navUsersChevron) navUsersChevron.style.transform = 'rotate(0deg)';
-        } else {
-            if (navUsersSubmenu) navUsersSubmenu.classList.add('open');
-            if (navUsersChevron) navUsersChevron.style.transform = 'rotate(180deg)';
-        }
-        if (navRequestsSubmenu) navRequestsSubmenu.classList.remove('open');
-        if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(0deg)';
-
-        hideAllViews();
-        viewUsers.classList.remove('hidden');
-        navUsers.classList.add('active');
-        currentView = 'viewUsers';
-        if (typeof switchUserSubdivision === 'function') {
-            switchUserSubdivision('supervisor');
-        } else {
-            loadUsersData();
-        }
-    });
+    if (navUsers) {
+        navUsers.addEventListener('click', (e) => {
+            e.preventDefault();
+            const isOpen = navUsersSubmenu && navUsersSubmenu.classList.contains('open');
+            if (isOpen && currentView === 'viewUsers') {
+                navUsersSubmenu.classList.remove('open');
+                if (navUsersChevron) navUsersChevron.style.transform = 'rotate(0deg)';
+            } else {
+                window.switchToView('viewUsers', 'supervisor');
+            }
+        });
+    }
 
     if (navSubSupervisors) {
         navSubSupervisors.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            hideAllViews();
-            viewUsers.classList.remove('hidden');
-            navUsers.classList.add('active');
-            if (navUsersSubmenu) navUsersSubmenu.classList.add('open');
-            if (navUsersChevron) navUsersChevron.style.transform = 'rotate(180deg)';
-            navSubSupervisors.classList.add('active');
-            currentView = 'viewUsers';
-            if (typeof switchUserSubdivision === 'function') switchUserSubdivision('supervisor');
+            window.switchToView('viewUsers', 'supervisor');
         });
     }
 
@@ -731,14 +780,7 @@ function initNavigation() {
         navSubChefs.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            hideAllViews();
-            viewUsers.classList.remove('hidden');
-            navUsers.classList.add('active');
-            if (navUsersSubmenu) navUsersSubmenu.classList.add('open');
-            if (navUsersChevron) navUsersChevron.style.transform = 'rotate(180deg)';
-            navSubChefs.classList.add('active');
-            currentView = 'viewUsers';
-            if (typeof switchUserSubdivision === 'function') switchUserSubdivision('chef');
+            window.switchToView('viewUsers', 'chef');
         });
     }
 
@@ -746,29 +788,14 @@ function initNavigation() {
         navSubAdmins.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            hideAllViews();
-            viewUsers.classList.remove('hidden');
-            navUsers.classList.add('active');
-            if (navUsersSubmenu) navUsersSubmenu.classList.add('open');
-            if (navUsersChevron) navUsersChevron.style.transform = 'rotate(180deg)';
-            navSubAdmins.classList.add('active');
-            currentView = 'viewUsers';
-            if (typeof switchUserSubdivision === 'function') switchUserSubdivision('admin');
+            window.switchToView('viewUsers', 'admin');
         });
     }
 
     if (navAddChef) {
         navAddChef.addEventListener('click', (e) => {
             e.preventDefault();
-            hideAllViews();
-            if (navRequestsSubmenu) navRequestsSubmenu.classList.remove('open');
-            if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(0deg)';
-            if (navUsersSubmenu) navUsersSubmenu.classList.remove('open');
-            if (navUsersChevron) navUsersChevron.style.transform = 'rotate(0deg)';
-            if (viewAddChef) viewAddChef.classList.remove('hidden');
-            navAddChef.classList.add('active');
-            currentView = 'viewAddChef';
-            if (typeof loadAddChefView === 'function') loadAddChefView();
+            window.switchToView('viewAddChef');
         });
     }
 }
@@ -3320,13 +3347,24 @@ window.deleteSupervisorRequest = async function(indentId) {
     }
 };
 
-// Global live sync receiver across browser tabs/windows
+// Global live sync receiver across browser tabs/windows and local data changes
 function onLiveSyncReceived() {
     if (typeof reloadDataFromStorage === 'function') {
         reloadDataFromStorage();
     }
+    if (currentUser) {
+        const updated = usersData.find(u => u.username.toLowerCase() === currentUser.username.toLowerCase());
+        if (updated) currentUser = updated;
+    }
     if (typeof updateRequestsBadge === 'function') updateRequestsBadge();
     if (typeof updateIndentsBadge === 'function') updateIndentsBadge();
+    if (typeof updateFormSelects === 'function' && typeof getVisibleOutlets === 'function') {
+        updateFormSelects(getVisibleOutlets());
+    }
+    
+    // Live update active view without disrupting user typing
+    const activeEl = document.activeElement;
+    const isTyping = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT');
     
     if (currentView === 'viewRequests' && typeof loadRequestsData === 'function') {
         loadRequestsData();
@@ -3335,15 +3373,27 @@ function onLiveSyncReceived() {
     } else if (currentView === 'viewIndents' && typeof loadIndentsData === 'function') {
         loadIndentsData();
     } else if (currentView === 'viewConsolidateRequests' && typeof loadConsolidateWorkspace === 'function') {
-        loadConsolidateWorkspace();
+        const isEditingInMatrix = isTyping && activeEl.closest('#wsConsolidatePrintArea');
+        if (!isEditingInMatrix) {
+            loadConsolidateWorkspace();
+        }
     } else if (currentView === 'viewChefPortal' && typeof loadChefPortalData === 'function') {
         loadChefPortalData();
     } else if (currentView === 'viewVendors' && typeof loadVendorsData === 'function') {
         loadVendorsData();
+    } else if (currentView === 'viewLocations' && typeof loadLocationsData === 'function') {
+        loadLocationsData();
+    } else if (currentView === 'viewUsers' && typeof loadUsersData === 'function') {
+        if (typeof switchUserSubdivision === 'function') {
+            switchUserSubdivision(currentUserSubdivision || 'supervisor');
+        } else {
+            loadUsersData();
+        }
     } else if (currentView === 'viewAddChef' && typeof loadAddChefView === 'function') {
         loadAddChefView();
     }
 }
+window.onLiveSyncReceived = onLiveSyncReceived;
 
 if (typeof BroadcastChannel !== 'undefined') {
     const appLiveChannel = new BroadcastChannel('nchef_live_channel');
@@ -4343,6 +4393,7 @@ function initUserManagementEvents() {
 
 function switchUserSubdivision(subKey) {
     currentUserSubdivision = subKey;
+    localStorage.setItem('nchef_active_subdivision', subKey);
     initUserManagementEvents();
 
     // Update Tab Buttons

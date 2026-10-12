@@ -272,6 +272,13 @@ function saveData() {
     localStorage.setItem('nchef_indents', JSON.stringify(indentsData));
     localStorage.setItem('nchef_purchase_orders', JSON.stringify(purchaseOrdersData));
     broadcastLiveUpdate();
+    if (typeof window !== 'undefined' && typeof window.onLiveSyncReceived === 'function') {
+        try {
+            window.onLiveSyncReceived();
+        } catch (e) {
+            console.error('Error in local live sync:', e);
+        }
+    }
 }
 
 function initSeedRequests() {
