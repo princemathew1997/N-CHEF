@@ -1268,16 +1268,37 @@ function initForms() {
     }
     
     const addVendorBtn = document.getElementById('addVendorBtn');
-    addVendorBtn.addEventListener('click', () => {
-        const name = document.getElementById('newVendorName').value.trim();
-        if (name) {
-            vendorsData.push({ id: 'v_' + Date.now(), name });
+    if (addVendorBtn) {
+        addVendorBtn.addEventListener('click', () => {
+            const editId = document.getElementById('editVendorId')?.value;
+            const name = document.getElementById('newVendorName')?.value.trim();
+            if (!name) {
+                window.showToast("Please enter a vendor name.", "warning");
+                return;
+            }
+            if (editId) {
+                const v = vendorsData.find(vend => vend.id === editId);
+                if (v) {
+                    v.name = name;
+                    window.showToast(`Vendor ${name} updated successfully!`, "success");
+                }
+            } else {
+                vendorsData.push({ id: 'v_' + Date.now(), name });
+                window.showToast(`Vendor ${name} registered successfully!`, "success");
+            }
             saveData();
-            document.getElementById('newVendorName').value = '';
+            if (typeof resetVendorForm === 'function') resetVendorForm();
             loadVendorsData();
             updateFormSelects(getVisibleOutlets()); // Refresh vendor dropdowns
-        }
-    });
+        });
+    }
+
+    const cancelEditVendorBtn = document.getElementById('cancelEditVendorBtn');
+    if (cancelEditVendorBtn) {
+        cancelEditVendorBtn.addEventListener('click', () => {
+            if (typeof resetVendorForm === 'function') resetVendorForm();
+        });
+    }
     
     const addItemBtn = document.getElementById('addItemBtn');
     if(addItemBtn) {
@@ -4216,13 +4237,29 @@ window.deleteRequest = async function(reqId) {
 
 function loadVendorsData() {
     const tbody = document.getElementById('vendorsTableBody');
+    const badge = document.getElementById('vendorsCountBadge');
+    if (badge) badge.textContent = `${vendorsData.length} Vendor${vendorsData.length === 1 ? '' : 's'}`;
+
     if (tbody) {
-        tbody.innerHTML = vendorsData.map(v => `
-            <tr>
-                <td>${v.name}</td>
-                <td><button class="icon-btn text-danger" onclick="removeVendor('${v.id}')"><i data-lucide="trash-2"></i></button></td>
-            </tr>
-        `).join('');
+        if (vendorsData.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="2" style="text-align: center; color: var(--text-muted); padding: 24px;">No vendors registered yet. Use the form below to add a vendor.</td></tr>`;
+        } else {
+            tbody.innerHTML = vendorsData.map(v => `
+                <tr>
+                    <td><strong style="color: var(--text-main); font-size: 0.92rem;">${v.name}</strong></td>
+                    <td style="text-align: left; padding-left: 12px; white-space: nowrap;">
+                        <div style="display: inline-flex; align-items: center; gap: 8px;">
+                            <button type="button" class="btn btn-outline" onclick="editVendor('${v.id}')" title="Edit Vendor" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(255,190,11,0.5); color: var(--primary); background: rgba(255,190,11,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
+                                <i data-lucide="edit" style="width: 13px; height: 13px;"></i> Edit
+                            </button>
+                            <button type="button" class="btn btn-outline" onclick="removeVendor('${v.id}')" title="Remove Vendor" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(239,71,111,0.5); color: #ef476f; background: rgba(239,71,111,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
+                                <i data-lucide="trash-2" style="width: 13px; height: 13px;"></i> Delete
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
     }
     if (typeof renderVendorPOTable === 'function') {
         renderVendorPOTable();
@@ -4230,13 +4267,40 @@ function loadVendorsData() {
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-window.removeVendor = function(id) {
-    const idx = vendorsData.findIndex(v => v.id === id);
+window.editVendor = function(id) {
+    const v = vendorsData.find(vend => vend.id === id);
+    if (!v) return;
+    document.getElementById('editVendorId').value = v.id;
+    document.getElementById('newVendorName').value = v.name;
+    document.getElementById('vendorFormTitle').textContent = `Edit Vendor: ${v.name}`;
+    document.getElementById('cancelEditVendorBtn')?.classList.remove('hidden');
+    document.getElementById('newVendorName')?.focus();
+};
+
+window.resetVendorForm = function() {
+    document.getElementById('editVendorId').value = '';
+    document.getElementById('newVendorName').value = '';
+    document.getElementById('vendorFormTitle').textContent = 'Add Vendor';
+    document.getElementById('cancelEditVendorBtn')?.classList.add('hidden');
+};
+
+window.removeVendor = async function(id) {
+    const v = vendorsData.find(vend => vend.id === id);
+    if (!v) return;
+
+    const confirmed = await window.showConfirmModal(`Are you sure you want to remove vendor "${v.name}"?`, "Remove Vendor", {
+        danger: true,
+        confirmText: "Remove"
+    });
+    if (!confirmed) return;
+
+    const idx = vendorsData.findIndex(vend => vend.id === id);
     if (idx > -1) {
         vendorsData.splice(idx, 1);
         saveData();
         loadVendorsData();
         updateFormSelects(getVisibleOutlets());
+        window.showToast(`Vendor ${v.name} removed.`, "info");
     }
 };
 
@@ -5136,26 +5200,42 @@ window.resetChefForm = resetChefForm;
 
 function loadLocationsData() {
     const tbody = document.getElementById('locationsTableBody');
+    if (!tbody) return;
+
+    const badge = document.getElementById('locationsCountBadge');
+    if (badge) badge.textContent = `${outletsData.length} Location${outletsData.length === 1 ? '' : 's'}`;
+
+    if (outletsData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 24px;">No locations configured yet. Use the form below to add a location.</td></tr>`;
+        return;
+    }
+
     tbody.innerHTML = outletsData.map(o => `
         <tr>
-            <td>${o.id}</td>
-            <td><strong>${o.name}</strong></td>
-            <td style="display: flex; gap: 4px;">
-                <button class="icon-btn" onclick="editLocation('${o.id}')" title="Edit"><i data-lucide="edit"></i></button>
-                <button class="icon-btn text-danger" onclick="removeLocation('${o.id}')" title="Remove"><i data-lucide="trash-2"></i></button>
+            <td><span style="font-family: monospace; color: var(--text-muted); font-size: 0.85rem;">${o.id}</span></td>
+            <td><strong style="color: var(--primary); font-size: 0.92rem;">${o.name}</strong></td>
+            <td style="text-align: left; padding-left: 12px; white-space: nowrap;">
+                <div style="display: inline-flex; align-items: center; gap: 8px;">
+                    <button type="button" class="btn btn-outline" onclick="editLocation('${o.id}')" title="Edit Location" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(255,190,11,0.5); color: var(--primary); background: rgba(255,190,11,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
+                        <i data-lucide="edit" style="width: 13px; height: 13px;"></i> Edit
+                    </button>
+                    <button type="button" class="btn btn-outline" onclick="removeLocation('${o.id}')" title="Remove Location" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(239,71,111,0.5); color: #ef476f; background: rgba(239,71,111,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
+                        <i data-lucide="trash-2" style="width: 13px; height: 13px;"></i> Delete
+                    </button>
+                </div>
             </td>
         </tr>
     `).join('');
-    lucide.createIcons();
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 function saveLocation() {
-    const editId = document.getElementById('editLocationId').value;
-    const id = document.getElementById('newLocationId').value.trim();
-    const name = document.getElementById('newLocationName').value.trim();
+    const editId = document.getElementById('editLocationId')?.value;
+    const id = document.getElementById('newLocationId')?.value.trim();
+    const name = document.getElementById('newLocationName')?.value.trim();
     
-    if(!id || !name) {
-        alert("Location ID and Name are required.");
+    if (!id || !name) {
+        window.showToast("Location ID and Name are required.", "warning");
         return;
     }
     
@@ -5164,13 +5244,15 @@ function saveLocation() {
         if (loc) {
             loc.id = id;
             loc.name = name;
+            window.showToast(`Location ${name} updated successfully!`, "success");
         }
     } else {
-        if(outletsData.find(o => o.id === id)) {
-            alert("Location ID already exists.");
+        if (outletsData.find(o => o.id.toLowerCase() === id.toLowerCase())) {
+            window.showToast("Location ID already exists. Please choose another.", "warning");
             return;
         }
         outletsData.push({ id, name });
+        window.showToast(`Location ${name} registered successfully!`, "success");
     }
     
     saveData();
@@ -5178,7 +5260,7 @@ function saveLocation() {
     loadLocationsData();
     
     // Clear user locations checkboxes so they rebuild with new data
-    const cbContainer = document.getElementById('userLocationsCheckboxes');
+    const cbContainer = document.getElementById('supLocationsCheckboxes');
     if (cbContainer) cbContainer.innerHTML = '';
 }
 
@@ -5187,21 +5269,31 @@ function resetLocationForm() {
     document.getElementById('editLocationId').value = '';
     document.getElementById('newLocationId').value = '';
     document.getElementById('newLocationName').value = '';
-    document.getElementById('cancelEditLocationBtn').classList.add('hidden');
+    document.getElementById('cancelEditLocationBtn')?.classList.add('hidden');
 }
 
 window.editLocation = function(id) {
     const loc = outletsData.find(o => o.id === id);
     if (!loc) return;
     
-    document.getElementById('locationFormTitle').textContent = 'Edit Location';
+    document.getElementById('locationFormTitle').textContent = `Edit Location: ${loc.name}`;
     document.getElementById('editLocationId').value = loc.id;
     document.getElementById('newLocationId').value = loc.id;
     document.getElementById('newLocationName').value = loc.name;
-    document.getElementById('cancelEditLocationBtn').classList.remove('hidden');
+    document.getElementById('cancelEditLocationBtn')?.classList.remove('hidden');
+    document.getElementById('newLocationName')?.focus();
 };
 
-window.removeLocation = function(id) {
+window.removeLocation = async function(id) {
+    const loc = outletsData.find(o => o.id === id);
+    if (!loc) return;
+
+    const confirmed = await window.showConfirmModal(`Are you sure you want to remove location "${loc.name}" (${loc.id})?`, "Remove Location", {
+        danger: true,
+        confirmText: "Remove"
+    });
+    if (!confirmed) return;
+    
     const idx = outletsData.findIndex(o => o.id === id);
     if (idx > -1) {
         outletsData.splice(idx, 1);
@@ -5209,8 +5301,9 @@ window.removeLocation = function(id) {
         loadLocationsData();
         
         // Clear user locations checkboxes so they rebuild with new data
-        const cbContainer = document.getElementById('userLocationsCheckboxes');
+        const cbContainer = document.getElementById('supLocationsCheckboxes');
         if (cbContainer) cbContainer.innerHTML = '';
+        window.showToast(`Location ${loc.name} removed.`, "info");
     }
 };
 
