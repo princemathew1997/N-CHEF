@@ -3555,8 +3555,8 @@ window.loadConsolidateWorkspace = function() {
             masterItemsData.map(item => `<option value="${item.id}">${item.name} (${item.unit || 'kg'} - ${item.category || 'General'})</option>`).join('');
     }
     
-    // Wire up top & bottom events once
-    ['btnWsSubmitIndent', 'btnWsSubmitIndentTop'].forEach(id => {
+    // Wire up top, mid & bottom events once
+    ['btnWsSubmitIndent', 'btnWsSubmitIndentTop', 'btnWsSubmitIndentMid'].forEach(id => {
         const btn = document.getElementById(id);
         if (btn && !btn.dataset.bound) {
             btn.addEventListener('click', window.submitWorkspaceConsolidatedIndent);
