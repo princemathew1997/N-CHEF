@@ -5,13 +5,16 @@
 const defaultOutlets = [
     { id: 'brigade', name: 'BRIGADE' },
     { id: 'vidyaranyapura', name: 'VIDYARANYAPURA' },
+    { id: 'ms-palya', name: 'MS PALYA' },
     { id: 'yelahanka', name: 'YELAHANKA' },
-    { id: 'ms-palya', name: 'MS PALYA' }
+    { id: 'cafe', name: 'CAFE' }
 ];
 
 const outletsData = JSON.parse(localStorage.getItem('nchef_outlets')) || [];
-if (outletsData.length === 0) {
+if (outletsData.length === 0 || !outletsData.some(o => o.id === 'cafe')) {
+    outletsData.length = 0;
     outletsData.push(...defaultOutlets);
+    localStorage.setItem('nchef_outlets', JSON.stringify(outletsData));
 }
 const primaryOutlet = outletsData[0] || defaultOutlets[0];
 
@@ -26,6 +29,15 @@ const defaultUsers = [
         assignedLocations: ['all'] 
     },
     {
+        username: 'supervisor',
+        password: '123',
+        role: 'supervisor',
+        name: 'Lora Peterson',
+        title: 'Outlet Manager',
+        salary: '-',
+        assignedLocations: ['all']
+    },
+    {
         username: 'chef',
         password: '123',
         role: 'chef',
@@ -37,15 +49,6 @@ const defaultUsers = [
         assignedCuisines: ['Indian', 'Tandoor']
     },
     {
-        username: 'supervisor',
-        password: '123',
-        role: 'supervisor',
-        name: 'Supervisor',
-        title: 'Supervisor',
-        salary: '-',
-        assignedLocations: [primaryOutlet.id]
-    },
-    {
         username: 'chef_li',
         password: '123',
         role: 'chef',
@@ -55,7 +58,7 @@ const defaultUsers = [
         assignedLocations: ['brigade'],
         assignedSections: ['Chinese'],
         assignedCuisines: ['Chinese'],
-        addedBySupervisor: 'Supervisor'
+        addedBySupervisor: 'Lora Peterson'
     },
     {
         username: 'chef_tariq',
@@ -67,7 +70,7 @@ const defaultUsers = [
         assignedLocations: ['brigade'],
         assignedSections: ['Arabic'],
         assignedCuisines: ['Arabic'],
-        addedBySupervisor: 'Supervisor'
+        addedBySupervisor: 'Lora Peterson'
     },
     {
         username: 'chef_sasi',
@@ -79,25 +82,15 @@ const defaultUsers = [
         assignedLocations: ['brigade'],
         assignedSections: ['Kerala'],
         assignedCuisines: ['Kerala'],
-        addedBySupervisor: 'Supervisor'
-    },
-    {
-        username: 'chef_rahul',
-        password: '123',
-        role: 'chef',
-        name: 'Chef Rahul',
-        title: 'Section Chef',
-        salary: '-',
-        assignedLocations: ['brigade'],
-        assignedSections: ['Indian'],
-        assignedCuisines: ['Indian'],
-        addedBySupervisor: 'Supervisor'
+        addedBySupervisor: 'Lora Peterson'
     }
 ];
 
 const usersData = JSON.parse(localStorage.getItem('nchef_users')) || [];
-if (usersData.length === 0) {
+if (usersData.length === 0 || !usersData.some(u => u.name === 'Lora Peterson')) {
+    usersData.length = 0;
     usersData.push(...defaultUsers);
+    localStorage.setItem('nchef_users', JSON.stringify(usersData));
 }
 
 // Ensure supervisor user exists and has a valid assigned outlet from outletsData
@@ -107,125 +100,135 @@ if (!supervisorUser) {
         username: 'supervisor',
         password: '123',
         role: 'supervisor',
-        name: 'Supervisor',
-        title: 'Supervisor',
+        name: 'Lora Peterson',
+        title: 'Outlet Manager',
         salary: '-',
-        assignedLocations: [primaryOutlet.id]
+        assignedLocations: ['all']
     };
     usersData.push(supervisorUser);
-} else {
-    if (!supervisorUser.assignedLocations || supervisorUser.assignedLocations.length === 0 || !supervisorUser.assignedLocations.some(id => id === 'all' || outletsData.some(o => o.id === id))) {
-        supervisorUser.assignedLocations = [primaryOutlet.id];
-    }
 }
 
-// Ensure chef users have assignedSections/assignedCuisines
-usersData.forEach(u => {
-    if (u.role === 'chef' && (!u.assignedSections || u.assignedSections.length === 0)) {
-        u.assignedSections = ['Indian'];
-        u.assignedCuisines = ['Indian'];
-    }
-});
-
 const defaultVendors = [
-    { id: 'v_01', name: 'Fresh Farms Produce Ltd' },
-    { id: 'v_02', name: 'Metro Food Distributors' },
-    { id: 'v_03', name: 'Prime Meats & Seafood' },
-    { id: 'v_04', name: 'Global Dairy Supplies' }
+    { id: 'v_01', name: 'Hyperpure' },
+    { id: 'v_02', name: 'Maruthi' },
+    { id: 'v_03', name: 'Prestige' },
+    { id: 'v_04', name: 'HVC' }
 ];
 const vendorsData = JSON.parse(localStorage.getItem('nchef_vendors')) || [];
-if (vendorsData.length === 0) {
+if (vendorsData.length === 0 || !vendorsData.some(v => v.name === 'Hyperpure')) {
+    vendorsData.length = 0;
     vendorsData.push(...defaultVendors);
+    localStorage.setItem('nchef_vendors', JSON.stringify(vendorsData));
 }
 
 const defaultMasterItems = [
     {
         id: 'item_01',
-        name: 'Fresh Chicken (Curry Cut)',
-        category: 'Meat',
-        vendor: 'Prime Meats & Seafood',
-        unit: 'kg',
-        bought: 120,
-        allocations: { 'brigade': 35, 'vidyaranyapura': 25, 'yelahanka': 20, 'ms-palya': 20 },
-        consumed: { 'brigade': 15, 'vidyaranyapura': 10, 'yelahanka': 8, 'ms-palya': 5 }
+        name: 'Tuna',
+        category: 'Dry',
+        vendor: 'Hyperpure',
+        unit: 'pcs',
+        bought: 100,
+        allocations: { 'brigade': 22, 'vidyaranyapura': 30, 'ms-palya': 10, 'yelahanka': 0, 'cafe': 0 },
+        consumed: { 'brigade': 5, 'vidyaranyapura': 8, 'ms-palya': 2, 'yelahanka': 0, 'cafe': 0 }
     },
     {
         id: 'item_02',
-        name: 'Fresh Farm Tomatoes',
-        category: 'Vegetables',
-        vendor: 'Fresh Farms Produce Ltd',
+        name: 'Pasta',
+        category: 'Dry',
+        vendor: 'Hyperpure',
         unit: 'kg',
-        bought: 90,
-        allocations: { 'brigade': 25, 'vidyaranyapura': 20, 'yelahanka': 18, 'ms-palya': 15 },
-        consumed: { 'brigade': 10, 'vidyaranyapura': 8, 'yelahanka': 5, 'ms-palya': 4 }
+        bought: 50,
+        allocations: { 'brigade': 10, 'vidyaranyapura': 5, 'ms-palya': 0, 'yelahanka': 0, 'cafe': 10 },
+        consumed: { 'brigade': 2, 'vidyaranyapura': 1, 'ms-palya': 0, 'yelahanka': 0, 'cafe': 3 }
     },
     {
         id: 'item_03',
-        name: 'Royal Basmati Rice',
-        category: 'Grains',
-        vendor: 'Metro Food Distributors',
+        name: 'Wheat flour',
+        category: 'Dry',
+        vendor: 'Hyperpure',
         unit: 'kg',
-        bought: 200,
-        allocations: { 'brigade': 60, 'vidyaranyapura': 45, 'yelahanka': 40, 'ms-palya': 35 },
-        consumed: { 'brigade': 25, 'vidyaranyapura': 15, 'yelahanka': 10, 'ms-palya': 10 }
+        bought: 20,
+        allocations: { 'brigade': 0, 'vidyaranyapura': 10, 'ms-palya': 10, 'yelahanka': 0, 'cafe': 0 },
+        consumed: { 'brigade': 0, 'vidyaranyapura': 4, 'ms-palya': 4, 'yelahanka': 0, 'cafe': 0 }
     },
     {
         id: 'item_04',
-        name: 'Red Onions',
-        category: 'Vegetables',
-        vendor: 'Fresh Farms Produce Ltd',
+        name: 'Bread flour',
+        category: 'Dry',
+        vendor: 'Hyperpure',
         unit: 'kg',
-        bought: 100,
-        allocations: { 'brigade': 30, 'vidyaranyapura': 25, 'yelahanka': 20, 'ms-palya': 15 },
-        consumed: { 'brigade': 12, 'vidyaranyapura': 10, 'yelahanka': 8, 'ms-palya': 5 }
+        bought: 25,
+        allocations: { 'brigade': 11, 'vidyaranyapura': 0, 'ms-palya': 10, 'yelahanka': 0, 'cafe': 0 },
+        consumed: { 'brigade': 3, 'vidyaranyapura': 0, 'ms-palya': 2, 'yelahanka': 0, 'cafe': 0 }
     },
     {
         id: 'item_05',
-        name: 'Pure Dairy Paneer',
-        category: 'Dairy',
-        vendor: 'Global Dairy Supplies',
+        name: 'Rice flour',
+        category: 'Dry',
+        vendor: 'Hyperpure',
         unit: 'kg',
-        bought: 45,
-        allocations: { 'brigade': 15, 'vidyaranyapura': 12, 'yelahanka': 8, 'ms-palya': 6 },
-        consumed: { 'brigade': 8, 'vidyaranyapura': 5, 'yelahanka': 4, 'ms-palya': 2 }
+        bought: 40,
+        allocations: { 'brigade': 11, 'vidyaranyapura': 20, 'ms-palya': 0, 'yelahanka': 0, 'cafe': 0 },
+        consumed: { 'brigade': 4, 'vidyaranyapura': 5, 'ms-palya': 0, 'yelahanka': 0, 'cafe': 0 }
     },
     {
         id: 'item_06',
-        name: 'Refined Sunflower Oil',
-        category: 'Dairy',
-        vendor: 'Global Dairy Supplies',
+        name: 'Rice milk',
+        category: 'Canned',
+        vendor: 'Hyperpure',
         unit: 'L',
-        bought: 80,
-        allocations: { 'brigade': 25, 'vidyaranyapura': 20, 'yelahanka': 15, 'ms-palya': 12 },
-        consumed: { 'brigade': 10, 'vidyaranyapura': 8, 'yelahanka': 6, 'ms-palya': 4 }
+        bought: 30,
+        allocations: { 'brigade': 0, 'vidyaranyapura': 0, 'ms-palya': 0, 'yelahanka': 20, 'cafe': 0 },
+        consumed: { 'brigade': 0, 'vidyaranyapura': 0, 'ms-palya': 0, 'yelahanka': 6, 'cafe': 0 }
     },
     {
         id: 'item_07',
-        name: 'Ginger Garlic Paste',
-        category: 'Spices',
-        vendor: 'Metro Food Distributors',
+        name: 'Fresh Chicken',
+        category: 'Meat',
+        vendor: 'Maruthi',
         unit: 'kg',
-        bought: 30,
-        allocations: { 'brigade': 10, 'vidyaranyapura': 8, 'yelahanka': 6, 'ms-palya': 4 },
-        consumed: { 'brigade': 4, 'vidyaranyapura': 3, 'yelahanka': 2, 'ms-palya': 2 }
+        bought: 80,
+        allocations: { 'brigade': 15, 'vidyaranyapura': 20, 'ms-palya': 10, 'yelahanka': 5, 'cafe': 0 },
+        consumed: { 'brigade': 5, 'vidyaranyapura': 8, 'ms-palya': 3, 'yelahanka': 2, 'cafe': 0 }
     },
     {
         id: 'item_08',
-        name: 'Mutton Curry Cut',
-        category: 'Meat',
-        vendor: 'Prime Meats & Seafood',
+        name: 'Tomatoes',
+        category: 'Vegetables',
+        vendor: 'Prestige',
         unit: 'kg',
-        bought: 50,
-        allocations: { 'brigade': 18, 'vidyaranyapura': 12, 'yelahanka': 10, 'ms-palya': 8 },
-        consumed: { 'brigade': 8, 'vidyaranyapura': 5, 'yelahanka': 4, 'ms-palya': 2 }
+        bought: 60,
+        allocations: { 'brigade': 2, 'vidyaranyapura': 10, 'ms-palya': 15, 'yelahanka': 8, 'cafe': 2 },
+        consumed: { 'brigade': 1, 'vidyaranyapura': 4, 'ms-palya': 5, 'yelahanka': 3, 'cafe': 1 }
+    },
+    {
+        id: 'item_09',
+        name: 'Coffee beans',
+        category: 'Grocery',
+        vendor: 'HVC',
+        unit: 'kg',
+        bought: 25,
+        allocations: { 'brigade': 5, 'vidyaranyapura': 0, 'ms-palya': 0, 'yelahanka': 15, 'cafe': 0 },
+        consumed: { 'brigade': 2, 'vidyaranyapura': 0, 'ms-palya': 0, 'yelahanka': 5, 'cafe': 0 }
+    },
+    {
+        id: 'item_10',
+        name: 'sample',
+        category: 'Dry',
+        vendor: 'Prestige',
+        unit: 'kg',
+        bought: 200,
+        allocations: { 'brigade': 0, 'vidyaranyapura': 0, 'ms-palya': 0, 'yelahanka': 0, 'cafe': 0 },
+        consumed: { 'brigade': 0, 'vidyaranyapura': 0, 'ms-palya': 0, 'yelahanka': 0, 'cafe': 0 }
     }
 ];
 
 const defaultRequests = [
     {
         id: 'req_01',
-        itemId: 'item_01',
-        itemName: 'Fresh Chicken (Curry Cut)',
+        itemId: 'item_07',
+        itemName: 'Fresh Chicken',
         unit: 'kg',
         outletId: 'brigade',
         outletName: 'BRIGADE',
@@ -238,8 +241,8 @@ const defaultRequests = [
     },
     {
         id: 'req_02',
-        itemId: 'item_01',
-        itemName: 'Fresh Chicken (Curry Cut)',
+        itemId: 'item_07',
+        itemName: 'Fresh Chicken',
         unit: 'kg',
         outletId: 'brigade',
         outletName: 'BRIGADE',
@@ -252,8 +255,8 @@ const defaultRequests = [
     },
     {
         id: 'req_03',
-        itemId: 'item_02',
-        itemName: 'Fresh Farm Tomatoes',
+        itemId: 'item_08',
+        itemName: 'Tomatoes',
         unit: 'kg',
         outletId: 'brigade',
         outletName: 'BRIGADE',
@@ -266,36 +269,24 @@ const defaultRequests = [
     },
     {
         id: 'req_04',
-        itemId: 'item_03',
-        itemName: 'Royal Basmati Rice',
-        unit: 'kg',
+        itemId: 'item_01',
+        itemName: 'Tuna',
+        unit: 'pcs',
         outletId: 'brigade',
         outletName: 'BRIGADE',
-        qty: 20,
-        cuisine: 'Indian',
-        chefName: 'Chef Rahul',
-        requestedBy: 'Chef Rahul',
+        qty: 10,
+        cuisine: 'Continental',
+        chefName: 'Chef Prince',
+        requestedBy: 'Chef Prince',
         status: 'Pending',
-        timestamp: new Date().toISOString()
-    },
-    {
-        id: 'req_05',
-        itemId: 'item_05',
-        itemName: 'Pure Dairy Paneer',
-        unit: 'kg',
-        outletId: 'brigade',
-        outletName: 'BRIGADE',
-        qty: 6,
-        cuisine: 'North Indian',
-        chefName: 'Chef Amit',
-        requestedBy: 'Chef Amit',
-        status: 'Accepted',
         timestamp: new Date().toISOString()
     }
 ];
 
 let masterItemsData = JSON.parse(localStorage.getItem('nchef_items')) || [];
-if (masterItemsData.length === 0) {
+// Auto-seed if items is empty or missing the live Tuna item
+if (masterItemsData.length === 0 || !masterItemsData.some(i => i.name === 'Tuna')) {
+    masterItemsData.length = 0;
     masterItemsData.push(...defaultMasterItems);
     localStorage.setItem('nchef_items', JSON.stringify(masterItemsData));
 }
