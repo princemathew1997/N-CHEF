@@ -260,29 +260,18 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 window.addEventListener('load', () => {
-    const savedUsername = localStorage.getItem('nchef_logged_in_username');
-    if (savedUsername) {
-        setTimeout(() => {
-            const loader = document.getElementById('page-loader');
-            if (loader) {
-                loader.classList.add('hidden');
-                if (loaderInterval) clearInterval(loaderInterval);
-            }
-        }, 120);
-    } else {
-        setTimeout(() => {
-            const loader = document.getElementById('page-loader');
-            if (loader) {
-                loader.classList.add('hidden');
-                if (loaderInterval) clearInterval(loaderInterval);
-            }
-            
-            const loginPage = document.getElementById('page-login');
-            if (loginPage && loginPage.classList.contains('active')) {
-                loginPage.classList.add('show');
-            }
-        }, 2200);
-    }
+    setTimeout(() => {
+        const loader = document.getElementById('page-loader');
+        if (loader) {
+            loader.classList.add('hidden');
+            if (loaderInterval) clearInterval(loaderInterval);
+        }
+        
+        const loginPage = document.getElementById('page-login');
+        if (loginPage && loginPage.classList.contains('active')) {
+            loginPage.classList.add('show');
+        }
+    }, 2200);
 });
 
 // ============================================================
@@ -313,11 +302,12 @@ function initKeyboardShortcuts() {
             // Only update if the user has access to this location or it's 'all'
             if (newView === 'all' || currentUser.assignedLocations.includes('all') || currentUser.assignedLocations.includes(newView)) {
                 currentStoreView = newView;
-                loadMasterOrdersData(); // This rebuilds the table and dropdown to reflect active state
+                loadDashboardData(); // Rebuilds the table, metrics, and dropdown to reflect active state
             }
         }
     });
 }
+window.loadMasterOrdersData = loadDashboardData;
 
 // ============================================================
 // LOADER ANIMATION
@@ -449,12 +439,6 @@ function applyLoggedInUser(user, targetView = null) {
     if (pageLogin) pageLogin.classList.remove('active', 'show');
     if (pageDashboard) pageDashboard.classList.add('active');
     
-    // Dismiss splash loader immediately
-    const loader = document.getElementById('page-loader');
-    if (loader) {
-        loader.classList.add('hidden');
-        if (loaderInterval) clearInterval(loaderInterval);
-    }
     
     // Restore preserved or requested view
     const savedView = targetView || localStorage.getItem('nchef_active_view');
@@ -1053,6 +1037,9 @@ function getVisibleOutlets() {
 
 function loadDashboardData() {
     const visibleOutlets = getVisibleOutlets();
+    if (currentStoreView !== 'all' && !visibleOutlets.some(o => o.id === currentStoreView)) {
+        currentStoreView = 'all';
+    }
     const selectedStore = currentStoreView;
 
     let displayOutlets = visibleOutlets;
@@ -1061,16 +1048,55 @@ function loadDashboardData() {
     }
     
     // 1. Update Metrics
-    document.getElementById('metricTotalItems').textContent = masterItemsData.length;
-    document.getElementById('metricActiveOutlets').textContent = visibleOutlets.length;
-    
-    let lowStockCount = 0;
-    masterItemsData.forEach(item => {
-        if (getItemStatus(item) === 'Low Stock' || getItemStatus(item) === 'Pending PO') {
-            lowStockCount++;
-        }
-    });
-    document.getElementById('metricLowStock').textContent = lowStockCount;
+    const metricTotalEl = document.getElementById('metricTotalItems');
+    const metricActiveEl = document.getElementById('metricActiveOutlets');
+    const metricLowEl = document.getElementById('metricLowStock');
+    const labelTotalEl = document.getElementById('metricTotalItemsLabel');
+    const labelOutletsEl = document.getElementById('metricActiveOutletsLabel');
+    const labelLowEl = document.getElementById('metricLowStockLabel');
+    const btnReset = document.getElementById('btnResetOutletFilter');
+
+    if (selectedStore === 'all') {
+        if (labelTotalEl) labelTotalEl.textContent = 'Total Items Managed';
+        if (labelOutletsEl) labelOutletsEl.textContent = 'Active Outlets';
+        if (labelLowEl) labelLowEl.textContent = 'Low Stock Items';
+        
+        if (metricTotalEl) metricTotalEl.textContent = masterItemsData.length;
+        if (metricActiveEl) metricActiveEl.textContent = visibleOutlets.length;
+        
+        let lowStockCount = 0;
+        masterItemsData.forEach(item => {
+            if (getItemStatus(item) === 'Low Stock' || getItemStatus(item) === 'Pending PO') {
+                lowStockCount++;
+            }
+        });
+        if (metricLowEl) metricLowEl.textContent = lowStockCount;
+        if (btnReset) btnReset.classList.add('hidden');
+    } else {
+        const selOutletObj = visibleOutlets.find(o => o.id === selectedStore);
+        const selName = selOutletObj ? selOutletObj.name : selectedStore.toUpperCase();
+        
+        const itemsInStore = masterItemsData.filter(i => (i.allocations && (i.allocations[selectedStore] || 0) > 0)).length;
+        
+        let storeLowStock = 0;
+        masterItemsData.forEach(item => {
+            const alloc = (item.allocations && item.allocations[selectedStore]) || 0;
+            const cons = (item.consumed && item.consumed[selectedStore]) || 0;
+            const bal = alloc - cons;
+            if (alloc > 0 && bal <= 5) {
+                storeLowStock++;
+            }
+        });
+        
+        if (labelTotalEl) labelTotalEl.textContent = `Items in ${selName}`;
+        if (labelOutletsEl) labelOutletsEl.textContent = 'Filtered Outlet';
+        if (labelLowEl) labelLowEl.textContent = `Low Stock (${selName})`;
+        
+        if (metricTotalEl) metricTotalEl.textContent = itemsInStore;
+        if (metricActiveEl) metricActiveEl.innerHTML = `<span style="font-size: 1.05rem; color: var(--primary); font-weight: 700;">${selName}</span>`;
+        if (metricLowEl) metricLowEl.textContent = storeLowStock;
+        if (btnReset) btnReset.classList.remove('hidden');
+    }
 
     // 2. Build Table Headers (Condensed)
     const thead = document.getElementById('inventoryTableHeader');
@@ -1115,11 +1141,27 @@ function loadDashboardData() {
         const tr = document.createElement('tr');
         
         let statusDot = '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--success); margin-right:8px;" title="In Stock"></span>';
-        const st = getItemStatus(item);
-        if (st === 'Low Stock' || st === 'Pending PO') {
-            statusDot = '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--danger); margin-right:8px;" title="Low Stock"></span>';
-        } else if (st === 'Allocated/Pending PO') {
-            statusDot = '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--warning); margin-right:8px;" title="Pending"></span>';
+        
+        if (selectedStore === 'all') {
+            const st = getItemStatus(item);
+            if (st === 'Low Stock' || st === 'Pending PO') {
+                statusDot = '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--danger); margin-right:8px;" title="Low Stock"></span>';
+            } else if (st === 'Allocated/Pending PO') {
+                statusDot = '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--warning); margin-right:8px;" title="Pending"></span>';
+            }
+        } else {
+            const oAlloc = (item.allocations && item.allocations[selectedStore]) || 0;
+            const oCons = (item.consumed && item.consumed[selectedStore]) || 0;
+            const oBal = oAlloc - oCons;
+            if (oAlloc === 0) {
+                statusDot = '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--text-muted); opacity:0.4; margin-right:8px;" title="Not Allocated"></span>';
+            } else if (oBal <= 0) {
+                statusDot = '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--danger); margin-right:8px;" title="Out of Stock"></span>';
+            } else if (oBal <= 5) {
+                statusDot = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--warning); margin-right:8px;" title="Low Stock (${oBal} ${item.unit})"></span>`;
+            } else {
+                statusDot = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--success); margin-right:8px;" title="In Stock (${oBal} ${item.unit})"></span>`;
+            }
         }
         
         // Combine Item Name, Category, and Unit to save space
@@ -1145,7 +1187,7 @@ function loadDashboardData() {
         let totalAllocated = 0;
         
         displayOutlets.forEach(o => {
-            const qty = item.allocations[o.id] || 0;
+            const qty = (item.allocations && item.allocations[o.id]) || 0;
             
             // Heatmap color logic applied directly to the main table
             let alpha = qty > 0 ? 0.15 + (qty / 50) : 0;
@@ -1165,7 +1207,7 @@ function loadDashboardData() {
         });
         
         visibleOutlets.forEach(o => {
-            totalAllocated += (item.allocations[o.id] || 0);
+            totalAllocated += ((item.allocations && item.allocations[o.id]) || 0);
         });
 
         const balance = (item.bought || 0) - totalAllocated;
@@ -1185,12 +1227,44 @@ function loadDashboardData() {
         tbody.appendChild(tr);
     });
 
-    // 4. Update Form Dropdowns
+    // 4. Update Form Dropdowns & Filter Controls
     updateFormSelects(visibleOutlets);
-    if (currentUser.role === 'admin') {
+    if (typeof lucide !== 'undefined') {
         lucide.createIcons();
     }
 }
+
+// ============================================================
+// ADD ITEM MODAL HELPERS
+// ============================================================
+window.openAddItemModal = function() {
+    const modal = document.getElementById('modalAddItem');
+    if (!modal) return;
+    
+    // Ensure vendor dropdown is populated
+    const vendorSel = document.getElementById('newItemVendor');
+    if (vendorSel) {
+        vendorSel.innerHTML = (typeof vendorsData !== 'undefined' && vendorsData && vendorsData.length)
+            ? vendorsData.map(v => `<option value="${v.name}">${v.name}</option>`).join('')
+            : '<option value="Royal Supplies">Royal Supplies</option>';
+    }
+    
+    const nameInput = document.getElementById('newItemName');
+    const unitInput = document.getElementById('newItemUnit');
+    const boughtInput = document.getElementById('newItemBought');
+    if (nameInput) nameInput.value = '';
+    if (unitInput) unitInput.value = '';
+    if (boughtInput) boughtInput.value = '';
+    
+    modal.classList.remove('hidden');
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    if (nameInput) nameInput.focus();
+};
+
+window.closeAddItemModal = function() {
+    const modal = document.getElementById('modalAddItem');
+    if (modal) modal.classList.add('hidden');
+};
 
 // ============================================================
 // FORMS LOGIC
@@ -1199,7 +1273,8 @@ function initForms() {
     initCustomDatePicker();
 
     const allocBtn = document.getElementById('allocateBtn');
-    allocBtn.addEventListener('click', () => {
+    if (allocBtn) {
+        allocBtn.addEventListener('click', () => {
         const itemId = document.getElementById('allocItem').value;
         const outletId = document.getElementById('allocOutlet').value;
         const qty = parseInt(document.getElementById('allocQty').value) || 0;
@@ -1229,6 +1304,7 @@ function initForms() {
             }
         }
     });
+}
     
     const reqBtn = document.getElementById('requestBtn');
     if (reqBtn) {
@@ -1330,25 +1406,95 @@ function initForms() {
     const addItemBtn = document.getElementById('addItemBtn');
     if(addItemBtn) {
         addItemBtn.addEventListener('click', () => {
-            const name = document.getElementById('newItemName').value.trim();
-            const unit = document.getElementById('newItemUnit').value.trim();
-            const cat = document.getElementById('newItemCategory').value;
-            const vendor = document.getElementById('newItemVendor').value;
-            const bought = parseInt(document.getElementById('newItemBought').value) || 0;
+            const nameEl = document.getElementById('newItemName');
+            const unitEl = document.getElementById('newItemUnit');
+            const catEl = document.getElementById('newItemCategory');
+            const vendorEl = document.getElementById('newItemVendor');
+            const boughtEl = document.getElementById('newItemBought');
+
+            const name = nameEl ? nameEl.value.trim() : '';
+            const unit = unitEl ? unitEl.value.trim() : '';
+            const cat = catEl ? catEl.value : 'Grocery';
+            const vendor = vendorEl ? vendorEl.value : '';
+            const bought = boughtEl ? (parseInt(boughtEl.value) || 0) : 0;
             
-            if (name) {
-                masterItemsData.push({
-                    id: 'itm_' + Date.now(),
-                    name, unit: unit || 'pcs', category: cat, vendor, bought,
-                    allocations: {}, consumed: {}
-                });
-                
-                saveData();
-                document.getElementById('newItemName').value = '';
-                document.getElementById('newItemUnit').value = '';
-                document.getElementById('newItemBought').value = '';
-                loadDashboardData();
+            if (!name) {
+                if (typeof window.showUiModal === 'function') {
+                    window.showUiModal({
+                        title: 'Required Field',
+                        message: 'Please enter an Item Name.',
+                        type: 'warning'
+                    });
+                } else {
+                    alert('Please enter an Item Name.');
+                }
+                if (nameEl) nameEl.focus();
+                return;
             }
+            
+            masterItemsData.push({
+                id: 'itm_' + Date.now(),
+                name,
+                unit: unit || 'pcs',
+                category: cat,
+                vendor: vendor || (typeof vendorsData !== 'undefined' && vendorsData[0] ? vendorsData[0].name : 'Royal Supplies'),
+                bought,
+                allocations: {},
+                consumed: {}
+            });
+            
+            saveData();
+            if (nameEl) nameEl.value = '';
+            if (unitEl) unitEl.value = '';
+            if (boughtEl) boughtEl.value = '';
+            
+            closeAddItemModal();
+            loadDashboardData();
+            
+            if (typeof window.showUiModal === 'function') {
+                window.showUiModal({
+                    title: 'Item Added',
+                    message: `"${name}" has been successfully added to Master Inventory.`,
+                    type: 'success'
+                });
+            }
+        });
+    }
+
+    // Modal Add Item Triggers & Handlers
+    const navAddItems = document.getElementById('navAddItems');
+    if (navAddItems) {
+        navAddItems.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (currentView !== 'viewMasterOrders' && typeof window.switchToView === 'function') {
+                window.switchToView('viewMasterOrders');
+            }
+            openAddItemModal();
+        });
+    }
+
+    const btnHeaderAddItem = document.getElementById('btnHeaderAddItem');
+    if (btnHeaderAddItem) {
+        btnHeaderAddItem.addEventListener('click', (e) => {
+            e.preventDefault();
+            openAddItemModal();
+        });
+    }
+
+    const closeAddItemModalBtn = document.getElementById('closeAddItemModalBtn');
+    if (closeAddItemModalBtn) {
+        closeAddItemModalBtn.addEventListener('click', closeAddItemModal);
+    }
+
+    const cancelAddItemModalBtn = document.getElementById('cancelAddItemModalBtn');
+    if (cancelAddItemModalBtn) {
+        cancelAddItemModalBtn.addEventListener('click', closeAddItemModal);
+    }
+
+    const modalAddItem = document.getElementById('modalAddItem');
+    if (modalAddItem) {
+        modalAddItem.addEventListener('click', (e) => {
+            if (e.target === modalAddItem) closeAddItemModal();
         });
     }
     
@@ -1662,7 +1808,20 @@ function updateFormSelects(visibleOutlets) {
     const trigger = document.getElementById('storeViewTrigger');
     const menu = document.getElementById('storeViewMenu');
     const textLabel = document.getElementById('storeViewSelectedText');
+    const chevron = document.getElementById('storeViewChevron');
+    const pillsContainer = document.getElementById('outletFilterPills');
+    const btnReset = document.getElementById('btnResetOutletFilter');
     
+    // Quick Reset Filter Button Handler
+    if (btnReset && !btnReset.dataset.bound) {
+        btnReset.addEventListener('click', (e) => {
+            e.preventDefault();
+            currentStoreView = 'all';
+            loadDashboardData();
+        });
+        btnReset.dataset.bound = 'true';
+    }
+
     if (trigger && menu) {
         menu.innerHTML = '';
         const items = [{ id: 'all', name: 'Overall View' }, ...visibleOutlets];
@@ -1670,37 +1829,78 @@ function updateFormSelects(visibleOutlets) {
         items.forEach(item => {
             const btn = document.createElement('div');
             const isActive = currentStoreView === item.id;
-            btn.style.cssText = `padding: 8px 12px; cursor: pointer; border-radius: 6px; transition: all 0.2s; font-size: 0.85rem; color: ${isActive ? 'var(--primary)' : 'var(--text-main)'}; background: ${isActive ? 'rgba(255,190,11,0.1)' : 'transparent'}; font-weight: ${isActive ? '600' : '400'}; display: flex; align-items: center; gap: 8px;`;
+            btn.style.cssText = `padding: 8px 12px; cursor: pointer; border-radius: 6px; transition: all 0.2s; font-size: 0.85rem; color: ${isActive ? 'var(--primary)' : 'var(--text-main)'}; background: ${isActive ? 'rgba(255,190,11,0.12)' : 'transparent'}; font-weight: ${isActive ? '600' : '400'}; display: flex; align-items: center; justify-content: space-between; gap: 8px;`;
             
             let iconHtml = isActive ? `<i data-lucide="check" style="width: 14px; height: 14px; color: var(--primary);"></i>` : `<span style="width: 14px; display: inline-block;"></span>`;
-            btn.innerHTML = `${iconHtml} <span>${item.name}</span>`;
+            const shortcutChar = item.id === 'all' ? 'O' : (item.name ? item.name[0].toUpperCase() : '');
+            
+            btn.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    ${iconHtml}
+                    <span>${item.name}</span>
+                </div>
+                <kbd style="font-size: 0.65rem; padding: 2px 5px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted); font-family: inherit;">${shortcutChar}</kbd>
+            `;
             
             btn.onmouseover = () => { if(!isActive) btn.style.background = 'rgba(255, 255, 255, 0.05)'; };
             btn.onmouseout = () => { if(!isActive) btn.style.background = 'transparent'; };
             
-            btn.onclick = () => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
                 currentStoreView = item.id;
                 menu.classList.add('hidden');
+                if (chevron) chevron.style.transform = 'rotate(0deg)';
                 loadDashboardData();
             };
             menu.appendChild(btn);
         });
         
-        if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
-        }
-        
         const activeItem = items.find(i => i.id === currentStoreView) || items[0];
         if (textLabel) textLabel.textContent = activeItem.name;
         
         if (!trigger.dataset.bound) {
+            trigger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isHidden = menu.classList.contains('hidden');
+                menu.classList.toggle('hidden');
+                if (chevron) {
+                    chevron.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+                }
+            });
             document.addEventListener('click', (e) => {
                 if (!trigger.contains(e.target) && !menu.contains(e.target)) {
                     menu.classList.add('hidden');
+                    if (chevron) chevron.style.transform = 'rotate(0deg)';
                 }
             });
             trigger.dataset.bound = 'true';
         }
+    }
+
+    // Populate Outlet Filter Pills above the Inventory Table
+    if (pillsContainer) {
+        pillsContainer.innerHTML = '';
+        const pillItems = [{ id: 'all', name: 'Overall' }, ...visibleOutlets];
+        pillItems.forEach(item => {
+            const pill = document.createElement('button');
+            pill.type = 'button';
+            const isActive = currentStoreView === item.id;
+            pill.className = `outlet-pill ${isActive ? 'active' : ''}`;
+            pill.innerHTML = `<span>${item.name}</span>`;
+            pill.title = `Filter by ${item.name}`;
+            pill.onclick = (e) => {
+                e.preventDefault();
+                currentStoreView = item.id;
+                loadDashboardData();
+            };
+            pillsContainer.appendChild(pill);
+        });
+    }
+
+    // If a specific outlet is filtered, pre-select it in the Receive Stock form
+    const allocOutletSel = document.getElementById('allocOutlet');
+    if (allocOutletSel && currentStoreView !== 'all' && visibleOutlets.some(o => o.id === currentStoreView)) {
+        allocOutletSel.value = currentStoreView;
     }
     
     // Populate Add Item Vendor Dropdown

@@ -534,7 +534,8 @@ label {
 }
 
 .dash-grid:has(.sidebar-right.hidden),
-.dash-grid:has(.sidebar-right[style*="display: none"]) {
+.dash-grid:has(.sidebar-right[style*="display: none"]),
+.dash-grid:not(:has(.sidebar-right)) {
     grid-template-columns: 1fr;
 }
 
@@ -751,3 +752,42 @@ tbody tr:hover {
     from { transform: scale(0.92); opacity: 0; }
     to { transform: scale(1); opacity: 1; }
 }
+
+/* Master Orders Outlet Filter Pills & Controls */
+.outlet-pill {
+    padding: 3px 10px;
+    font-size: 0.74rem;
+    font-weight: 500;
+    border-radius: 16px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-muted);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.outlet-pill:hover {
+    background: rgba(255, 190, 11, 0.12);
+    color: var(--text-main);
+    border-color: rgba(255, 190, 11, 0.35);
+    transform: translateY(-1px);
+}
+.outlet-pill.active {
+    background: var(--primary);
+    color: #1a1712 !important;
+    font-weight: 700;
+    border-color: var(--primary);
+    box-shadow: 0 0 12px rgba(255, 190, 11, 0.35);
+}
+#storeViewTrigger:hover {
+    border-color: var(--primary);
+    background: rgba(42, 35, 18, 1);
+}
+#btnResetOutletFilter:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-main);
+}
+
