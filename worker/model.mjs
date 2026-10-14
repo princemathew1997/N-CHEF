@@ -1,0 +1,247 @@
+export const entities = ['outlets', 'vendors', 'items', 'users', 'requests', 'indents', 'purchase_orders'];
+export const clone = value => JSON.parse(JSON.stringify(value));
+export const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }); };
+export function number(value, label, positive = false) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || (positive && value === 0) || value > 1e9) fail(`${label} must be a valid ${positive ? 'positive' : 'non-negative'} quantity.`);
+  return value;
+}
+export function safeText(value, label, max = 200) {
+  if (typeof value !== 'string' || !value.trim() || value.length > max || /[<>"'`\\\u0000-\u0008]/.test(value)) fail(`${label} is invalid. Avoid HTML, quotes, and backslashes.`);
+  return value;
+}
+export function id(value) {
+  if (typeof value !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(value) || value === '__proto__' || value === 'constructor' || value === 'prototype') fail('Invalid record ID.');
+  return value;
+}
+export function cleanPayload(value, depth = 0) {
+  if (depth > 12) fail('Record is too deeply nested.');
+  if (value === null || typeof value === 'boolean' || typeof value === 'number') return;
+  if (typeof value === 'string') {
+    if (value.length > 4000 || /[<>"'`\\\u0000-\u0008]/.test(value)) fail('Text contains unsupported markup or quote characters.');
+    return;
+  }
+  if (typeof value !== 'object') fail('Invalid record value.');
+  for (const [key, child] of Object.entries(value)) {
+    if (['__proto__', 'constructor', 'prototype', 'password_hash', 'token_hash'].includes(key)) fail('Invalid record field.');
+    if (key !== 'password') cleanPayload(child, depth + 1);
+  }
+}
+export const hasOutlet = (user, outletId) => user.role === 'admin' || user.assignedLocations?.includes('all') || user.assignedLocations?.includes(outletId);
+export const ownsRequest = (user, request) => request.ownerId === user.id;
+export const without = (object, keys) => Object.fromEntries(Object.entries(object || {}).filter(([key]) => !keys.includes(key)));
+export const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+export function project(state, user) {
+  const result = clone(state);
+  result.outlets = result.outlets.filter(o => hasOutlet(user, o.id));
+  result.requests = result.requests.filter(r => hasOutlet(user, r.outletId) && (user.role !== 'chef' || ownsRequest(user, r)));
+  result.indents = result.indents.filter(r => hasOutlet(user, r.outletId) && user.role !== 'chef');
+  result.purchase_orders = result.purchase_orders.filter(r => hasOutlet(user, r.outletId) && user.role !== 'chef');
+  result.users = result.users.filter(u => user.role === 'admin' || u.id === user.id || (user.role === 'supervisor' && u.role === 'chef' && u.assignedLocations?.every(o => o !== 'all' && hasOutlet(user, o))));
+  for (const item of result.items) {
+    if (user.role !== 'admin') {
+      item.allocations = Object.fromEntries(Object.entries(item.allocations || {}).filter(([outlet]) => hasOutlet(user, outlet)));
+      item.consumed = Object.fromEntries(Object.entries(item.consumed || {}).filter(([outlet]) => hasOutlet(user, outlet)));
+      // No central-store totals are exposed to outlet accounts.
+      item.bought = Object.values(item.allocations).reduce((sum, q) => sum + q, 0);
+    }
+  }
+  return result;
+}
+
+export function validateChanges(state, changes, actor) {
+  const next = clone(state);
+  const touched = [];
+  if (!Array.isArray(changes) || changes.length < 1 || changes.length > 150) fail('Submit between 1 and 150 record changes.');
+  const unique = new Set();
+  for (const change of changes) {
+    const { entity, key, value } = change;
+    if (!entities.includes(entity)) fail('Unknown record type.');
+    id(key);
+    if (unique.has(`${entity}:${key}`)) fail('Duplicate record change.');
+    unique.add(`${entity}:${key}`);
+    const old = next[entity].find(row => row.id === key);
+    const data = value === null ? null : clone(value);
+    if (data) { if (data.id !== key) fail('Record identity cannot change.'); cleanPayload(data); }
+    if (!old && !data) fail('Record does not exist.', 404);
+    if (data && entity === 'requests' && !old && !['Pending', 'Consolidated'].includes(data.status)) fail('New requests must be pending or linked to a new indent.');
+    if (data && entity === 'indents' && !old && data.status !== 'Pending Approval') fail('New indents must await approval.');
+    if (data && old && ['requests', 'indents', 'purchase_orders'].includes(entity)) {
+      for (const field of ['itemId', 'outletId', 'cuisine', 'indentNumber', 'poNumber', 'vendorId']) {
+        if (old[field] !== data[field]) fail('Record references cannot change.');
+      }
+    }
+    if (!data && entity === 'items' && old?.bought) fail('An item with stock history cannot be removed.');
+    if (actor.role !== 'admin') {
+      if (entity === 'requests') {
+        const r = old || data;
+        if (!hasOutlet(actor, r.outletId) || (old && data && old.outletId !== data.outletId)) fail('Outlet access denied.', 403);
+        if (actor.role === 'chef') {
+          if (old && !ownsRequest(actor, old)) fail('Request access denied.', 403);
+          if (old && !['Pending', 'Accepted'].includes(old.status)) fail('Forwarded requests cannot be edited.', 409);
+          if (data && old && !same(without(data, ['qty']), without(old, ['qty']))) fail('Chefs can only change the quantity of their request.', 403);
+          if (!old && data && data.status !== 'Pending') fail('New requests must be pending.');
+          const sections = actor.assignedSections || actor.assignedCuisines || [];
+          if (data && !sections.includes(data.cuisine)) fail('Cuisine access denied.', 403);
+        } else {
+          if (old && ['Approved', 'Rejected', 'PO Raised'].includes(old.status)) fail('Completed requests cannot be changed by supervisors.', 403);
+          if (data && !['Pending', 'Accepted', 'Sent to Admin', 'Consolidated', 'Rejected'].includes(data.status)) fail('Supervisors cannot approve stock.', 403);
+          if (old && data && (old.itemId !== data.itemId || old.ownerId !== data.ownerId)) fail('Request identity cannot change.', 403);
+        }
+      } else if (entity === 'indents') {
+        if (actor.role !== 'supervisor' || !hasOutlet(actor, (old || data).outletId)) fail('Indent access denied.', 403);
+        if (old && old.status !== 'Pending Approval') fail('Completed indents cannot be changed.', 409);
+        if (data && (data.status !== 'Pending Approval' || (old && old.outletId !== data.outletId))) fail('Only admins can approve indents.', 403);
+      } else if (entity === 'users') {
+        if (actor.role !== 'supervisor' || (old && old.role !== 'chef') || (data && data.role !== 'chef')) fail('User access denied.', 403);
+        for (const u of [old, data].filter(Boolean)) {
+          if (!u.assignedLocations?.length || u.assignedLocations.some(o => o === 'all' || !hasOutlet(actor, o))) fail('Chef outlet access denied.', 403);
+        }
+      } else if (entity === 'items') {
+        if (!old || !data) fail('Only admins can manage catalog items.', 403);
+        const visibleOld = project({ ...state, items: [old] }, actor).items[0];
+        if (!same(without(data, ['consumed']), without(visibleOld, ['consumed']))) fail('Only outlet consumption may be changed.', 403);
+        const merged = clone(old);
+        for (const [outlet, quantity] of Object.entries(data.consumed || {})) {
+          if (!hasOutlet(actor, outlet) || quantity < (old.consumed?.[outlet] || 0)) fail('Invalid consumption change.', 403);
+          merged.consumed[outlet] = quantity;
+        }
+        Object.assign(data, merged);
+      } else fail('Administrator permission required.', 403);
+    }
+    if (data && entity === 'requests' && !old) {
+      data.ownerId = actor.id;
+      data.requestedBy = actor.name;
+      data.chefName = actor.name;
+      data.timestamp = new Date().toISOString();
+    }
+    if (data && entity === 'indents' && !old) { data.ownerId = actor.id; data.supervisorName = actor.name; }
+    if (data && entity === 'purchase_orders' && !old) { data.ownerId = actor.id; data.raisedBy = actor.name; }
+    if (data && old && ['requests', 'indents', 'purchase_orders'].includes(entity)) {
+      if (data.ownerId !== old.ownerId) fail('Owner cannot change.');
+      if (['Approved', 'Rejected'].includes(old.status) && data.status !== old.status) fail('Completed workflow cannot be reopened.', 409);
+      if (old.status === 'Approved' && !same(data, old)) fail('Approved records are immutable.', 409);
+    }
+    if (!data && old && ['requests', 'indents', 'purchase_orders'].includes(entity) && !['Pending', 'Accepted', 'Pending Approval'].includes(old.status)) fail('Completed records cannot be deleted.', 409);
+    const index = next[entity].findIndex(row => row.id === key);
+    if (data) {
+      if (index < 0) next[entity].unshift(data); else next[entity][index] = data;
+    } else next[entity].splice(index, 1);
+    touched.push({ entity, key, old, data });
+  }
+  // Cross-record validation uses the resulting state, never the browser's role.
+  // Keep catalog display names consistent when a vendor is renamed.
+  for (const vendor of touched.filter(t => t.entity === 'vendors' && t.old && t.data && t.old.name !== t.data.name)) {
+    for (const item of next.items.filter(i => i.vendor === vendor.old.name)) {
+      const old = state.items.find(i => i.id === item.id);
+      item.vendor = vendor.data.name;
+      const existing = touched.find(t => t.entity === 'items' && t.key === item.id);
+      if (existing) existing.data = item; else touched.push({ entity: 'items', key: item.id, old, data: item });
+    }
+  }
+  const outlets = new Set(next.outlets.map(o => o.id));
+  const items = new Map(next.items.map(i => [i.id, i]));
+  const vendors = new Map(next.vendors.map(v => [v.name, v.id]));
+  const usernames = new Set();
+  for (const user of next.users) {
+    if (!/^[a-zA-Z0-9_.-]{3,64}$/.test(user.username || '')) fail('Usernames need 3–64 letters, digits, dots, underscores or hyphens.');
+    if (usernames.has(user.username.toLowerCase())) fail('Username already exists.', 409);
+    usernames.add(user.username.toLowerCase());
+    if (!['admin', 'supervisor', 'chef'].includes(user.role)) fail('Invalid role.');
+    safeText(user.name, 'User name');
+    if (!Array.isArray(user.assignedLocations) || !user.assignedLocations.length || user.assignedLocations.some(o => o !== 'all' && !outlets.has(o))) fail('Assign valid outlets to each user.');
+    if (user.role === 'chef' && !(user.assignedSections || user.assignedCuisines)?.length) fail('Assign cuisines to each chef.');
+    for (const c of user.assignedSections || user.assignedCuisines || []) if (!next.cuisines.some(row => row.name === c)) fail('Unknown cuisine.');
+  }
+  if (!next.users.some(u => u.role === 'admin') || !next.users.some(u => u.id === actor.id)) fail('Keep an admin and your own account active.');
+  for (const outlet of next.outlets) { id(outlet.id); safeText(outlet.name, 'Outlet name'); }
+  for (const vendor of next.vendors) safeText(vendor.name, 'Vendor name');
+  for (const item of next.items) {
+    safeText(item.name, 'Item name'); safeText(item.unit, 'Unit'); safeText(item.category, 'Category');
+    if (!vendors.has(item.vendor)) fail('Choose an existing vendor.');
+    number(item.bought, 'Stock bought');
+    let total = 0;
+    for (const [outlet, q] of Object.entries(item.allocations || {})) {
+      if (!outlets.has(outlet)) fail('Invalid stock outlet.');
+      total += number(q, 'Allocation');
+    }
+    if (total > item.bought + 1e-8) fail(`Insufficient central stock for ${item.name}.`, 409);
+    for (const [outlet, q] of Object.entries(item.consumed || {})) {
+      if (!outlets.has(outlet)) fail('Invalid consumption outlet.');
+      number(q, 'Consumption');
+      if (q > (item.allocations?.[outlet] || 0) + 1e-8) fail(`Consumption exceeds available stock for ${item.name}.`, 409);
+    }
+  }
+  for (const r of next.requests) {
+    if (!items.has(r.itemId) || !outlets.has(r.outletId)) fail('Unknown request item or outlet.');
+    if (!['Pending', 'Accepted', 'Sent to Admin', 'Consolidated', 'Approved', 'Rejected', 'PO Raised'].includes(r.status)) fail('Invalid request status.');
+    number(r.qty, 'Request quantity', true);
+    if (!next.cuisines.some(c => c.name === r.cuisine) && !['Supervisor Extra', 'Store Stock'].includes(r.cuisine)) fail('Choose a valid cuisine.');
+    if (r.indentId && !next.indents.some(i => i.id === r.indentId && i.outletId === r.outletId)) fail('Invalid indent link.');
+  }
+  for (const indent of next.indents) {
+    if (!outlets.has(indent.outletId)) fail('Unknown indent outlet.');
+    safeText(indent.indentNumber, 'Indent number');
+    if (!['Pending Approval', 'Approved', 'Rejected'].includes(indent.status) && !/^PO Raised \([^<>]+\)$/.test(indent.status)) fail('Invalid indent status.');
+    if (!Array.isArray(indent.items) || !indent.items.length) fail('Indent needs at least one item.');
+    const seen = new Set();
+    for (const row of indent.items) {
+      if (!items.has(row.itemId) || seen.has(row.itemId)) fail('Invalid or duplicate indent item.');
+      seen.add(row.itemId); number(row.originalQty, 'Original quantity'); number(row.revisedQty, 'Revised quantity');
+    }
+  }
+  for (const po of next.purchase_orders) {
+    if (!next.vendors.some(v => v.id === po.vendorId) || !outlets.has(po.outletId)) fail('Invalid purchase order vendor or outlet.');
+    safeText(po.poNumber, 'PO number');
+    if (!Array.isArray(po.items) || !po.items.length) fail('Purchase order needs items.');
+    if (po.indentId && !next.indents.some(i => i.id === po.indentId && i.outletId === po.outletId)) fail('Invalid PO indent.');
+    for (const row of po.items) { if (!items.has(row.itemId)) fail('Unknown PO item.'); number(row.qty, 'PO quantity', true); }
+  }
+  // A newly approved indent must allocate exactly its approved quantities and
+  // approve its linked requests in the same command. Partial changes roll back.
+  const expectedAllocations = new Map();
+  for (const t of touched.filter(t => t.entity === 'indents' && t.data?.status === 'Approved' && t.old?.status !== 'Approved')) {
+    if (!t.old || t.old.status !== 'Pending Approval') fail('Indent is not awaiting approval.', 409);
+    for (const row of t.data.items) {
+      const key = `${row.itemId}:${t.data.outletId}`;
+      expectedAllocations.set(key, (expectedAllocations.get(key) || 0) + row.revisedQty);
+    }
+    for (const req of next.requests.filter(r => r.indentId === t.key)) if (req.status !== 'Approved') fail('Linked requests must be approved atomically.');
+  }
+  for (const [key, quantity] of expectedAllocations) {
+    const split = key.lastIndexOf(':');
+    const itemId = key.slice(0, split), outlet = key.slice(split + 1);
+    const before = state.items.find(i => i.id === itemId)?.allocations?.[outlet] || 0;
+    const after = items.get(itemId)?.allocations?.[outlet] || 0;
+    const standalone = touched.filter(r => r.entity === 'requests' && r.data?.status === 'Approved' && r.old?.status !== 'Approved' && !r.data.indentId && r.data.itemId === itemId && r.data.outletId === outlet).reduce((sum, r) => sum + r.data.qty, 0);
+    if (Math.abs(after - before - quantity - standalone) > 1e-8) fail('Approval stock allocation does not match the indent.');
+  }
+  for (const t of touched.filter(t => t.entity === 'requests' && t.data?.status === 'Approved' && t.old?.status !== 'Approved')) {
+    if (!t.old) fail('Create requests before approving them.');
+    const indentApproval = touched.some(i => i.entity === 'indents' && i.key === t.data.indentId && i.data?.status === 'Approved' && i.old?.status !== 'Approved');
+    if (indentApproval) continue;
+    if (t.data.indentId) fail('Approve linked requests through their indent.');
+    const before = state.items.find(i => i.id === t.data.itemId)?.allocations?.[t.data.outletId] || 0;
+    const after = items.get(t.data.itemId)?.allocations?.[t.data.outletId] || 0;
+    const total = touched.filter(r => r.entity === 'requests' && r.data?.status === 'Approved' && r.old?.status !== 'Approved' && !r.data.indentId && r.data.itemId === t.data.itemId && r.data.outletId === t.data.outletId).reduce((sum, r) => sum + r.data.qty, 0);
+    const indentQty = expectedAllocations.get(`${t.data.itemId}:${t.data.outletId}`) || 0;
+    if (Math.abs(after - before - total - indentQty) > 1e-8) fail('Request approval stock does not match its quantity.');
+  }
+  for (const t of touched.filter(t => t.entity === 'purchase_orders')) {
+    if (!t.data) continue;
+    if (!['PO Raised', 'Received'].includes(t.data.status)) fail('Invalid purchase order status.');
+    if (t.old?.status === 'Received' && !same(t.data, t.old)) fail('Received orders cannot be changed.', 409);
+    if (t.data.status === 'Received' && t.old?.status !== 'Received') {
+      if (!t.old || !same(without(t.data, ['status', 'items', 'receivedBy', 'receivedAt']), without(t.old, ['status', 'items', 'receivedBy', 'receivedAt']))) fail('Order details cannot change during receiving.');
+      for (const line of t.data.items) {
+        const previous = t.old.items.find(i => i.itemId === line.itemId);
+        if (!previous || line.qty !== previous.qty || line.receivedQty !== line.qty) fail('Received quantities do not match the order.');
+        const before = state.items.find(i => i.id === line.itemId);
+        const after = items.get(line.itemId);
+        const quantity = line.qty - (previous.receivedQty || 0);
+        if (Math.abs(after.bought - before.bought - quantity) > 1e-8 || Math.abs((after.allocations[t.data.outletId] || 0) - (before.allocations[t.data.outletId] || 0) - quantity) > 1e-8) fail('Order receiving stock does not match delivery.');
+      }
+    }
+  }
+  return { next, touched };
+}

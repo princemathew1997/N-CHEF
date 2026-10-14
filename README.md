@@ -53,32 +53,35 @@ A modern, high-performance web application designed for commercial multi-branch 
 
 ## 🚀 Getting Started
 
-No build step or external compilers required. Run with any local HTTP server:
+The app now uses Cloudflare Workers APIs and a shared D1 database. Node.js 24
+is recommended. Local development uses an isolated D1 database:
 
-### Option 1: Python
 ```bash
-python -m http.server 8000
+npm ci
+npm run db:local
+node scripts/setup-key.mjs
+npm start
 ```
 
-### Option 2: Node.js (npx)
-```bash
-npx serve -p 8000 .
-```
+Open `http://localhost:8000/setup.html` for first-admin setup, then sign in at
+`http://localhost:8000`. Use the setup key from ignored `.dev.vars`. Choose a
+password with at least 12 characters. A generic Python/static server cannot
+run the database API and must not serve the repository containing local secrets.
 
-Open `http://localhost:8000` in your web browser.
+Production uses Cloudflare Pages plus the private `nchef-api` Worker and
+`nchef-db` database. See [database and deployment guide](docs/D1_MIGRATION.md)
+for the API, permissions, testing, transaction behavior, and deployment order.
+Other devices receive confirmed updates through 10-second polling.
 
 ---
 
-## 🔐 Default Demo Accounts
+## 🔐 Accounts
 
-| Role | Username | Password | Assigned Location / Cuisine |
-|---|---|---|---|
-| **Admin** | `admin` | *(any)* | All Outlets / Central Store |
-| **Supervisor** | `supervisor` | *(any)* | Brigade Road / Yelahanka |
-| **Chef (Continental)** | `chef_prince` | *(any)* | Brigade Road — Continental |
-| **Chef (Indian)** | `chef_priya` | *(any)* | Yelahanka — Indian |
-| **Chef (Chinese)** | `chef_li` | *(any)* | Brigade Road — Chinese |
-| **Chef (Tandoor)** | `chef_arun` | *(any)* | Yelahanka — Tandoor |
+There are no demo accounts in the shared database. The first administrator
+creates supervisors and chefs with assigned outlets and cuisine sections.
+Passwords are salted and hashed server-side; session cookies expire after
+8 hours. Browser storage retains only view preferences, not credentials or
+business data. Local and production accounts are separate.
 
 ---
 

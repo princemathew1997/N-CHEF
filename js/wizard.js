@@ -138,7 +138,7 @@ function initRequestWizard() {
         document.getElementById('wizardStep1').classList.remove('hidden');
     });
 
-    document.getElementById('wizardSubmitBtn')?.addEventListener('click', () => {
+    document.getElementById('wizardSubmitBtn')?.addEventListener('click', async () => {
         const items = [];
         for (const itemId in wizardSelectedItems) {
             const qtyInput = document.getElementById('wizardQty_' + itemId);
@@ -199,7 +199,7 @@ function initRequestWizard() {
             });
         }
 
-        saveData();
+        await saveData();
         modal.classList.add('hidden');
         if (typeof showUiModal === 'function') {
             showUiModal({
@@ -362,7 +362,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Modifying saveUser and editUser to support assignedSections / cuisines
 const originalSaveUser = window.saveUser;
-window.saveUser = function() {
+window.saveUser = async function() {
     const role = document.getElementById('newUserRole').value;
     const sectionCbs = document.querySelectorAll('.section-checkbox');
     const assignedSections = [];
@@ -371,7 +371,7 @@ window.saveUser = function() {
     const editUsername = document.getElementById('editUsername').value;
     const username = document.getElementById('newUserUsername').value.trim();
     
-    if(originalSaveUser) originalSaveUser();
+    if(originalSaveUser) await originalSaveUser();
     
     const targetUser = editUsername 
         ? usersData.find(u => u.username === editUsername)
@@ -385,7 +385,7 @@ window.saveUser = function() {
             currentUser.assignedCuisines = assignedSections;
         }
     }
-    saveData();
+    await saveData();
     if(typeof loadUsersData === 'function') loadUsersData();
 };
 

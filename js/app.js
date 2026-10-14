@@ -198,6 +198,7 @@ window.alert = function(msg) {
 
 // Lightweight, non-intrusive floating toast notification
 window.showToast = function(msg, type = 'success') {
+    if (window.deferDatabaseSuccess?.(msg, type)) return;
     let toast = document.getElementById('uiFloatingToast');
     if (!toast) {
         toast = document.createElement('div');
@@ -280,10 +281,10 @@ window.addEventListener('load', () => {
 function initKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
         // Only active on Master Orders view
-        if (currentView !== 'viewMasterOrders') return;
+        if (!currentUser || currentView !== 'viewMasterOrders' || typeof e.key !== 'string') return;
         
         // Ignore if user is typing in an input field
-        const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+        const activeTag = document.activeElement?.tagName?.toLowerCase() || '';
         if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select') return;
         
         const key = e.key.toLowerCase();
@@ -392,7 +393,6 @@ function initParticles() {
 // ============================================================
 function applyLoggedInUser(user, targetView = null) {
     currentUser = user;
-    localStorage.setItem('nchef_logged_in_username', user.username);
     
     // Populate profile in sidebar
     const nameEl = document.getElementById('userName');
@@ -469,20 +469,20 @@ function initLogin() {
     const passIn   = document.getElementById('password');
     const errDiv   = document.getElementById('loginError');
 
-    const doLogin = () => {
+    const doLogin = async () => {
         const u = userIn ? userIn.value.trim() : '';
-        const p = passIn ? passIn.value.trim() : '';
-        
-        if (typeof reloadDataFromStorage === 'function') {
-            reloadDataFromStorage();
-        }
-        const user = usersData.find(usr => usr.username.toLowerCase() === u.toLowerCase() && usr.password === p);
-        
-        if (user) {
+        const p = passIn ? passIn.value : '';
+        if (loginBtn) loginBtn.disabled = true;
+        try {
+            const result = await apiRequest('login', 'POST', { username: u, password: p });
+            applyServerState(result.state);
             if (errDiv) errDiv.classList.remove('active');
-            applyLoggedInUser(user);
-        } else {
-            if (errDiv) errDiv.classList.add('active');
+            if (passIn) passIn.value = '';
+            applyLoggedInUser(result.user);
+        } catch (error) {
+            if (errDiv) { errDiv.textContent = error.message; errDiv.classList.add('active'); }
+        } finally {
+            if (loginBtn) loginBtn.disabled = false;
         }
     };
 
@@ -493,7 +493,10 @@ function initLogin() {
     
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
-        logoutBtn.addEventListener('click', () => {
+        logoutBtn.addEventListener('click', async () => {
+            try { await apiRequest('logout', 'POST', {}); } catch (error) { if (error.status !== 401) throw error; }
+            committedState = null;
+            for (const values of Object.values(collectionMap)) values.length = 0;
             currentUser = null;
             localStorage.removeItem('nchef_logged_in_username');
             localStorage.removeItem('nchef_active_view');
@@ -514,17 +517,19 @@ function initLogin() {
         });
     }
 
-    // Auto-restore session on refresh if user is already logged in
-    const savedUsername = localStorage.getItem('nchef_logged_in_username');
-    if (savedUsername) {
-        if (typeof reloadDataFromStorage === 'function') {
-            reloadDataFromStorage();
-        }
-        const savedUser = usersData.find(u => u.username.toLowerCase() === savedUsername.toLowerCase());
-        if (savedUser) {
-            applyLoggedInUser(savedUser);
-        }
-    }
+    apiRequest('session').then(result => {
+        applyServerState(result.state);
+        applyLoggedInUser(result.user);
+    }).catch(async error => {
+        if (error.status !== 401 && errDiv) { errDiv.textContent = error.message; errDiv.classList.add('active'); }
+        try {
+            const setup = await apiRequest('setup-status');
+            if (setup.required && errDiv) {
+                errDiv.textContent = 'Administrator setup is required. Open /setup.html to create the first account.';
+                errDiv.classList.add('active');
+            }
+        } catch { /* Keep the connection error visible. */ }
+    });
 }
 
 // ============================================================
@@ -1024,14 +1029,7 @@ function getVisibleOutlets() {
     }
     const matched = outletsData.filter(o => currentUser.assignedLocations && currentUser.assignedLocations.includes(o.id));
     if (matched.length > 0) return matched;
-    // Fallback: If supervisor's assigned location was not found or stale, assign to primary outlet
-    if (outletsData.length > 0) {
-        if (currentUser.role === 'supervisor') {
-            currentUser.assignedLocations = [outletsData[0].id];
-            saveData();
-        }
-        return [outletsData[0]];
-    }
+    // Do not invent permissions when an account has no visible outlet.
     return [];
 }
 
@@ -1274,7 +1272,7 @@ function initForms() {
 
     const allocBtn = document.getElementById('allocateBtn');
     if (allocBtn) {
-        allocBtn.addEventListener('click', () => {
+        allocBtn.addEventListener('click', async () => {
         const itemId = document.getElementById('allocItem').value;
         const outletId = document.getElementById('allocOutlet').value;
         const qty = parseInt(document.getElementById('allocQty').value) || 0;
@@ -1293,7 +1291,7 @@ function initForms() {
             }
             
             item.allocations[outletId] = qty;
-            saveData();
+            await saveData();
             loadDashboardData();
             document.getElementById('allocQty').value = '';
             document.getElementById('allocItem').value = '';
@@ -1308,7 +1306,7 @@ function initForms() {
     
     const reqBtn = document.getElementById('requestBtn');
     if (reqBtn) {
-        reqBtn.addEventListener('click', () => {
+        reqBtn.addEventListener('click', async () => {
             const itemId = document.getElementById('reqItem').value;
             const outletId = document.getElementById('reqOutlet').value;
             const qty = parseInt(document.getElementById('reqQty').value) || 0;
@@ -1328,7 +1326,7 @@ function initForms() {
                 timestamp: new Date().toISOString()
             });
             
-            saveData();
+            await saveData();
             document.getElementById('reqQty').value = '';
             alert("Request submitted successfully!");
             updateRequestsBadge();
@@ -1359,7 +1357,7 @@ function initForms() {
                         }
                     }
                 }
-                saveData();
+                await saveData();
                 loadRequestsData();
                 loadIndentsData();
                 updateRequestsBadge();
@@ -1372,7 +1370,7 @@ function initForms() {
     
     const addVendorBtn = document.getElementById('addVendorBtn');
     if (addVendorBtn) {
-        addVendorBtn.addEventListener('click', () => {
+        addVendorBtn.addEventListener('click', async () => {
             const editId = document.getElementById('editVendorId')?.value;
             const name = document.getElementById('newVendorName')?.value.trim();
             if (!name) {
@@ -1389,7 +1387,7 @@ function initForms() {
                 vendorsData.push({ id: 'v_' + Date.now(), name });
                 window.showToast(`Vendor ${name} registered successfully!`, "success");
             }
-            saveData();
+            await saveData();
             if (typeof resetVendorForm === 'function') resetVendorForm();
             loadVendorsData();
             updateFormSelects(getVisibleOutlets()); // Refresh vendor dropdowns
@@ -1405,7 +1403,7 @@ function initForms() {
     
     const addItemBtn = document.getElementById('addItemBtn');
     if(addItemBtn) {
-        addItemBtn.addEventListener('click', () => {
+        addItemBtn.addEventListener('click', async () => {
             const nameEl = document.getElementById('newItemName');
             const unitEl = document.getElementById('newItemUnit');
             const catEl = document.getElementById('newItemCategory');
@@ -1443,7 +1441,7 @@ function initForms() {
                 consumed: {}
             });
             
-            saveData();
+            await saveData();
             if (nameEl) nameEl.value = '';
             if (unitEl) unitEl.value = '';
             if (boughtEl) boughtEl.value = '';
@@ -1500,7 +1498,7 @@ function initForms() {
     
     const saveUserBtn = document.getElementById('saveUserBtn');
     if(saveUserBtn) {
-        saveUserBtn.addEventListener('click', saveUser);
+        saveUserBtn.addEventListener('click', () => window.saveUser());
     }
     
     const cancelEditUserBtn = document.getElementById('cancelEditUserBtn');
@@ -1547,26 +1545,10 @@ function initForms() {
         document.getElementById('modalIndentApproval')?.classList.add('hidden');
     });
 
-    document.getElementById('btnApproveIndent')?.addEventListener('click', () => {
+    document.getElementById('btnApproveIndent')?.addEventListener('click', async () => {
         const indent = indentsData.find(i => i.id === activeReviewingIndentId);
         if (indent) {
-            indent.status = 'Approved';
-            // Allocate / add stock to the outlet for each approved ingredient
-            indent.items.forEach(it => {
-                const mItem = masterItemsData.find(m => m.id === it.itemId);
-                if (mItem) {
-                    mItem.allocations = mItem.allocations || {};
-                    const currentAlloc = mItem.allocations[indent.outletId] || 0;
-                    mItem.allocations[indent.outletId] = currentAlloc + (parseFloat(it.revisedQty) || 0);
-                }
-            });
-            // Mark linked chef requests as Approved
-            requestsData.forEach(r => {
-                if (r.indentId === indent.id) {
-                    r.status = 'Approved';
-                }
-            });
-            saveData();
+            await runDatabaseAction('indents/approve', { indentId: indent.id });
             document.getElementById('modalIndentApproval')?.classList.add('hidden');
             window.showUiModal({
                 title: "Request Approved",
@@ -1592,7 +1574,7 @@ function initForms() {
                         r.status = 'Rejected';
                     }
                 });
-                saveData();
+                await saveData();
                 document.getElementById('modalIndentApproval')?.classList.add('hidden');
                 window.showUiModal({
                     title: "Request Rejected",
@@ -2069,7 +2051,7 @@ window.deleteChefRequest = async function(reqId) {
         if (reqIndex !== -1) {
             const itemName = requestsData[reqIndex].itemName;
             requestsData.splice(reqIndex, 1);
-            saveData();
+            await saveData();
             loadChefPortalData();
             if (typeof loadRequestsData === 'function') loadRequestsData();
             if (typeof updateRequestsBadge === 'function') updateRequestsBadge();
@@ -2101,7 +2083,7 @@ window.deleteItem = async function(itemId) {
         const itemIndex = masterItemsData.findIndex(i => String(i.id) === String(itemId));
         if (itemIndex > -1) {
             masterItemsData.splice(itemIndex, 1);
-            saveData();
+            await saveData();
             loadDashboardData();
             window.showToast(`Deleted ${itemName}`, 'info');
         }
@@ -2897,7 +2879,7 @@ function goToConsolidationStep2() {
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-function submitConsolidatedIndent() {
+async function submitConsolidatedIndent() {
     if (!activeConsolidationData) return;
     
     const items = Object.values(activeConsolidationData.groupedItems).filter(i => i.revisedQty > 0);
@@ -2967,7 +2949,7 @@ function submitConsolidatedIndent() {
         }
     });
     
-    saveData();
+    await saveData();
     
     document.getElementById('modalConsolidateIndent').classList.add('hidden');
     alert(`Consolidated Indent ${indentNumber} submitted successfully! Routed to Owner / Admin for approval.`);
@@ -3377,7 +3359,7 @@ function openVendorPOModal() {
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-function submitVendorPurchaseOrder() {
+async function submitVendorPurchaseOrder() {
     const indent = indentsData.find(i => i.id === activeReviewingIndentId);
     if (!indent) return;
     
@@ -3464,7 +3446,7 @@ function submitVendorPurchaseOrder() {
         }
     });
     
-    saveData();
+    await saveData();
     
     // Close modals
     document.getElementById('modalVendorPO')?.classList.add('hidden');
@@ -3538,7 +3520,7 @@ window.deleteSupervisorRequest = async function(indentId) {
             }
         });
         indentsData.splice(idx, 1);
-        saveData();
+        await saveData();
         loadRequestsData();
         loadIndentsData();
         updateRequestsBadge();
@@ -3647,13 +3629,7 @@ window.approveRequest = async function(reqId) {
         return;
     }
     
-    const currentOutletQty = item.allocations[req.outletId] || 0;
-    item.allocations[req.outletId] = currentOutletQty + approveQty;
-    
-    req.status = 'Approved';
-    req.qty = approveQty;
-    
-    saveData();
+    await runDatabaseAction('requests/approve', { requestId: req.id, quantity: approveQty });
     loadRequestsData();
     loadDashboardData();
     window.showUiModal({
@@ -3663,25 +3639,25 @@ window.approveRequest = async function(reqId) {
     });
 };
 
-window.rejectRequest = function(reqId) {
+window.rejectRequest = async function(reqId) {
     const req = requestsData.find(r => r.id === reqId);
     if (req) {
         req.status = 'Rejected';
-        saveData();
+        await saveData();
         loadRequestsData();
         if (typeof loadChefPortalData === 'function') loadChefPortalData();
         updateRequestsBadge();
     }
 };
 
-window.acceptChefRequest = function(reqId) {
+window.acceptChefRequest = async function(reqId) {
     const req = requestsData.find(r => r.id === reqId);
     if (!req) return;
     req.status = 'Accepted';
     req.acceptedBy = (currentUser && currentUser.name) ? currentUser.name : 'Supervisor';
     req.acceptedAt = new Date().toISOString();
     
-    saveData();
+    await saveData();
     loadRequestsData();
     if (typeof loadChefPortalData === 'function') loadChefPortalData();
     updateRequestsBadge();
@@ -3689,14 +3665,14 @@ window.acceptChefRequest = function(reqId) {
     window.showToast(`Accepted "${req.itemName}" (${req.qty} ${req.unit || 'kg'}). Ready to consolidate.`, "success");
 };
 
-window.revertChefRequest = function(reqId) {
+window.revertChefRequest = async function(reqId) {
     const req = requestsData.find(r => r.id === reqId);
     if (!req) return;
     req.status = 'Pending';
     delete req.acceptedBy;
     delete req.acceptedAt;
     
-    saveData();
+    await saveData();
     loadRequestsData();
     if (typeof loadChefPortalData === 'function') loadChefPortalData();
     updateRequestsBadge();
@@ -3704,7 +3680,7 @@ window.revertChefRequest = function(reqId) {
     window.showToast(`Reverted "${req.itemName}" to pending status.`, "info");
 };
 
-window.acceptAllSection = function(secName) {
+window.acceptAllSection = async function(secName) {
     const vis = getVisibleOutlets();
     const visIds = vis.map(o => (o.id || '').toLowerCase());
     const pendingInSec = requestsData.filter(r => {
@@ -3727,7 +3703,7 @@ window.acceptAllSection = function(secName) {
         r.acceptedAt = nowIso;
     });
     
-    saveData();
+    await saveData();
     loadRequestsData();
     if (typeof loadChefPortalData === 'function') loadChefPortalData();
     updateRequestsBadge();
@@ -3753,7 +3729,7 @@ window.sendRequestToAdmin = async function(reqId) {
     req.forwardedBy = (currentUser && currentUser.name) ? currentUser.name : 'Supervisor';
     req.forwardedAt = new Date().toISOString();
     
-    saveData();
+    await saveData();
     loadRequestsData();
     if (typeof loadChefPortalData === 'function') loadChefPortalData();
     updateRequestsBadge();
@@ -3765,13 +3741,13 @@ window.sendRequestToAdmin = async function(reqId) {
     });
 };
 
-window.updateSectionItemQty = function(reqId, val) {
+window.updateSectionItemQty = async function(reqId, val) {
     const req = requestsData.find(r => r.id === reqId);
     if (!req) return;
     const num = parseFloat(val);
     if (!isNaN(num) && num > 0) {
         req.qty = num;
-        saveData();
+        await saveData();
     }
 };
 
@@ -4359,7 +4335,7 @@ window.submitWorkspaceConsolidatedIndent = async function() {
         }
     });
     
-    saveData();
+    await saveData();
     loadRequestsData();
     loadIndentsData();
     if (typeof loadChefPortalData === 'function') loadChefPortalData();
@@ -4388,12 +4364,12 @@ window.sendAllSectionsToAdmin = function() {
 window.adminApproveAllSections = async function() {
     const filterOutlet = document.getElementById('filterOutlet')?.value || 'all';
     const targetReqs = requestsData.filter(r => {
-        if (r.status !== 'Sent to Admin' && r.status !== 'Pending') return false;
+        if (!['Sent to Admin', 'Pending', 'Accepted', 'Consolidated'].includes(r.status)) return false;
         if (filterOutlet !== 'all' && r.outletId !== filterOutlet) return false;
         return true;
     });
     
-    if (targetReqs.length === 0) {
+    if (targetReqs.length === 0 && !indentsData.some(i => i.status === 'Pending Approval' && (filterOutlet === 'all' || i.outletId === filterOutlet))) {
         window.showUiModal({
             title: "No Requests",
             message: "No pending section requests to approve.",
@@ -4407,26 +4383,7 @@ window.adminApproveAllSections = async function() {
     });
     if (!confirmed) return;
     
-    targetReqs.forEach(req => {
-        const item = masterItemsData.find(i => i.id === req.itemId);
-        if (item) {
-            item.allocations = item.allocations || {};
-            const curAlloc = item.allocations[req.outletId] || 0;
-            item.allocations[req.outletId] = curAlloc + (parseFloat(req.qty) || 0);
-        }
-        req.status = 'Approved';
-    });
-    
-    // Also approve matching indents if any
-    indentsData.forEach(ind => {
-        if (ind.status === 'Pending Approval') {
-            if (filterOutlet === 'all' || ind.outletId === filterOutlet) {
-                ind.status = 'Approved';
-            }
-        }
-    });
-    
-    saveData();
+    await runDatabaseAction('indents/approve-all', { outletId: filterOutlet });
     loadRequestsData();
     loadIndentsData();
     loadDashboardData();
@@ -4459,7 +4416,7 @@ window.editRequest = async function(reqId) {
     }
     
     req.qty = newQty;
-    saveData();
+    await saveData();
     loadRequestsData();
 };
 
@@ -4476,7 +4433,7 @@ window.deleteRequest = async function(reqId) {
         if (reqIndex !== -1) {
             const itemName = requestsData[reqIndex].itemName;
             requestsData.splice(reqIndex, 1);
-            saveData();
+            await saveData();
             loadRequestsData();
             updateRequestsBadge();
             if (typeof loadChefPortalData === 'function') loadChefPortalData();
@@ -4547,7 +4504,7 @@ window.removeVendor = async function(id) {
     const idx = vendorsData.findIndex(vend => vend.id === id);
     if (idx > -1) {
         vendorsData.splice(idx, 1);
-        saveData();
+        await saveData();
         loadVendorsData();
         updateFormSelects(getVisibleOutlets());
         window.showToast(`Vendor ${v.name} removed.`, "info");
@@ -4724,7 +4681,7 @@ function renderSupervisorsSection(supervisors) {
     }).join('');
 }
 
-function saveSupervisorUser() {
+async function saveSupervisorUser() {
     const editUsername = document.getElementById('editSupervisorUsername')?.value;
     const name = document.getElementById('supFullName')?.value.trim();
     const username = document.getElementById('supUsername')?.value.trim();
@@ -4766,7 +4723,7 @@ function saveSupervisorUser() {
         }
         const newSup = {
             username,
-            password: password || '123',
+            password,
             role: 'supervisor',
             name,
             title: 'Supervisor',
@@ -4777,7 +4734,7 @@ function saveSupervisorUser() {
         window.showToast(`Supervisor ${name} registered successfully!`, "success");
     }
 
-    saveData();
+    await saveData();
     resetSupervisorForm();
     loadUsersData();
 }
@@ -4826,7 +4783,7 @@ window.removeSupervisorUser = async function(username) {
     const idx = usersData.findIndex(u => u.username === username);
     if (idx > -1) {
         usersData.splice(idx, 1);
-        saveData();
+        await saveData();
         loadUsersData();
         window.showToast(`Supervisor ${sup.name} removed.`, "info");
     }
@@ -4898,7 +4855,7 @@ function renderAdminChefsSection(chefs) {
     }).join('');
 }
 
-function saveAdminChefUser() {
+async function saveAdminChefUser() {
     const editUsername = document.getElementById('editAdminChefUsername')?.value;
     const name = document.getElementById('adminChefFullName')?.value.trim();
     const username = document.getElementById('adminChefUsername')?.value.trim();
@@ -4943,7 +4900,7 @@ function saveAdminChefUser() {
         }
         const newChef = {
             username,
-            password: password || '123',
+            password,
             role: 'chef',
             name,
             title: 'Store Chef',
@@ -4957,7 +4914,7 @@ function saveAdminChefUser() {
         window.showToast(`Chef ${name} registered successfully!`, "success");
     }
 
-    saveData();
+    await saveData();
     resetAdminChefForm();
     loadUsersData();
     if (typeof renderChefsTable === 'function') renderChefsTable();
@@ -5007,7 +4964,7 @@ window.removeAdminChefUser = async function(username) {
     const idx = usersData.findIndex(u => u.username === username);
     if (idx > -1) {
         usersData.splice(idx, 1);
-        saveData();
+        await saveData();
         loadUsersData();
         if (typeof renderChefsTable === 'function') renderChefsTable();
         window.showToast(`Chef ${chef.name} removed.`, "info");
@@ -5045,7 +5002,7 @@ function renderAdminsSection(admins) {
     `).join('');
 }
 
-function saveAdminUser() {
+async function saveAdminUser() {
     const editUsername = document.getElementById('editAdminUserUsername')?.value;
     const name = document.getElementById('adminUserFullName')?.value.trim();
     const username = document.getElementById('adminUserUsername')?.value.trim();
@@ -5079,7 +5036,7 @@ function saveAdminUser() {
         }
         const newAdmin = {
             username,
-            password: password || '123',
+            password,
             role: 'admin',
             name,
             title: 'Administrator',
@@ -5090,7 +5047,7 @@ function saveAdminUser() {
         window.showToast(`Admin ${name} registered successfully!`, "success");
     }
 
-    saveData();
+    await saveData();
     resetAdminUserForm();
     loadUsersData();
 }
@@ -5133,7 +5090,7 @@ window.removeAdminUser = async function(username) {
     const idx = usersData.findIndex(u => u.username === username);
     if (idx > -1) {
         usersData.splice(idx, 1);
-        saveData();
+        await saveData();
         loadUsersData();
         window.showToast(`Admin ${admin.name} removed.`, "info");
     }
@@ -5311,7 +5268,7 @@ function renderChefsTable() {
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-function saveChefUser() {
+async function saveChefUser() {
     const editUsername = document.getElementById('editChefUsername')?.value;
     const name = document.getElementById('chefFullName')?.value.trim();
     const username = document.getElementById('chefUsername')?.value.trim();
@@ -5368,7 +5325,7 @@ function saveChefUser() {
 
         const newChef = {
             username: username,
-            password: password || '123',
+            password,
             role: 'chef',
             name: name,
             title: 'Store Chef',
@@ -5382,7 +5339,7 @@ function saveChefUser() {
         window.showToast(`Chef ${name} registered successfully!`, "success");
     }
 
-    saveData();
+    await saveData();
     resetChefForm();
     renderChefsTable();
     if (typeof loadUsersData === 'function') loadUsersData();
@@ -5436,7 +5393,7 @@ window.removeChefUser = async function(username) {
         const idx = usersData.findIndex(u => u.username === username);
         if (idx !== -1) {
             usersData.splice(idx, 1);
-            saveData();
+            await saveData();
             renderChefsTable();
             if (typeof loadUsersData === 'function') loadUsersData();
             window.showToast(`Chef ${chef.name} removed`, 'info');
@@ -5480,7 +5437,7 @@ function loadLocationsData() {
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-function saveLocation() {
+async function saveLocation() {
     const editId = document.getElementById('editLocationId')?.value;
     const id = document.getElementById('newLocationId')?.value.trim();
     const name = document.getElementById('newLocationName')?.value.trim();
@@ -5506,7 +5463,7 @@ function saveLocation() {
         window.showToast(`Location ${name} registered successfully!`, "success");
     }
     
-    saveData();
+    await saveData();
     resetLocationForm();
     loadLocationsData();
     
@@ -5548,7 +5505,7 @@ window.removeLocation = async function(id) {
     const idx = outletsData.findIndex(o => o.id === id);
     if (idx > -1) {
         outletsData.splice(idx, 1);
-        saveData();
+        await saveData();
         loadLocationsData();
         
         // Clear user locations checkboxes so they rebuild with new data

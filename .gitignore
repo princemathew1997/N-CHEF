@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-package-lock.json
 
 # Temporary files & backups
 *.zip
@@ -10,6 +9,14 @@ package-lock.json
 temp*.js
 backup*/
 .wrangler/
+.env
+.env.*
+.dev.vars
+.dev.vars.*
+backups/
+__pycache__/
+dist/
+screenshots/
 
 # OS and Editor files
 .DS_Store
