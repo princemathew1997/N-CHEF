@@ -4,8 +4,8 @@
 let currentUser = null;
 let customDateSelected = '';
 let currentView = 'viewMasterOrders';
-let loaderInterval = null;
 let currentStoreView = 'all';
+let currentCuisineFilter = 'all';
 
 // ============================================================
 // CENTER OF SCREEN UI MODAL NOTIFICATION (Matches n.chef Theme)
@@ -544,6 +544,10 @@ window.switchToView = function(viewName, subDivision = null) {
     const navRequestsChevron = document.getElementById('navRequestsChevron');
     const navIndents = document.getElementById('navIndents');
     const navChef = document.getElementById('navChefPortal');
+    const navStock = document.getElementById('navStock');
+    const navStockSubmenu = document.getElementById('navStockSubmenu');
+    const navStockChevron = document.getElementById('navStockChevron');
+    const navAddItems = document.getElementById('navAddItems');
     const navVendors = document.getElementById('navVendors');
     const navLocations = document.getElementById('navLocations');
     const navUsers = document.getElementById('navUsers');
@@ -568,7 +572,7 @@ window.switchToView = function(viewName, subDivision = null) {
     [viewMaster, viewRequests, viewConsolidateRequests, viewIndents, viewChef, viewVendors, viewLocations, viewUsers, viewAddChef].forEach(v => {
         if (v) v.classList.add('hidden');
     });
-    [navMaster, navRequests, navManageRequests, navConsolidateRequests, navIndents, navChef, navVendors, navLocations, navUsers, navSubSupervisors, navSubChefs, navSubAdmins, navAddChef].forEach(n => {
+    [navMaster, navStock, navAddItems, navRequests, navManageRequests, navConsolidateRequests, navIndents, navChef, navVendors, navLocations, navUsers, navSubSupervisors, navSubChefs, navSubAdmins, navAddChef].forEach(n => {
         if (n) n.classList.remove('active');
     });
 
@@ -579,6 +583,10 @@ window.switchToView = function(viewName, subDivision = null) {
     if (viewName !== 'viewUsers') {
         if (navUsersSubmenu) navUsersSubmenu.classList.remove('open');
         if (navUsersChevron) navUsersChevron.style.transform = 'rotate(0deg)';
+    }
+    if (viewName !== 'viewMasterOrders') {
+        if (navStockSubmenu) navStockSubmenu.classList.remove('open');
+        if (navStockChevron) navStockChevron.style.transform = 'rotate(0deg)';
     }
 
     currentView = viewName;
@@ -670,6 +678,9 @@ function initNavigation() {
     const navRequestsChevron = document.getElementById('navRequestsChevron');
     const navIndents = document.getElementById('navIndents');
     const navChef = document.getElementById('navChefPortal');
+    const navStock = document.getElementById('navStock');
+    const navStockSubmenu = document.getElementById('navStockSubmenu');
+    const navStockChevron = document.getElementById('navStockChevron');
     const navVendors = document.getElementById('navVendors');
     const navLocations = document.getElementById('navLocations');
     const navUsers = document.getElementById('navUsers');
@@ -684,6 +695,22 @@ function initNavigation() {
         navMaster.addEventListener('click', (e) => {
             e.preventDefault();
             window.switchToView('viewMasterOrders');
+        });
+    }
+
+    if (navStock) {
+        navStock.addEventListener('click', (e) => {
+            e.preventDefault();
+            const isOpen = navStockSubmenu && navStockSubmenu.classList.contains('open');
+            if (isOpen) {
+                navStockSubmenu.classList.remove('open');
+                if (navStockChevron) navStockChevron.style.transform = 'rotate(0deg)';
+                navStock.classList.remove('active');
+            } else {
+                if (navStockSubmenu) navStockSubmenu.classList.add('open');
+                if (navStockChevron) navStockChevron.style.transform = 'rotate(180deg)';
+                navStock.classList.add('active');
+            }
         });
     }
 
@@ -1033,6 +1060,73 @@ function getVisibleOutlets() {
     return [];
 }
 
+// Helper to get or infer item cuisine
+function getItemCuisine(item, outletId) {
+    if (!item) return 'Indian';
+    if (item.cuisine && typeof item.cuisine === 'string' && item.cuisine.trim()) {
+        return item.cuisine.trim();
+    }
+    if (typeof requestsData !== 'undefined' && Array.isArray(requestsData)) {
+        if (outletId && outletId !== 'all') {
+            const req = requestsData.find(r => (r.itemId === item.id || r.itemName === item.name) && r.outletId === outletId && r.cuisine);
+            if (req && req.cuisine) {
+                item.cuisine = req.cuisine;
+                return req.cuisine;
+            }
+        }
+        const reqAny = requestsData.find(r => (r.itemId === item.id || r.itemName === item.name) && r.cuisine);
+        if (reqAny && reqAny.cuisine) {
+            item.cuisine = reqAny.cuisine;
+            return reqAny.cuisine;
+        }
+    }
+    const defaultItemCuisines = {
+        'item_01': 'Continental',
+        'item_02': 'Continental',
+        'item_03': 'Indian',
+        'item_04': 'Continental',
+        'item_05': 'Kerala',
+        'item_06': 'Continental',
+        'item_07': 'Tandoor',
+        'item_08': 'Kerala',
+        'item_09': 'Arabic',
+        'item_10': 'Indian'
+    };
+    if (item.id && defaultItemCuisines[item.id]) {
+        item.cuisine = defaultItemCuisines[item.id];
+        return defaultItemCuisines[item.id];
+    }
+    const name = (item.name || '').toLowerCase();
+    if (name.includes('chicken') || name.includes('tandoor') || name.includes('tikka')) item.cuisine = 'Tandoor';
+    else if (name.includes('pasta') || name.includes('tuna') || name.includes('bread') || name.includes('cheese')) item.cuisine = 'Continental';
+    else if (name.includes('noodle') || name.includes('soya') || name.includes('chilli')) item.cuisine = 'Chinese';
+    else if (name.includes('rice') || name.includes('tomato') || name.includes('coconut')) item.cuisine = 'Kerala';
+    else if (name.includes('coffee') || name.includes('shawarma') || name.includes('pita')) item.cuisine = 'Arabic';
+    else item.cuisine = 'Indian';
+    return item.cuisine;
+}
+
+// Sync and handle inline Cuisine Filter dropdown
+function updateCuisineFilterSelect() {
+    const select = document.getElementById('cuisineFilterSelect');
+    if (!select) return;
+
+    select.value = currentCuisineFilter;
+    if (currentCuisineFilter !== 'all') {
+        select.classList.add('active');
+    } else {
+        select.classList.remove('active');
+    }
+
+    if (!select.dataset.bound) {
+        select.addEventListener('change', (e) => {
+            currentCuisineFilter = e.target.value;
+            loadDashboardData();
+        });
+        select.dataset.bound = 'true';
+    }
+}
+
 function loadDashboardData() {
     const visibleOutlets = getVisibleOutlets();
     if (currentStoreView !== 'all' && !visibleOutlets.some(o => o.id === currentStoreView)) {
@@ -1044,6 +1138,23 @@ function loadDashboardData() {
     if (selectedStore !== 'all') {
         displayOutlets = visibleOutlets.filter(o => o.id === selectedStore);
     }
+
+    // Filter items by cuisine
+    let filteredItems = masterItemsData.slice();
+    if (currentCuisineFilter !== 'all') {
+        filteredItems = filteredItems.filter(item => {
+            const c = getItemCuisine(item, selectedStore);
+            return c.toLowerCase() === currentCuisineFilter.toLowerCase();
+        });
+    }
+
+    // Sort cuisine-wise (by cuisine, then by item name)
+    filteredItems.sort((a, b) => {
+        const cA = getItemCuisine(a, selectedStore);
+        const cB = getItemCuisine(b, selectedStore);
+        if (cA.localeCompare(cB) !== 0) return cA.localeCompare(cB);
+        return a.name.localeCompare(b.name);
+    });
     
     // 1. Update Metrics
     const metricTotalEl = document.getElementById('metricTotalItems');
@@ -1055,15 +1166,15 @@ function loadDashboardData() {
     const btnReset = document.getElementById('btnResetOutletFilter');
 
     if (selectedStore === 'all') {
-        if (labelTotalEl) labelTotalEl.textContent = 'Total Items Managed';
+        if (labelTotalEl) labelTotalEl.textContent = currentCuisineFilter === 'all' ? 'Total Items Managed' : `Items (${currentCuisineFilter})`;
         if (labelOutletsEl) labelOutletsEl.textContent = 'Active Outlets';
         if (labelLowEl) labelLowEl.textContent = 'Low Stock Items';
         
-        if (metricTotalEl) metricTotalEl.textContent = masterItemsData.length;
+        if (metricTotalEl) metricTotalEl.textContent = filteredItems.length;
         if (metricActiveEl) metricActiveEl.textContent = visibleOutlets.length;
         
         let lowStockCount = 0;
-        masterItemsData.forEach(item => {
+        filteredItems.forEach(item => {
             if (getItemStatus(item) === 'Low Stock' || getItemStatus(item) === 'Pending PO') {
                 lowStockCount++;
             }
@@ -1074,10 +1185,10 @@ function loadDashboardData() {
         const selOutletObj = visibleOutlets.find(o => o.id === selectedStore);
         const selName = selOutletObj ? selOutletObj.name : selectedStore.toUpperCase();
         
-        const itemsInStore = masterItemsData.filter(i => (i.allocations && (i.allocations[selectedStore] || 0) > 0)).length;
+        const itemsInStore = filteredItems.filter(i => (i.allocations && (i.allocations[selectedStore] || 0) > 0)).length;
         
         let storeLowStock = 0;
-        masterItemsData.forEach(item => {
+        filteredItems.forEach(item => {
             const alloc = (item.allocations && item.allocations[selectedStore]) || 0;
             const cons = (item.consumed && item.consumed[selectedStore]) || 0;
             const bal = alloc - cons;
@@ -1086,7 +1197,7 @@ function loadDashboardData() {
             }
         });
         
-        if (labelTotalEl) labelTotalEl.textContent = `Items in ${selName}`;
+        if (labelTotalEl) labelTotalEl.textContent = currentCuisineFilter === 'all' ? `Items in ${selName}` : `${currentCuisineFilter} in ${selName}`;
         if (labelOutletsEl) labelOutletsEl.textContent = 'Filtered Outlet';
         if (labelLowEl) labelLowEl.textContent = `Low Stock (${selName})`;
         
@@ -1096,136 +1207,197 @@ function loadDashboardData() {
         if (btnReset) btnReset.classList.remove('hidden');
     }
 
-    // 2. Build Table Headers (Condensed)
+    // 2. Build Table Headers
     const thead = document.getElementById('inventoryTableHeader');
-    thead.innerHTML = `
-        <th>Item</th>
-        <th>Vendor</th>
-    `;
-    // Abbreviate outlet names for compact view
-    const abbreviate = (name) => {
-        if (name === 'VIDYARANYAPURA') return 'VIDYA';
-        if (name === 'BRIGADE') return 'BRG';
-        if (name === 'YELAHANKA') return 'YLH';
-        if (name === 'MS PALYA') return 'MSP';
-        return name;
-    };
-    
-    if (selectedStore === 'all') {
-        thead.innerHTML += `<th style="text-align:center;">Bought</th>`;
-    }
-    
-    displayOutlets.forEach(o => {
-        thead.innerHTML += `<th style="text-align:center;">${selectedStore === 'all' ? abbreviate(o.name) : o.name + ' Qty'}</th>`;
-        if (selectedStore !== 'all') {
-            thead.innerHTML += `<th style="text-align:center;">Consumed</th>`;
-            thead.innerHTML += `<th style="text-align:center;">Store Bal.</th>`;
+    if (selectedStore !== 'all') {
+        // Store View: Items, Vendor, Cuisine, Consumed, Storage Balance, Actions
+        thead.innerHTML = `
+            <th>Item</th>
+            <th>Vendor</th>
+            <th style="text-align:center;">Cuisine</th>
+            <th style="text-align:center;">Consumed</th>
+            <th style="text-align:center;">Storage Balance</th>
+        `;
+        if (currentUser.role === 'admin') {
+            thead.innerHTML += `<th style="text-align:center;">Actions</th>`;
         }
-    });
-
-    if (selectedStore === 'all') {
+    } else {
+        // Overall View: Item, Vendor, Bought, [outlets], Allocated, Balance, Actions
+        thead.innerHTML = `
+            <th>Item</th>
+            <th>Vendor</th>
+            <th style="text-align:center;">Bought</th>
+        `;
+        const abbreviate = (name) => {
+            if (name === 'VIDYARANYAPURA') return 'VIDYA';
+            if (name === 'BRIGADE') return 'BRG';
+            if (name === 'YELAHANKA') return 'YLH';
+            if (name === 'MS PALYA') return 'MSP';
+            return name;
+        };
+        displayOutlets.forEach(o => {
+            thead.innerHTML += `<th style="text-align:center;">${abbreviate(o.name)}</th>`;
+        });
         thead.innerHTML += `<th class="no-chef" style="text-align:center;">Allocated</th>`;
         thead.innerHTML += `<th style="text-align:center;">Balance</th>`;
-    }
-    if (currentUser.role === 'admin') {
-        thead.innerHTML += `<th style="text-align:center;">Actions</th>`;
+        if (currentUser.role === 'admin') {
+            thead.innerHTML += `<th style="text-align:center;">Actions</th>`;
+        }
     }
 
     // 3. Build Table Body
     const tbody = document.getElementById('inventoryTableBody');
     tbody.innerHTML = '';
     
-    masterItemsData.forEach(item => {
+    if (filteredItems.length === 0) {
         const tr = document.createElement('tr');
-        
-        let statusDot = '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--success); margin-right:8px;" title="In Stock"></span>';
-        
-        if (selectedStore === 'all') {
-            const st = getItemStatus(item);
-            if (st === 'Low Stock' || st === 'Pending PO') {
-                statusDot = '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--danger); margin-right:8px;" title="Low Stock"></span>';
-            } else if (st === 'Allocated/Pending PO') {
-                statusDot = '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--warning); margin-right:8px;" title="Pending"></span>';
-            }
-        } else {
-            const oAlloc = (item.allocations && item.allocations[selectedStore]) || 0;
-            const oCons = (item.consumed && item.consumed[selectedStore]) || 0;
-            const oBal = oAlloc - oCons;
-            if (oAlloc === 0) {
-                statusDot = '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--text-muted); opacity:0.4; margin-right:8px;" title="Not Allocated"></span>';
-            } else if (oBal <= 0) {
-                statusDot = '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--danger); margin-right:8px;" title="Out of Stock"></span>';
-            } else if (oBal <= 5) {
-                statusDot = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--warning); margin-right:8px;" title="Low Stock (${oBal} ${item.unit})"></span>`;
-            } else {
-                statusDot = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--success); margin-right:8px;" title="In Stock (${oBal} ${item.unit})"></span>`;
-            }
-        }
-        
-        // Combine Item Name, Category, and Unit to save space
-        let rowHtml = `
-            <td>
-                <div style="display:flex; align-items:center;">
-                    ${statusDot}
-                    <div>
-                        <strong>${item.name}</strong>
-                        <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
-                            ${item.category} &bull; ${item.unit}
-                        </div>
-                    </div>
-                </div>
-            </td>
-            <td><span style="font-size:0.85rem; color:var(--text-muted);">${item.vendor}</span></td>
-        `;
+        const colSpan = selectedStore !== 'all' ? (currentUser.role === 'admin' ? 6 : 5) : (displayOutlets.length + (currentUser.role === 'admin' ? 5 : 4));
+        tr.innerHTML = `<td colspan="${colSpan}" style="text-align:center; padding: 28px; color: var(--text-muted); font-size: 0.88rem;">No items found matching the selected cuisine view.</td>`;
+        tbody.appendChild(tr);
+    } else {
+        let lastCuisine = null;
+        filteredItems.forEach(item => {
+            const itemCuisine = getItemCuisine(item, selectedStore);
 
-        if (selectedStore === 'all') {
-            rowHtml += `<td style="text-align:center; color:var(--text-muted);"><strong>${item.bought || 0}</strong></td>`;
-        }
-        
-        let totalAllocated = 0;
-        
-        displayOutlets.forEach(o => {
-            const qty = (item.allocations && item.allocations[o.id]) || 0;
+            // Clean Cuisine Section Divider row for grouped cuisine view
+            if (selectedStore !== 'all' && currentCuisineFilter === 'all' && itemCuisine !== lastCuisine) {
+                lastCuisine = itemCuisine;
+                const cuisineIcons = {
+                    'Indian': '🍛',
+                    'Continental': '🥗',
+                    'Tandoor': '🍢',
+                    'Chinese': '🍲',
+                    'Arabic': '🫓',
+                    'Kerala': '🥥'
+                };
+                const icon = cuisineIcons[itemCuisine] || '🥘';
+                const count = filteredItems.filter(i => getItemCuisine(i, selectedStore) === itemCuisine).length;
+                
+                const groupRow = document.createElement('tr');
+                groupRow.style.background = 'rgba(255, 255, 255, 0.025)';
+                groupRow.style.borderTop = '1px solid rgba(255, 255, 255, 0.08)';
+                groupRow.style.borderBottom = '1px solid rgba(255, 255, 255, 0.05)';
+                const colSpan = currentUser.role === 'admin' ? 6 : 5;
+                groupRow.innerHTML = `
+                    <td colspan="${colSpan}" style="padding: 7px 12px; font-size: 0.74rem; font-weight: 700; color: var(--primary); letter-spacing: 0.4px; text-transform: uppercase;">
+                        ${icon} ${itemCuisine} Section <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: normal; margin-left: 6px; text-transform: none;">(${count} item${count === 1 ? '' : 's'})</span>
+                    </td>
+                `;
+                tbody.appendChild(groupRow);
+            }
+
+            const tr = document.createElement('tr');
+
+            let statusDot = '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--success); margin-right:8px;" title="In Stock"></span>';
             
-            // Heatmap color logic applied directly to the main table
-            let alpha = qty > 0 ? 0.15 + (qty / 50) : 0;
-            if (alpha > 0.6) alpha = 0.6; // Cap the opacity so text is still readable
-            let bgStyle = qty > 0 ? `background: rgba(52, 211, 153, ${alpha});` : '';
-            
-            rowHtml += `<td style="text-align:center; ${bgStyle}">${qty > 0 ? qty : '-'}</td>`;
+            if (selectedStore === 'all') {
+                const st = getItemStatus(item);
+                if (st === 'Low Stock' || st === 'Pending PO') {
+                    statusDot = '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--danger); margin-right:8px;" title="Low Stock"></span>';
+                } else if (st === 'Allocated/Pending PO') {
+                    statusDot = '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--warning); margin-right:8px;" title="Pending"></span>';
+                }
+            } else {
+                const oAlloc = (item.allocations && item.allocations[selectedStore]) || 0;
+                const oCons = (item.consumed && item.consumed[selectedStore]) || 0;
+                const oBal = oAlloc - oCons;
+                if (oAlloc === 0) {
+                    statusDot = '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--text-muted); opacity:0.4; margin-right:8px;" title="Not Allocated"></span>';
+                } else if (oBal <= 0) {
+                    statusDot = '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--danger); margin-right:8px;" title="Out of Stock"></span>';
+                } else if (oBal <= 5) {
+                    statusDot = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--warning); margin-right:8px;" title="Low Stock (${oBal} ${item.unit})"></span>`;
+                } else {
+                    statusDot = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--success); margin-right:8px;" title="In Stock (${oBal} ${item.unit})"></span>`;
+                }
+            }
             
             if (selectedStore !== 'all') {
-                const consumed = (item.consumed && item.consumed[o.id]) ? item.consumed[o.id] : 0;
-                const balance = qty - consumed;
-                let balColor = balance === 0 && qty > 0 ? 'var(--text-muted)' : (balance <= 5 && qty > 0 ? 'var(--warning)' : 'var(--text-main)');
+                // Store-specific row: Item, Vendor, Cuisine, Consumed, Storage Balance, Actions
+                const oAlloc = (item.allocations && item.allocations[selectedStore]) || 0;
+                const oCons = (item.consumed && item.consumed[selectedStore]) || 0;
+                const oBal = oAlloc - oCons;
+                let balColor = oBal <= 0 && oAlloc > 0 ? 'var(--danger)' : (oBal <= 5 && oAlloc > 0 ? 'var(--warning)' : 'var(--text-main)');
+
+                let rowHtml = `
+                    <td>
+                        <div style="display:flex; align-items:center;">
+                            ${statusDot}
+                            <div>
+                                <strong>${item.name}</strong>
+                                <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+                                    ${item.category} &bull; ${item.unit}
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                    <td><span style="font-size:0.85rem; color:var(--text-muted);">${item.vendor || '-'}</span></td>
+                    <td style="text-align:center;">
+                        <span style="background: rgba(255,190,11,0.12); color: var(--primary); border: 1px solid rgba(255,190,11,0.25); padding: 2px 8px; border-radius: 4px; font-size: 0.74rem; font-weight: 600; white-space: nowrap;">
+                            ${itemCuisine}
+                        </span>
+                    </td>
+                    <td style="text-align:center; color: var(--danger); font-weight: 600; font-size: 0.9rem;">
+                        ${oAlloc > 0 || oCons > 0 ? `${oCons} <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">${item.unit}</span>` : '<span style="color:var(--text-muted);">-</span>'}
+                    </td>
+                    <td style="text-align:center; color: ${balColor}; font-weight: 700; font-size: 0.92rem;">
+                        ${oAlloc > 0 ? `${oBal} <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">${item.unit}</span>` : '<span style="color:var(--text-muted);">-</span>'}
+                    </td>
+                `;
+                if (currentUser.role === 'admin') {
+                    rowHtml += `<td style="text-align:center;"><button class="icon-btn text-danger" onclick="deleteItem('${item.id}')" title="Delete Item"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button></td>`;
+                }
+                tr.innerHTML = rowHtml;
+                tbody.appendChild(tr);
+            } else {
+                // Overall row
+                let rowHtml = `
+                    <td>
+                        <div style="display:flex; align-items:center;">
+                            ${statusDot}
+                            <div>
+                                <strong>${item.name}</strong>
+                                <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+                                    ${item.category} &bull; ${item.unit} &bull; <span style="color: var(--primary); font-weight: 500;">${itemCuisine}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                    <td><span style="font-size:0.85rem; color:var(--text-muted);">${item.vendor || '-'}</span></td>
+                    <td style="text-align:center; color:var(--text-muted);"><strong>${item.bought || 0}</strong></td>
+                `;
                 
-                rowHtml += `<td style="text-align:center; color: var(--danger); opacity: 0.8;">${qty > 0 ? consumed : '-'}</td>`;
-                rowHtml += `<td style="text-align:center; color: ${balColor};"><strong>${qty > 0 ? balance : '-'}</strong></td>`;
+                let totalAllocated = 0;
+                displayOutlets.forEach(o => {
+                    const qty = (item.allocations && item.allocations[o.id]) || 0;
+                    let alpha = qty > 0 ? 0.15 + (qty / 50) : 0;
+                    if (alpha > 0.6) alpha = 0.6;
+                    let bgStyle = qty > 0 ? `background: rgba(52, 211, 153, ${alpha});` : '';
+                    rowHtml += `<td style="text-align:center; ${bgStyle}">${qty > 0 ? qty : '-'}</td>`;
+                });
+                
+                visibleOutlets.forEach(o => {
+                    totalAllocated += ((item.allocations && item.allocations[o.id]) || 0);
+                });
+
+                const balance = (item.bought || 0) - totalAllocated;
+                let balanceColor = 'var(--text-main)';
+                if (balance < 0) balanceColor = 'var(--danger)';
+                if (balance === 0) balanceColor = 'var(--text-muted)';
+                
+                rowHtml += `<td class="no-chef" style="text-align:center;"><strong>${totalAllocated}</strong></td>`;
+                rowHtml += `<td style="text-align:center; color:${balanceColor};"><strong>${balance}</strong></td>`;
+                if (currentUser.role === 'admin') {
+                    rowHtml += `<td style="text-align:center;"><button class="icon-btn text-danger" onclick="deleteItem('${item.id}')" title="Delete Item"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button></td>`;
+                }
+                tr.innerHTML = rowHtml;
+                tbody.appendChild(tr);
             }
         });
-        
-        visibleOutlets.forEach(o => {
-            totalAllocated += ((item.allocations && item.allocations[o.id]) || 0);
-        });
-
-        const balance = (item.bought || 0) - totalAllocated;
-        let balanceColor = 'var(--text-main)';
-        if (balance < 0) balanceColor = 'var(--danger)';
-        if (balance === 0) balanceColor = 'var(--text-muted)';
-        
-        if (selectedStore === 'all') {
-            rowHtml += `<td class="no-chef" style="text-align:center;"><strong>${totalAllocated}</strong></td>`;
-            rowHtml += `<td style="text-align:center; color:${balanceColor};"><strong>${balance}</strong></td>`;
-        }
-        if (currentUser.role === 'admin') {
-            rowHtml += `<td style="text-align:center;"><button class="icon-btn text-danger" onclick="deleteItem('${item.id}')" title="Delete Item"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button></td>`;
-        }
-        
-        tr.innerHTML = rowHtml;
-        tbody.appendChild(tr);
-    });
+    }
 
     // 4. Update Form Dropdowns & Filter Controls
+    updateCuisineFilterSelect();
     updateFormSelects(visibleOutlets);
     if (typeof lucide !== 'undefined') {
         lucide.createIcons();
@@ -1253,6 +1425,12 @@ window.openAddItemModal = function() {
     if (nameInput) nameInput.value = '';
     if (unitInput) unitInput.value = '';
     if (boughtInput) boughtInput.value = '';
+
+    const suggestionsBox = document.getElementById('newItemSuggestions');
+    if (suggestionsBox) {
+        suggestionsBox.classList.add('hidden');
+        suggestionsBox.innerHTML = '';
+    }
     
     modal.classList.remove('hidden');
     if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -1262,13 +1440,178 @@ window.openAddItemModal = function() {
 window.closeAddItemModal = function() {
     const modal = document.getElementById('modalAddItem');
     if (modal) modal.classList.add('hidden');
+    const navAddItems = document.getElementById('navAddItems');
+    if (navAddItems) navAddItems.classList.remove('active');
+    const suggestionsBox = document.getElementById('newItemSuggestions');
+    if (suggestionsBox) {
+        suggestionsBox.classList.add('hidden');
+        suggestionsBox.innerHTML = '';
+    }
 };
+
+function initItemNameSuggestions() {
+    const input = document.getElementById('newItemName');
+    const box = document.getElementById('newItemSuggestions');
+    if (!input || !box) return;
+
+    let currentMatches = [];
+    let hoveredIndex = -1;
+
+    function escapeHtml(str) {
+        return (str || '').replace(/[&<>"']/g, m => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[m]));
+    }
+
+    function closeSuggestions() {
+        box.classList.add('hidden');
+        box.style.display = 'none';
+        box.innerHTML = '';
+        currentMatches = [];
+        hoveredIndex = -1;
+    }
+
+    function selectItem(item) {
+        if (!item) return;
+        input.value = item.name;
+        
+        // Auto-select unit from database item behind the scenes
+        const unitEl = document.getElementById('newItemUnit');
+        if (unitEl && item.unit) {
+            const opt = Array.from(unitEl.options).find(o => o.value.toLowerCase() === item.unit.toLowerCase());
+            if (opt) unitEl.value = opt.value;
+        }
+
+        // Auto-select category from database item behind the scenes
+        const catEl = document.getElementById('newItemCategory');
+        if (catEl && item.category) {
+            const opt = Array.from(catEl.options).find(o => o.value.toLowerCase() === item.category.toLowerCase());
+            if (opt) catEl.value = opt.value;
+        }
+
+        // Auto-select supplier/vendor from database item behind the scenes
+        const vendorEl = document.getElementById('newItemVendor');
+        if (vendorEl && item.vendor) {
+            const opt = Array.from(vendorEl.options).find(o => o.value.toLowerCase() === item.vendor.toLowerCase());
+            if (opt) vendorEl.value = opt.value;
+        }
+
+        // Auto-select cuisine section from database item behind the scenes
+        const cui = item.cuisine || getItemCuisine(item);
+        const cuiEl = document.getElementById('newItemCuisine');
+        if (cuiEl && cui) {
+            const opt = Array.from(cuiEl.options).find(o => o.value.toLowerCase() === cui.toLowerCase());
+            if (opt) cuiEl.value = opt.value;
+        }
+
+        closeSuggestions();
+    }
+
+    function renderSuggestions() {
+        const query = (input.value || '').trim().toLowerCase();
+        if (!query) {
+            closeSuggestions();
+            return;
+        }
+
+        // Suggestions based ONLY on items present in the DB
+        const dbItems = Array.isArray(masterItemsData) ? masterItemsData : [];
+        const seen = new Set();
+        const matches = [];
+        for (const item of dbItems) {
+            if (!item || !item.name) continue;
+            const nameLower = item.name.toLowerCase();
+            if (nameLower.includes(query) && !seen.has(nameLower)) {
+                seen.add(nameLower);
+                matches.push(item);
+            }
+        }
+
+        if (matches.length === 0) {
+            closeSuggestions();
+            return;
+        }
+
+        currentMatches = matches;
+        hoveredIndex = 0;
+        box.innerHTML = '';
+
+        matches.forEach((item, idx) => {
+            const row = document.createElement('div');
+            row.className = 'suggestion-item' + (idx === 0 ? ' active' : '');
+            row.dataset.index = idx;
+            row.style.cssText = 'padding: 8px 12px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 0.88rem;';
+            
+            const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+            const highlightedName = escapeHtml(item.name).replace(regex, '<span style="color: var(--primary); font-weight: 700;">$1</span>');
+            
+            row.innerHTML = `
+                <i data-lucide="package" style="width: 14px; height: 14px; color: var(--primary); flex-shrink: 0;"></i>
+                <span style="color: #fff; font-weight: 500;">${highlightedName}</span>
+            `;
+
+            row.addEventListener('mouseenter', () => {
+                hoveredIndex = idx;
+                const rows = box.querySelectorAll('.suggestion-item');
+                rows.forEach((r, i) => {
+                    if (i === idx) r.classList.add('active');
+                    else r.classList.remove('active');
+                });
+            });
+
+            row.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                selectItem(item);
+            });
+
+            row.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                selectItem(item);
+            });
+
+            box.appendChild(row);
+        });
+
+        box.classList.remove('hidden');
+        box.style.display = 'block';
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    input.addEventListener('input', () => {
+        renderSuggestions();
+    });
+
+    input.addEventListener('keydown', (e) => {
+        if (box.classList.contains('hidden') || currentMatches.length === 0) return;
+
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const targetItem = (hoveredIndex >= 0 && currentMatches[hoveredIndex])
+                ? currentMatches[hoveredIndex]
+                : currentMatches[0];
+            if (targetItem) {
+                selectItem(targetItem);
+            }
+        } else if (e.key === 'Escape') {
+            closeSuggestions();
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!input.contains(e.target) && !box.contains(e.target)) {
+            closeSuggestions();
+        }
+    });
+}
 
 // ============================================================
 // FORMS LOGIC
 // ============================================================
 function initForms() {
     initCustomDatePicker();
+    initItemNameSuggestions();
 
     const allocBtn = document.getElementById('allocateBtn');
     if (allocBtn) {
@@ -1407,12 +1750,14 @@ function initForms() {
             const nameEl = document.getElementById('newItemName');
             const unitEl = document.getElementById('newItemUnit');
             const catEl = document.getElementById('newItemCategory');
+            const cuiEl = document.getElementById('newItemCuisine');
             const vendorEl = document.getElementById('newItemVendor');
             const boughtEl = document.getElementById('newItemBought');
 
             const name = nameEl ? nameEl.value.trim() : '';
             const unit = unitEl ? unitEl.value.trim() : '';
             const cat = catEl ? catEl.value : 'Grocery';
+            const cui = cuiEl ? cuiEl.value : 'Indian';
             const vendor = vendorEl ? vendorEl.value : '';
             const bought = boughtEl ? (parseInt(boughtEl.value) || 0) : 0;
             
@@ -1435,6 +1780,7 @@ function initForms() {
                 name,
                 unit: unit || 'pcs',
                 category: cat,
+                cuisine: cui || 'Indian',
                 vendor: vendor || (typeof vendorsData !== 'undefined' && vendorsData[0] ? vendorsData[0].name : 'Royal Supplies'),
                 bought,
                 allocations: {},
@@ -1464,6 +1810,14 @@ function initForms() {
     if (navAddItems) {
         navAddItems.addEventListener('click', (e) => {
             e.preventDefault();
+            e.stopPropagation();
+            const navStock = document.getElementById('navStock');
+            const navStockSubmenu = document.getElementById('navStockSubmenu');
+            const navStockChevron = document.getElementById('navStockChevron');
+            if (navStockSubmenu) navStockSubmenu.classList.add('open');
+            if (navStockChevron) navStockChevron.style.transform = 'rotate(180deg)';
+            if (navStock) navStock.classList.add('active');
+            navAddItems.classList.add('active');
             if (currentView !== 'viewMasterOrders' && typeof window.switchToView === 'function') {
                 window.switchToView('viewMasterOrders');
             }
@@ -1471,13 +1825,6 @@ function initForms() {
         });
     }
 
-    const btnHeaderAddItem = document.getElementById('btnHeaderAddItem');
-    if (btnHeaderAddItem) {
-        btnHeaderAddItem.addEventListener('click', (e) => {
-            e.preventDefault();
-            openAddItemModal();
-        });
-    }
 
     const closeAddItemModalBtn = document.getElementById('closeAddItemModalBtn');
     if (closeAddItemModalBtn) {
@@ -1799,6 +2146,7 @@ function updateFormSelects(visibleOutlets) {
         btnReset.addEventListener('click', (e) => {
             e.preventDefault();
             currentStoreView = 'all';
+            currentCuisineFilter = 'all';
             loadDashboardData();
         });
         btnReset.dataset.bound = 'true';
@@ -2549,7 +2897,7 @@ function loadRequestsData() {
                     : '';
 
                 sectionsHtml += `
-                    <div class="panel" style="padding: 18px 20px; border-radius: 12px; background: rgba(26, 22, 11, 0.85); border: 1px solid var(--border); box-shadow: 0 4px 16px rgba(0,0,0,0.25);">
+                    <div class="panel" style="padding: 18px 20px; border-radius: 12px; background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border); box-shadow: 0 4px 16px rgba(0,0,0,0.25);">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 10px;">
                             <div style="display: flex; align-items: center; gap: 10px;">
                                 <span style="font-size: 1.4rem;">${icon}</span>

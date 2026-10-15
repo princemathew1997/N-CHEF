@@ -1,17 +1,17 @@
 :root {
     --primary: #FFBE0B;
     --primary-hover: #e0a800;
-    --dark-bg: #1e190d;
-    --dark: #2A2312;
+    --dark-bg: #09090b;
+    --dark: #121214;
     --text-main: #fcfcfc;
-    --text-muted: #a39c89;
+    --text-muted: #a1a1aa;
     
     --success: #34d399;
     --danger: #ef4444;
     --warning: #fbbf24;
 
-    --panel-bg: rgba(42, 35, 18, 0.7);
-    --border: rgba(255, 190, 11, 0.15);
+    --panel-bg: rgba(18, 18, 20, 0.82);
+    --border: rgba(255, 190, 11, 0.16);
     
     --font-family: 'Inter', sans-serif;
 }
@@ -35,7 +35,7 @@
 body {
     font-size: 11.5px; /* Scaled down base font size to fit more content */
     font-family: var(--font-family);
-    background: linear-gradient(135deg, var(--dark-bg) 0%, var(--dark) 100%);
+    background: linear-gradient(135deg, #070708 0%, #111113 100%);
     color: var(--text-main);
     height: 100vh;
     overflow: hidden;
@@ -98,7 +98,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 .btn-primary {
     background: var(--primary);
-    color: var(--dark);
+    color: #0d0d0f;
 }
 .btn-primary:hover {
     background: var(--primary-hover);
@@ -325,7 +325,7 @@ label {
 
 /* Sidebar */
 .sidebar {
-    background: var(--dark);
+    background: #0d0d0f;
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
@@ -363,8 +363,9 @@ label {
     background: rgba(255, 190, 11, 0.05);
 }
 .nav-item.active {
-    color: var(--dark);
+    color: #0d0d0f;
     background: var(--primary);
+    font-weight: 700;
 }
 .nav-submenu {
     display: none;
@@ -787,14 +788,14 @@ tbody tr:hover {
 }
 .outlet-pill.active {
     background: var(--primary);
-    color: #1a1712 !important;
+    color: #0d0d0f !important;
     font-weight: 700;
     border-color: var(--primary);
     box-shadow: 0 0 12px rgba(255, 190, 11, 0.35);
 }
 #storeViewTrigger:hover {
     border-color: var(--primary);
-    background: rgba(42, 35, 18, 1);
+    background: rgba(28, 28, 30, 1);
 }
 #btnResetOutletFilter:hover {
     background: rgba(255, 255, 255, 0.08);
@@ -813,3 +814,60 @@ body.database-saving::after {
     font-weight: 700;
     cursor: wait;
 }
+
+/* Item Name Suggestions Dropdown */
+#newItemSuggestions {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 190, 11, 0.3) transparent;
+}
+#newItemSuggestions::-webkit-scrollbar {
+    width: 6px;
+}
+#newItemSuggestions::-webkit-scrollbar-thumb {
+    background: rgba(255, 190, 11, 0.3);
+    border-radius: 4px;
+}
+.suggestion-item {
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    transition: all 0.15s ease;
+    font-size: 0.85rem;
+}
+.suggestion-item:hover, .suggestion-item.active {
+    background: rgba(255, 190, 11, 0.16) !important;
+}
+
+/* Inline Cuisine Filter Select */
+.cuisine-select {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-main);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 3px 10px;
+    font-size: 0.74rem;
+    font-weight: 600;
+    outline: none;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.cuisine-select:hover {
+    border-color: rgba(255, 190, 11, 0.4);
+    background: rgba(255, 190, 11, 0.08);
+}
+.cuisine-select.active {
+    background: rgba(255, 190, 11, 0.15);
+    border-color: var(--primary);
+    color: var(--primary);
+    box-shadow: 0 0 10px rgba(255, 190, 11, 0.2);
+}
+.cuisine-select option {
+    background: #18181b;
+    color: #ffffff;
+}
+
+
