@@ -5,7 +5,7 @@ export async function readState(db) {
   const queries = entities.map(entity => entity === 'users'
     ? 'SELECT id, username, name, role, title, profile_json FROM users WHERE active = 1 ORDER BY created_at DESC'
     : `SELECT payload_json FROM ${entity} WHERE ${['requests', 'indents', 'purchase_orders'].includes(entity) ? 'deleted = 0' : 'active = 1'} ORDER BY rowid DESC`);
-  const result = await db.batch([...queries.map(q => db.prepare(q)), db.prepare('SELECT id, name FROM cuisines'), db.prepare('SELECT revision FROM app_revision WHERE id = 1')]);
+  const result = await db.batch([...queries.map(q => db.prepare(q)), db.prepare('SELECT id, name FROM cuisines'), db.prepare('SELECT revision FROM app_revision WHERE id = 1'), db.prepare('SELECT * FROM outlet_stock'), db.prepare('SELECT * FROM legacy_stock'), db.prepare('SELECT * FROM outlet_stock_history ORDER BY created_at DESC, rowid DESC')]);
   const state = {};
   entities.forEach((entity, i) => {
     state[entity] = result[i].results.map(row => entity === 'users'
@@ -14,16 +14,16 @@ export async function readState(db) {
   });
   state.cuisines = result[entities.length].results;
   state.revision = result[entities.length + 1].results[0].revision;
+  const stock = result.slice(entities.length + 2);
+  state.outletStock = stock[0].results;
+  state.legacyStock = stock[1].results;
+  state.stockHistory = stock[2].results;
   return state;
 }
 
 const query = (db, sql, ...values) => db.prepare(sql).bind(...values);
-function balances(item, outlets) {
-  const allocated = Object.values(item.allocations || {}).reduce((s, q) => s + q, 0);
-  return { central: item.bought - allocated, ...Object.fromEntries(outlets.map(o => [o.id, (item.allocations?.[o.id] || 0) - (item.consumed?.[o.id] || 0)])) };
-}
 
-export async function persistChanges(db, state, next, touched, actor, operationId) {
+export async function persistChanges(db, state, next, touched, actor, operationId, stock = null) {
   const writes = [
     query(db, 'INSERT INTO revision_guards VALUES (?, ?)', operationId, state.revision),
     query(db, 'INSERT INTO command_receipts (id, actor_id, expected_revision, created_at) VALUES (?, ?, ?, ?)', operationId, actor.id, state.revision, Math.floor(Date.now() / 1000)),
@@ -56,12 +56,6 @@ export async function persistChanges(db, state, next, touched, actor, operationI
       } else if (entity === 'items') {
         const vendor = next.vendors.find(v => v.name === data.vendor);
         writes.push(query(db, 'INSERT INTO items (id, name, category, vendor_id, unit, payload_json) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, category = excluded.category, vendor_id = excluded.vendor_id, unit = excluded.unit, payload_json = excluded.payload_json, version = items.version + 1', key, data.name, data.category, vendor.id, data.unit, JSON.stringify(data)));
-        const previousBalances = old ? balances(old, next.outlets) : {};
-        for (const [location, qty] of Object.entries(balances(data, next.outlets))) {
-          writes.push(query(db, 'INSERT INTO inventory_balances (item_id, location_id, quantity) VALUES (?, ?, ?) ON CONFLICT(item_id, location_id) DO UPDATE SET quantity = excluded.quantity, version = inventory_balances.version + 1', key, location, Math.max(0, qty)));
-          const delta = qty - (previousBalances[location] || 0);
-          if (Math.abs(delta) > 1e-8) writes.push(query(db, 'INSERT INTO stock_movements (id, operation_id, item_id, location_id, delta, reason, actor_id) VALUES (?, ?, ?, ?, ?, ?, ?)', crypto.randomUUID(), operationId, key, location, delta, 'inventory-command', actor.id));
-        }
       } else if (entity === 'indents') {
         writes.push(query(db, 'INSERT INTO indents (id, indent_number, outlet_id, supervisor_id, status, payload_json) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET status = excluded.status, payload_json = excluded.payload_json, version = indents.version + 1, updated_at = strftime(\'%Y-%m-%dT%H:%M:%fZ\', \'now\')', key, data.indentNumber, data.outletId, data.ownerId || old?.ownerId || actor.id, data.status, JSON.stringify(data)));
         writes.push(query(db, 'DELETE FROM indent_items WHERE indent_id = ?', key));
@@ -76,6 +70,17 @@ export async function persistChanges(db, state, next, touched, actor, operationI
       }
       writes.push(query(db, 'INSERT INTO audit_events (id, actor_id, action, entity_type, entity_id, details_json) VALUES (?, ?, ?, ?, ?, ?)', crypto.randomUUID(), actor.id, old ? 'update' : 'create', entity, key, JSON.stringify({ operationId })));
     }
+  }
+  if (stock) {
+    for (const balance of stock.outletStock) {
+      const previous = state.outletStock.find(s => s.item_id === balance.item_id && s.outlet_id === balance.outlet_id);
+      if (previous?.quantity === balance.quantity) continue;
+      writes.push(query(db, 'INSERT INTO outlet_stock VALUES (?, ?, ?) ON CONFLICT(item_id,outlet_id) DO UPDATE SET quantity=excluded.quantity', balance.item_id, balance.outlet_id, balance.quantity));
+    }
+    for (const legacy of stock.legacyStock) {
+      if (state.legacyStock.find(s => s.item_id === legacy.item_id)?.quantity !== legacy.quantity || state.legacyStock.find(s => s.item_id === legacy.item_id)?.issue !== legacy.issue) writes.push(query(db, 'UPDATE legacy_stock SET quantity=?, issue=? WHERE item_id=?', legacy.quantity, legacy.issue, legacy.item_id));
+    }
+    for (const m of stock.movements) writes.push(query(db, 'INSERT INTO outlet_stock_history (id,operation_id,item_id,outlet_id,delta,quantity,kind,reason,cuisine,vendor,item_name,unit,actor_id,actor_name) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)', crypto.randomUUID(), operationId, m.item_id, m.outlet_id, m.delta, m.quantity, m.kind, m.reason, m.cuisine, m.vendor, m.item_name, m.unit, actor.id, actor.name));
   }
   for (const t of touched.filter(t => !t.data)) writes.push(query(db, 'INSERT INTO audit_events (id, actor_id, action, entity_type, entity_id) VALUES (?, ?, ?, ?, ?)', crypto.randomUUID(), actor.id, 'deactivate', t.entity, t.key));
   writes.push(query(db, 'DELETE FROM revision_guards WHERE command_id = ?', operationId), query(db, 'UPDATE app_revision SET revision = revision + 1 WHERE id = 1'));

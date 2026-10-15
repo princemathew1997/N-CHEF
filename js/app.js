@@ -4,7 +4,7 @@
 let currentUser = null;
 let customDateSelected = '';
 let currentView = 'viewMasterOrders';
-let currentStoreView = 'all';
+let currentStoreView = '';
 let currentCuisineFilter = 'all';
 
 // ============================================================
@@ -291,7 +291,7 @@ function initKeyboardShortcuts() {
         let newView = null;
         
         switch(key) {
-            case 'o': newView = 'all'; break;
+
             case 'b': newView = 'brigade'; break;
             case 'v': newView = 'vidyaranyapura'; break;
             case 'm': newView = 'ms-palya'; break;
@@ -301,7 +301,7 @@ function initKeyboardShortcuts() {
         
         if (newView) {
             // Only update if the user has access to this location or it's 'all'
-            if (newView === 'all' || currentUser.assignedLocations.includes('all') || currentUser.assignedLocations.includes(newView)) {
+            if (currentUser.role === 'admin' || currentUser.assignedLocations.includes('all') || currentUser.assignedLocations.includes(newView)) {
                 currentStoreView = newView;
                 loadDashboardData(); // Rebuilds the table, metrics, and dropdown to reflect active state
             }
@@ -393,6 +393,7 @@ function initParticles() {
 // ============================================================
 function applyLoggedInUser(user, targetView = null) {
     currentUser = user;
+    window.OutletSelection?.restore();
     
     // Populate profile in sidebar
     const nameEl = document.getElementById('userName');
@@ -568,6 +569,8 @@ window.switchToView = function(viewName, subDivision = null) {
     const viewUsers = document.getElementById('viewUsers');
     const viewAddChef = document.getElementById('viewAddChef');
 
+    document.getElementById("viewInventory")?.classList.add("hidden");
+    document.querySelectorAll('[data-inventory]').forEach(a => a.classList.remove('active'));
     // Hide all views & deactivate nav items
     [viewMaster, viewRequests, viewConsolidateRequests, viewIndents, viewChef, viewVendors, viewLocations, viewUsers, viewAddChef].forEach(v => {
         if (v) v.classList.add('hidden');
@@ -613,6 +616,7 @@ window.switchToView = function(viewName, subDivision = null) {
     if (mobileDrawer) mobileDrawer.classList.remove('mobile-open');
     if (mobileBackdrop) mobileBackdrop.classList.add('hidden');
 
+    if (window.showInventoryView?.(viewName)) return;
     switch(viewName) {
         case 'viewMasterOrders':
             if (viewMaster) viewMaster.classList.remove('hidden');
@@ -642,6 +646,7 @@ window.switchToView = function(viewName, subDivision = null) {
             if (viewIndents) viewIndents.classList.remove('hidden');
             if (navIndents) navIndents.classList.add('active');
             loadIndentsData();
+            renderVendorPOTable();
             break;
 
         case 'viewChefPortal':
@@ -1203,490 +1208,14 @@ function updateCuisineFilterSelect() {
 }
 
 function loadDashboardData() {
-    const visibleOutlets = getVisibleOutlets();
-    if (currentStoreView !== 'all' && !visibleOutlets.some(o => o.id === currentStoreView)) {
-        currentStoreView = 'all';
-    }
-    const selectedStore = currentStoreView;
-
-    let displayOutlets = visibleOutlets;
-    if (selectedStore !== 'all') {
-        displayOutlets = visibleOutlets.filter(o => o.id === selectedStore);
-    }
-
-    // Filter items by cuisine
-    let filteredItems = masterItemsData.slice();
-    if (currentCuisineFilter !== 'all') {
-        filteredItems = filteredItems.filter(item => {
-            const c = getItemCuisine(item, selectedStore);
-            return c.toLowerCase() === currentCuisineFilter.toLowerCase();
-        });
-    }
-
-    // Sort cuisine-wise (by cuisine, then by item name)
-    filteredItems.sort((a, b) => {
-        const cA = getItemCuisine(a, selectedStore);
-        const cB = getItemCuisine(b, selectedStore);
-        if (cA.localeCompare(cB) !== 0) return cA.localeCompare(cB);
-        return a.name.localeCompare(b.name);
-    });
-    
-    // 1. Update Metrics
-    const metricTotalEl = document.getElementById('metricTotalItems');
-    const metricActiveEl = document.getElementById('metricActiveOutlets');
-    const metricLowEl = document.getElementById('metricLowStock');
-    const labelTotalEl = document.getElementById('metricTotalItemsLabel');
-    const labelOutletsEl = document.getElementById('metricActiveOutletsLabel');
-    const labelLowEl = document.getElementById('metricLowStockLabel');
-    const btnReset = document.getElementById('btnResetOutletFilter');
-
-    if (selectedStore === 'all') {
-        if (labelTotalEl) labelTotalEl.textContent = currentCuisineFilter === 'all' ? 'Total Items Managed' : `Items (${currentCuisineFilter})`;
-        if (labelOutletsEl) labelOutletsEl.textContent = 'Active Outlets';
-        if (labelLowEl) labelLowEl.textContent = 'Low Stock Items';
-        
-        if (metricTotalEl) metricTotalEl.textContent = filteredItems.length;
-        if (metricActiveEl) metricActiveEl.textContent = visibleOutlets.length;
-        
-        let lowStockCount = 0;
-        filteredItems.forEach(item => {
-            if (getItemStatus(item) === 'Low Stock' || getItemStatus(item) === 'Pending PO') {
-                lowStockCount++;
-            }
-        });
-        if (metricLowEl) metricLowEl.textContent = lowStockCount;
-        if (btnReset) btnReset.classList.add('hidden');
-    } else {
-        const selOutletObj = visibleOutlets.find(o => o.id === selectedStore);
-        const selName = selOutletObj ? selOutletObj.name : selectedStore.toUpperCase();
-        
-        const itemsInStore = filteredItems.filter(i => (i.allocations && (i.allocations[selectedStore] || 0) > 0)).length;
-        
-        let storeLowStock = 0;
-        filteredItems.forEach(item => {
-            const alloc = (item.allocations && item.allocations[selectedStore]) || 0;
-            const cons = (item.consumed && item.consumed[selectedStore]) || 0;
-            const bal = alloc - cons;
-            if (alloc > 0 && bal <= 5) {
-                storeLowStock++;
-            }
-        });
-        
-        if (labelTotalEl) labelTotalEl.textContent = currentCuisineFilter === 'all' ? `Items in ${selName}` : `${currentCuisineFilter} in ${selName}`;
-        if (labelOutletsEl) labelOutletsEl.textContent = 'Filtered Outlet';
-        if (labelLowEl) labelLowEl.textContent = `Low Stock (${selName})`;
-        
-        if (metricTotalEl) metricTotalEl.textContent = itemsInStore;
-        if (metricActiveEl) metricActiveEl.innerHTML = `<span style="font-size: 1.05rem; color: var(--primary); font-weight: 700;">${selName}</span>`;
-        if (metricLowEl) metricLowEl.textContent = storeLowStock;
-        if (btnReset) btnReset.classList.remove('hidden');
-    }
-
-    // 2. Build Table Headers
-    const thead = document.getElementById('inventoryTableHeader');
-    if (selectedStore !== 'all') {
-        // Store View: Items, Vendor, Cuisine, Consumed, Storage Balance, Actions
-        thead.innerHTML = `
-            <th>Item</th>
-            <th>Vendor</th>
-            <th style="text-align:center;">Cuisine</th>
-            <th style="text-align:center;">Consumed</th>
-            <th style="text-align:center;">Storage Balance</th>
-        `;
-        if (currentUser.role === 'admin') {
-            thead.innerHTML += `<th style="text-align:center;">Actions</th>`;
-        }
-    } else {
-        // Overall View: Item, Vendor, Bought, [outlets], Allocated, Balance, Actions
-        thead.innerHTML = `
-            <th>Item</th>
-            <th>Vendor</th>
-            <th style="text-align:center;">Bought</th>
-        `;
-        const abbreviate = (name) => {
-            if (name === 'VIDYARANYAPURA') return 'VIDYA';
-            if (name === 'BRIGADE') return 'BRG';
-            if (name === 'YELAHANKA') return 'YLH';
-            if (name === 'MS PALYA') return 'MSP';
-            return name;
-        };
-        displayOutlets.forEach(o => {
-            thead.innerHTML += `<th style="text-align:center;">${abbreviate(o.name)}</th>`;
-        });
-        thead.innerHTML += `<th class="no-chef" style="text-align:center;">Allocated</th>`;
-        thead.innerHTML += `<th style="text-align:center;">Balance</th>`;
-        if (currentUser.role === 'admin') {
-            thead.innerHTML += `<th style="text-align:center;">Actions</th>`;
-        }
-    }
-
-    // 3. Build Table Body
-    const tbody = document.getElementById('inventoryTableBody');
-    tbody.innerHTML = '';
-    
-    if (filteredItems.length === 0) {
-        const tr = document.createElement('tr');
-        const colSpan = selectedStore !== 'all' ? (currentUser.role === 'admin' ? 6 : 5) : (displayOutlets.length + (currentUser.role === 'admin' ? 5 : 4));
-        tr.innerHTML = `<td colspan="${colSpan}" style="text-align:center; padding: 28px; color: var(--text-muted); font-size: 0.88rem;">No items found matching the selected cuisine view.</td>`;
-        tbody.appendChild(tr);
-    } else {
-        let lastCuisine = null;
-        filteredItems.forEach(item => {
-            const itemCuisine = getItemCuisine(item, selectedStore);
-
-            // Clean Cuisine Section Divider row for grouped cuisine view
-            if (selectedStore !== 'all' && currentCuisineFilter === 'all' && itemCuisine !== lastCuisine) {
-                lastCuisine = itemCuisine;
-                const cuisineIcons = {
-                    'Indian': '🍛',
-                    'Continental': '🥗',
-                    'Tandoor': '🍢',
-                    'Chinese': '🍲',
-                    'Arabic': '🫓',
-                    'Kerala': '🥥'
-                };
-                const icon = cuisineIcons[itemCuisine] || '🥘';
-                const count = filteredItems.filter(i => getItemCuisine(i, selectedStore) === itemCuisine).length;
-                
-                const groupRow = document.createElement('tr');
-                groupRow.style.background = 'rgba(255, 255, 255, 0.025)';
-                groupRow.style.borderTop = '1px solid rgba(255, 255, 255, 0.08)';
-                groupRow.style.borderBottom = '1px solid rgba(255, 255, 255, 0.05)';
-                const colSpan = currentUser.role === 'admin' ? 6 : 5;
-                groupRow.innerHTML = `
-                    <td colspan="${colSpan}" style="padding: 7px 12px; font-size: 0.74rem; font-weight: 700; color: var(--primary); letter-spacing: 0.4px; text-transform: uppercase;">
-                        ${icon} ${itemCuisine} Section <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: normal; margin-left: 6px; text-transform: none;">(${count} item${count === 1 ? '' : 's'})</span>
-                    </td>
-                `;
-                tbody.appendChild(groupRow);
-            }
-
-            const tr = document.createElement('tr');
-
-            let statusDot = '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--success); margin-right:8px;" title="In Stock"></span>';
-            
-            if (selectedStore === 'all') {
-                const st = getItemStatus(item);
-                if (st === 'Low Stock' || st === 'Pending PO') {
-                    statusDot = '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--danger); margin-right:8px;" title="Low Stock"></span>';
-                } else if (st === 'Allocated/Pending PO') {
-                    statusDot = '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--warning); margin-right:8px;" title="Pending"></span>';
-                }
-            } else {
-                const oAlloc = (item.allocations && item.allocations[selectedStore]) || 0;
-                const oCons = (item.consumed && item.consumed[selectedStore]) || 0;
-                const oBal = oAlloc - oCons;
-                if (oAlloc === 0) {
-                    statusDot = '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--text-muted); opacity:0.4; margin-right:8px;" title="Not Allocated"></span>';
-                } else if (oBal <= 0) {
-                    statusDot = '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--danger); margin-right:8px;" title="Out of Stock"></span>';
-                } else if (oBal <= 5) {
-                    statusDot = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--warning); margin-right:8px;" title="Low Stock (${oBal} ${item.unit})"></span>`;
-                } else {
-                    statusDot = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--success); margin-right:8px;" title="In Stock (${oBal} ${item.unit})"></span>`;
-                }
-            }
-            
-            if (selectedStore !== 'all') {
-                // Store-specific row: Item, Vendor, Cuisine, Consumed, Storage Balance, Actions
-                const oAlloc = (item.allocations && item.allocations[selectedStore]) || 0;
-                const oCons = (item.consumed && item.consumed[selectedStore]) || 0;
-                const oBal = oAlloc - oCons;
-                let balColor = oBal <= 0 && oAlloc > 0 ? 'var(--danger)' : (oBal <= 5 && oAlloc > 0 ? 'var(--warning)' : 'var(--text-main)');
-
-                let rowHtml = `
-                    <td>
-                        <div style="display:flex; align-items:center;">
-                            ${statusDot}
-                            <div>
-                                <strong>${item.name}</strong>
-                                <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
-                                    ${item.category} &bull; ${item.unit}
-                                </div>
-                            </div>
-                        </div>
-                    </td>
-                    <td><span style="font-size:0.85rem; color:var(--text-muted);">${item.vendor || '-'}</span></td>
-                    <td style="text-align:center;">
-                        <span style="background: rgba(255,190,11,0.12); color: var(--primary); border: 1px solid rgba(255,190,11,0.25); padding: 2px 8px; border-radius: 4px; font-size: 0.74rem; font-weight: 600; white-space: nowrap;">
-                            ${itemCuisine}
-                        </span>
-                    </td>
-                    <td style="text-align:center; color: var(--danger); font-weight: 600; font-size: 0.9rem;">
-                        ${oAlloc > 0 || oCons > 0 ? `${oCons} <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">${item.unit}</span>` : '<span style="color:var(--text-muted);">-</span>'}
-                    </td>
-                    <td style="text-align:center; color: ${balColor}; font-weight: 700; font-size: 0.92rem;">
-                        ${oAlloc > 0 ? `${oBal} <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">${item.unit}</span>` : '<span style="color:var(--text-muted);">-</span>'}
-                    </td>
-                `;
-                if (currentUser.role === 'admin') {
-                    rowHtml += `<td style="text-align:center;"><button class="icon-btn text-danger" onclick="deleteItem('${item.id}')" title="Delete Item"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button></td>`;
-                }
-                tr.innerHTML = rowHtml;
-                tbody.appendChild(tr);
-            } else {
-                // Overall row
-                let rowHtml = `
-                    <td>
-                        <div style="display:flex; align-items:center;">
-                            ${statusDot}
-                            <div>
-                                <strong>${item.name}</strong>
-                                <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
-                                    ${item.category} &bull; ${item.unit} &bull; <span style="color: var(--primary); font-weight: 500;">${itemCuisine}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </td>
-                    <td><span style="font-size:0.85rem; color:var(--text-muted);">${item.vendor || '-'}</span></td>
-                    <td style="text-align:center; color:var(--text-muted);"><strong>${item.bought || 0}</strong></td>
-                `;
-                
-                let totalAllocated = 0;
-                displayOutlets.forEach(o => {
-                    const qty = (item.allocations && item.allocations[o.id]) || 0;
-                    let alpha = qty > 0 ? 0.15 + (qty / 50) : 0;
-                    if (alpha > 0.6) alpha = 0.6;
-                    let bgStyle = qty > 0 ? `background: rgba(52, 211, 153, ${alpha});` : '';
-                    rowHtml += `<td style="text-align:center; ${bgStyle}">${qty > 0 ? qty : '-'}</td>`;
-                });
-                
-                visibleOutlets.forEach(o => {
-                    totalAllocated += ((item.allocations && item.allocations[o.id]) || 0);
-                });
-
-                const balance = (item.bought || 0) - totalAllocated;
-                let balanceColor = 'var(--text-main)';
-                if (balance < 0) balanceColor = 'var(--danger)';
-                if (balance === 0) balanceColor = 'var(--text-muted)';
-                
-                rowHtml += `<td class="no-chef" style="text-align:center;"><strong>${totalAllocated}</strong></td>`;
-                rowHtml += `<td style="text-align:center; color:${balanceColor};"><strong>${balance}</strong></td>`;
-                if (currentUser.role === 'admin') {
-                    rowHtml += `<td style="text-align:center;"><button class="icon-btn text-danger" onclick="deleteItem('${item.id}')" title="Delete Item"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button></td>`;
-                }
-                tr.innerHTML = rowHtml;
-                tbody.appendChild(tr);
-            }
-        });
-    }
-
-    // 4. Update Form Dropdowns & Filter Controls
-    updateCuisineFilterSelect();
-    updateFormSelects(visibleOutlets);
-    if (typeof lucide !== 'undefined') {
-        lucide.createIcons();
-    }
+    if (!currentUser) return;
+    window.renderOutletDashboard?.();
+    updateFormSelects(getVisibleOutlets());
 }
 
-// ============================================================
-// ADD ITEM MODAL HELPERS
-// ============================================================
-window.openAddItemModal = function() {
-    const modal = document.getElementById('modalAddItem');
-    if (!modal) return;
-    
-    // Ensure vendor dropdown is populated
-    const vendorSel = document.getElementById('newItemVendor');
-    if (vendorSel) {
-        vendorSel.innerHTML = (typeof vendorsData !== 'undefined' && vendorsData && vendorsData.length)
-            ? vendorsData.map(v => `<option value="${v.name}">${v.name}</option>`).join('')
-            : '<option value="Royal Supplies">Royal Supplies</option>';
-    }
-    
-    const nameInput = document.getElementById('newItemName');
-    const unitInput = document.getElementById('newItemUnit');
-    const boughtInput = document.getElementById('newItemBought');
-    if (nameInput) nameInput.value = '';
-    if (unitInput) unitInput.value = '';
-    if (boughtInput) boughtInput.value = '';
-
-    const suggestionsBox = document.getElementById('newItemSuggestions');
-    if (suggestionsBox) {
-        suggestionsBox.classList.add('hidden');
-        suggestionsBox.innerHTML = '';
-    }
-    
-    modal.classList.remove('hidden');
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-    if (nameInput) nameInput.focus();
-};
-
-window.closeAddItemModal = function() {
-    const modal = document.getElementById('modalAddItem');
-    if (modal) modal.classList.add('hidden');
-    const navAddItems = document.getElementById('navAddItems');
-    if (navAddItems) navAddItems.classList.remove('active');
-    const suggestionsBox = document.getElementById('newItemSuggestions');
-    if (suggestionsBox) {
-        suggestionsBox.classList.add('hidden');
-        suggestionsBox.innerHTML = '';
-    }
-};
-
-function initItemNameSuggestions() {
-    const input = document.getElementById('newItemName');
-    const box = document.getElementById('newItemSuggestions');
-    if (!input || !box) return;
-
-    let currentMatches = [];
-    let hoveredIndex = -1;
-
-    function escapeHtml(str) {
-        return (str || '').replace(/[&<>"']/g, m => ({
-            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-        }[m]));
-    }
-
-    function closeSuggestions() {
-        box.classList.add('hidden');
-        box.style.display = 'none';
-        box.innerHTML = '';
-        currentMatches = [];
-        hoveredIndex = -1;
-    }
-
-    function selectItem(item) {
-        if (!item) return;
-        input.value = item.name;
-        
-        // Auto-select unit from database item behind the scenes
-        const unitEl = document.getElementById('newItemUnit');
-        if (unitEl && item.unit) {
-            const opt = Array.from(unitEl.options).find(o => o.value.toLowerCase() === item.unit.toLowerCase());
-            if (opt) unitEl.value = opt.value;
-        }
-
-        // Auto-select category from database item behind the scenes
-        const catEl = document.getElementById('newItemCategory');
-        if (catEl && item.category) {
-            const opt = Array.from(catEl.options).find(o => o.value.toLowerCase() === item.category.toLowerCase());
-            if (opt) catEl.value = opt.value;
-        }
-
-        // Auto-select supplier/vendor from database item behind the scenes
-        const vendorEl = document.getElementById('newItemVendor');
-        if (vendorEl && item.vendor) {
-            const opt = Array.from(vendorEl.options).find(o => o.value.toLowerCase() === item.vendor.toLowerCase());
-            if (opt) vendorEl.value = opt.value;
-        }
-
-        // Auto-select cuisine section from database item behind the scenes
-        const cui = item.cuisine || getItemCuisine(item);
-        const cuiEl = document.getElementById('newItemCuisine');
-        if (cuiEl && cui) {
-            const opt = Array.from(cuiEl.options).find(o => o.value.toLowerCase() === cui.toLowerCase());
-            if (opt) cuiEl.value = opt.value;
-        }
-
-        closeSuggestions();
-    }
-
-    function renderSuggestions() {
-        const query = (input.value || '').trim().toLowerCase();
-        if (!query) {
-            closeSuggestions();
-            return;
-        }
-
-        // Suggestions based ONLY on items present in the DB
-        const dbItems = Array.isArray(masterItemsData) ? masterItemsData : [];
-        const seen = new Set();
-        const matches = [];
-        for (const item of dbItems) {
-            if (!item || !item.name) continue;
-            const nameLower = item.name.toLowerCase();
-            if (nameLower.includes(query) && !seen.has(nameLower)) {
-                seen.add(nameLower);
-                matches.push(item);
-            }
-        }
-
-        if (matches.length === 0) {
-            closeSuggestions();
-            return;
-        }
-
-        currentMatches = matches;
-        hoveredIndex = 0;
-        box.innerHTML = '';
-
-        matches.forEach((item, idx) => {
-            const row = document.createElement('div');
-            row.className = 'suggestion-item' + (idx === 0 ? ' active' : '');
-            row.dataset.index = idx;
-            row.style.cssText = 'padding: 8px 12px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 0.88rem;';
-            
-            const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-            const highlightedName = escapeHtml(item.name).replace(regex, '<span style="color: var(--primary); font-weight: 700;">$1</span>');
-            
-            row.innerHTML = `
-                <i data-lucide="package" style="width: 14px; height: 14px; color: var(--primary); flex-shrink: 0;"></i>
-                <span style="color: #fff; font-weight: 500;">${highlightedName}</span>
-            `;
-
-            row.addEventListener('mouseenter', () => {
-                hoveredIndex = idx;
-                const rows = box.querySelectorAll('.suggestion-item');
-                rows.forEach((r, i) => {
-                    if (i === idx) r.classList.add('active');
-                    else r.classList.remove('active');
-                });
-            });
-
-            row.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                selectItem(item);
-            });
-
-            row.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                selectItem(item);
-            });
-
-            box.appendChild(row);
-        });
-
-        box.classList.remove('hidden');
-        box.style.display = 'block';
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-    }
-
-    input.addEventListener('input', () => {
-        renderSuggestions();
-    });
-
-    input.addEventListener('keydown', (e) => {
-        if (box.classList.contains('hidden') || currentMatches.length === 0) return;
-
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            const targetItem = (hoveredIndex >= 0 && currentMatches[hoveredIndex])
-                ? currentMatches[hoveredIndex]
-                : currentMatches[0];
-            if (targetItem) {
-                selectItem(targetItem);
-            }
-        } else if (e.key === 'Escape') {
-            closeSuggestions();
-        }
-    });
-
-    document.addEventListener('click', (e) => {
-        if (!input.contains(e.target) && !box.contains(e.target)) {
-            closeSuggestions();
-        }
-    });
-}
-
-// ============================================================
-// FORMS LOGIC
-// ============================================================
 function initForms() {
     initCustomDatePicker();
-    initItemNameSuggestions();
+
 
     const allocBtn = document.getElementById('allocateBtn');
     if (allocBtn) {
@@ -1816,105 +1345,6 @@ function initForms() {
     if (cancelEditVendorBtn) {
         cancelEditVendorBtn.addEventListener('click', () => {
             if (typeof resetVendorForm === 'function') resetVendorForm();
-        });
-    }
-    
-    const addItemBtn = document.getElementById('addItemBtn');
-    if(addItemBtn) {
-        addItemBtn.addEventListener('click', async () => {
-            const nameEl = document.getElementById('newItemName');
-            const unitEl = document.getElementById('newItemUnit');
-            const catEl = document.getElementById('newItemCategory');
-            const cuiEl = document.getElementById('newItemCuisine');
-            const vendorEl = document.getElementById('newItemVendor');
-            const boughtEl = document.getElementById('newItemBought');
-
-            const name = nameEl ? nameEl.value.trim() : '';
-            const unit = unitEl ? unitEl.value.trim() : '';
-            const cat = catEl ? catEl.value : 'Grocery';
-            const cui = cuiEl ? cuiEl.value : 'Indian';
-            const vendor = vendorEl ? vendorEl.value : '';
-            const bought = boughtEl ? (parseInt(boughtEl.value) || 0) : 0;
-            
-            if (!name) {
-                if (typeof window.showUiModal === 'function') {
-                    window.showUiModal({
-                        title: 'Required Field',
-                        message: 'Please enter an Item Name.',
-                        type: 'warning'
-                    });
-                } else {
-                    alert('Please enter an Item Name.');
-                }
-                if (nameEl) nameEl.focus();
-                return;
-            }
-            
-            masterItemsData.push({
-                id: 'itm_' + Date.now(),
-                name,
-                unit: unit || 'pcs',
-                category: cat,
-                cuisine: cui || 'Indian',
-                vendor: vendor || (typeof vendorsData !== 'undefined' && vendorsData[0] ? vendorsData[0].name : 'Royal Supplies'),
-                bought,
-                allocations: {},
-                consumed: {}
-            });
-            
-            await saveData();
-            if (nameEl) nameEl.value = '';
-            if (unitEl) unitEl.value = '';
-            if (boughtEl) boughtEl.value = '';
-            
-            closeAddItemModal();
-            loadDashboardData();
-            
-            if (typeof window.showUiModal === 'function') {
-                window.showUiModal({
-                    title: 'Item Added',
-                    message: `"${name}" has been successfully added to Master Inventory.`,
-                    type: 'success'
-                });
-            }
-        });
-    }
-
-    // Modal Add Item Triggers & Handlers
-    const navAddItems = document.getElementById('navAddItems');
-    if (navAddItems) {
-        navAddItems.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const navStock = document.getElementById('navStock');
-            const navStockSubmenu = document.getElementById('navStockSubmenu');
-            const navStockChevron = document.getElementById('navStockChevron');
-            if (navStockSubmenu) navStockSubmenu.classList.add('open');
-            if (navStockChevron) navStockChevron.style.transform = 'rotate(180deg)';
-            if (navStock) navStock.classList.add('active');
-            navAddItems.classList.add('active');
-            if (currentView !== 'viewMasterOrders' && typeof window.switchToView === 'function') {
-                window.switchToView('viewMasterOrders');
-            }
-            openAddItemModal();
-        });
-    }
-
-
-    const closeAddItemModalBtn = document.getElementById('closeAddItemModalBtn');
-    if (closeAddItemModalBtn) {
-        closeAddItemModalBtn.addEventListener('click', closeAddItemModal);
-    }
-
-    const cancelAddItemModalBtn = document.getElementById('cancelAddItemModalBtn');
-    if (cancelAddItemModalBtn) {
-        cancelAddItemModalBtn.addEventListener('click', closeAddItemModal);
-    }
-
-    const modalAddItem = document.getElementById('modalAddItem');
-    if (modalAddItem) {
-        modalAddItem.addEventListener('click', (e) => {
-            if (e.target === modalAddItem) closeAddItemModal();
         });
     }
     
@@ -2088,7 +1518,7 @@ function updateFormSelects(visibleOutlets) {
     const reqItemSel = document.getElementById('reqItem');
     const consumeItemSel = document.getElementById('consumeItem');
     
-    const itemsOptions = '<option value="" disabled selected>Select Item</option>' + masterItemsData.map(i => `<option value="${i.id}">${i.name}</option>`).join('');
+    const itemsOptions = '<option value="" disabled selected>Select Item</option>' + masterItemsData.filter(i => i.active !== false).map(i => `<option value="${i.id}">${i.name}</option>`).join('');
     
     if (itemSel) {
         const cur = itemSel.value;
@@ -2209,105 +1639,7 @@ function updateFormSelects(visibleOutlets) {
         }
     }
     
-    const trigger = document.getElementById('storeViewTrigger');
-    const menu = document.getElementById('storeViewMenu');
-    const textLabel = document.getElementById('storeViewSelectedText');
-    const chevron = document.getElementById('storeViewChevron');
-    const pillsContainer = document.getElementById('outletFilterPills');
-    const btnReset = document.getElementById('btnResetOutletFilter');
-    
-    // Quick Reset Filter Button Handler
-    if (btnReset && !btnReset.dataset.bound) {
-        btnReset.addEventListener('click', (e) => {
-            e.preventDefault();
-            currentStoreView = 'all';
-            currentCuisineFilter = 'all';
-            loadDashboardData();
-        });
-        btnReset.dataset.bound = 'true';
-    }
-
-    if (trigger && menu) {
-        menu.innerHTML = '';
-        const items = [{ id: 'all', name: 'Overall View' }, ...visibleOutlets];
-        
-        items.forEach(item => {
-            const btn = document.createElement('div');
-            const isActive = currentStoreView === item.id;
-            btn.style.cssText = `padding: 8px 12px; cursor: pointer; border-radius: 6px; transition: all 0.2s; font-size: 0.85rem; color: ${isActive ? 'var(--primary)' : 'var(--text-main)'}; background: ${isActive ? 'rgba(255,190,11,0.12)' : 'transparent'}; font-weight: ${isActive ? '600' : '400'}; display: flex; align-items: center; justify-content: space-between; gap: 8px;`;
-            
-            let iconHtml = isActive ? `<i data-lucide="check" style="width: 14px; height: 14px; color: var(--primary);"></i>` : `<span style="width: 14px; display: inline-block;"></span>`;
-            const shortcutChar = item.id === 'all' ? 'O' : (item.name ? item.name[0].toUpperCase() : '');
-            
-            btn.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    ${iconHtml}
-                    <span>${item.name}</span>
-                </div>
-                <kbd style="font-size: 0.65rem; padding: 2px 5px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted); font-family: inherit;">${shortcutChar}</kbd>
-            `;
-            
-            btn.onmouseover = () => { if(!isActive) btn.style.background = 'rgba(255, 255, 255, 0.05)'; };
-            btn.onmouseout = () => { if(!isActive) btn.style.background = 'transparent'; };
-            
-            btn.onclick = (e) => {
-                e.stopPropagation();
-                currentStoreView = item.id;
-                menu.classList.add('hidden');
-                if (chevron) chevron.style.transform = 'rotate(0deg)';
-                loadDashboardData();
-            };
-            menu.appendChild(btn);
-        });
-        
-        const activeItem = items.find(i => i.id === currentStoreView) || items[0];
-        if (textLabel) textLabel.textContent = activeItem.name;
-        
-        if (!trigger.dataset.bound) {
-            trigger.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const isHidden = menu.classList.contains('hidden');
-                menu.classList.toggle('hidden');
-                if (chevron) {
-                    chevron.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
-                }
-            });
-            document.addEventListener('click', (e) => {
-                if (!trigger.contains(e.target) && !menu.contains(e.target)) {
-                    menu.classList.add('hidden');
-                    if (chevron) chevron.style.transform = 'rotate(0deg)';
-                }
-            });
-            trigger.dataset.bound = 'true';
-        }
-    }
-
-    // Populate Outlet Filter Pills above the Inventory Table
-    if (pillsContainer) {
-        pillsContainer.innerHTML = '';
-        const pillItems = [{ id: 'all', name: 'Overall' }, ...visibleOutlets];
-        pillItems.forEach(item => {
-            const pill = document.createElement('button');
-            pill.type = 'button';
-            const isActive = currentStoreView === item.id;
-            pill.className = `outlet-pill ${isActive ? 'active' : ''}`;
-            pill.innerHTML = `<span>${item.name}</span>`;
-            pill.title = `Filter by ${item.name}`;
-            pill.onclick = (e) => {
-                e.preventDefault();
-                currentStoreView = item.id;
-                loadDashboardData();
-            };
-            pillsContainer.appendChild(pill);
-        });
-    }
-
-    // If a specific outlet is filtered, pre-select it in the Receive Stock form
-    const allocOutletSel = document.getElementById('allocOutlet');
-    if (allocOutletSel && currentStoreView !== 'all' && visibleOutlets.some(o => o.id === currentStoreView)) {
-        allocOutletSel.value = currentStoreView;
-    }
-    
+    window.OutletSelection?.renderHeader();
     // Populate Add Item Vendor Dropdown
     const vendorSel = document.getElementById('newItemVendor');
     if (vendorSel) {
@@ -2405,7 +1737,7 @@ function loadChefPortalData() {
         filteredReqs.sort((a, b) => new Date(b.timestamp || b.date || 0) - new Date(a.timestamp || a.date || 0));
         
         tbody.innerHTML = filteredReqs.map(r => {
-            const dateStr = (r.timestamp || r.date) ? new Date(r.timestamp || r.date).toLocaleDateString() : '-';
+            const dateStr = (r.timestamp || r.date) ? InventoryTools.timestamp(r.timestamp || r.date) : '-';
             let statusHtml = '';
             if (r.status === 'Pending') {
                 statusHtml = `<span class="status pending" style="background: rgba(255,190,11,0.15); color: var(--primary); border: 1px solid rgba(255,190,11,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Pending Supervisor</span>`;
@@ -2577,7 +1909,7 @@ function loadRequestsData() {
         headerTitle.innerHTML = `Manage <span class="text-primary">Requests</span>`;
         headerSub.textContent = `Review and approve stock requests forwarded by supervisors or submitted by kitchen staff.`;
     } else if (currentUser.role === 'supervisor') {
-        headerTitle.innerHTML = `Chef <span class="text-primary">Requests</span>`;
+        headerTitle.innerHTML = `Outlet <span class="text-primary">Requests</span>`;
         headerSub.textContent = `Review requests for your allocated outlet and accept items to consolidate.`;
     } else {
         headerTitle.innerHTML = `My <span class="text-primary">Requests</span>`;
@@ -2697,7 +2029,7 @@ function loadRequestsData() {
     }
     if (selDate) {
         viewableRequests = viewableRequests.filter(r => {
-            const reqDateStr = new Date(r.timestamp || r.date).toISOString().split('T')[0];
+            const reqDateStr = InventoryTools.day(r.timestamp || r.date);
             return reqDateStr === selDate;
         });
     }
@@ -2754,7 +2086,7 @@ function loadRequestsData() {
             `;
         } else {
             supTbody.innerHTML = viewableIndents.map(indent => {
-                const totalUnits = (indent.items || []).reduce((sum, item) => sum + (parseFloat(item.revisedQty) || parseFloat(item.originalQty) || 0), 0);
+                const totalUnits = (indent.items || []).reduce((sum, item) => sum + (Number(item.revisedQty ?? item.originalQty) || 0), 0);
                 const itemsCount = (indent.items || []).length;
                 const topItems = (indent.items || []).slice(0, 3).map(it => it.itemName).join(', ');
                 const moreItems = itemsCount > 3 ? ` +${itemsCount - 3} more` : '';
@@ -2876,7 +2208,7 @@ function loadRequestsData() {
 
                 const rowsHtml = reqs.map(r => {
                     const item = masterItemsData.find(i => i.id === r.itemId) || { name: r.itemName || 'Item', unit: r.unit || 'kg' };
-                    const dateStr = (r.timestamp || r.date) ? new Date(r.timestamp || r.date).toLocaleDateString() : '-';
+                    const dateStr = (r.timestamp || r.date) ? InventoryTools.timestamp(r.timestamp || r.date) : '-';
                     const outletName = r.outletName || (outletsData.find(o => o.id === r.outletId)?.name) || 'Branch';
                     
                     const parentIndent = r.indentId ? indentsData.find(i => i.id === r.indentId) : null;
@@ -3027,7 +2359,7 @@ function loadRequestsData() {
     tbody.innerHTML = viewableRequests.map(req => {
         const item = masterItemsData.find(i => i.id === req.itemId) || { name: req.itemName || 'Unknown Item', unit: req.unit || 'pcs' };
         const outlet = outletsData.find(o => o.id === req.outletId) || { name: req.outletName || 'Assigned Store' };
-        const dateStr = (req.timestamp || req.date) ? new Date(req.timestamp || req.date).toLocaleDateString() : '-';
+        const dateStr = (req.timestamp || req.date) ? InventoryTools.timestamp(req.timestamp || req.date) : '-';
         
         const parentIndent = req.indentId ? indentsData.find(i => i.id === req.indentId) : null;
         const indentNum = parentIndent ? (parentIndent.indentNumber || parentIndent.id) : null;
@@ -3184,7 +2516,7 @@ function openConsolidationModal() {
     // Populate new stock item selector
     const newStockSel = document.getElementById('supervisorNewStockItem');
     if (newStockSel) {
-        newStockSel.innerHTML = '<option value="" disabled selected>Select Ingredient</option>' + masterItemsData.map(i => `<option value="${i.id}">${i.name} (${i.unit})</option>`).join('');
+        newStockSel.innerHTML = '<option value="" disabled selected>Select Ingredient</option>' + masterItemsData.filter(i => i.active !== false).map(i => `<option value="${i.id}">${i.name} (${i.unit})</option>`).join('');
     }
     
     // Reset view to step 1
@@ -3432,37 +2764,12 @@ function addSupervisorNewStockItem() {
 // ============================================================
 // Helper to format indent date consistently for table display
 function formatIndentTableDate(indent) {
-    if (indent.date && indent.date !== 'undefined' && String(indent.date).trim() !== '') {
-        return indent.date;
-    }
-    if (indent.createdAt) {
-        try {
-            const d = new Date(indent.createdAt);
-            if (!isNaN(d.getTime())) {
-                const day = String(d.getDate()).padStart(2, '0');
-                const month = String(d.getMonth() + 1).padStart(2, '0');
-                const year = d.getFullYear();
-                return `${day}/${month}/${year}`;
-            }
-        } catch(e) {}
-    }
-    const today = new Date();
-    return `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
+    return indent.createdAt ? InventoryTools.timestamp(indent.createdAt) : (indent.date || '-');
 }
 
 // Helper to extract a standard YYYY-MM-DD key from indent for date comparisons
 function getIndentDateKey(indent) {
-    if (indent.createdAt) {
-        try {
-            const d = new Date(indent.createdAt);
-            if (!isNaN(d.getTime())) {
-                const y = d.getFullYear();
-                const m = String(d.getMonth() + 1).padStart(2, '0');
-                const day = String(d.getDate()).padStart(2, '0');
-                return `${y}-${m}-${day}`;
-            }
-        } catch(e) {}
-    }
+    if (indent.createdAt && !isNaN(Date.parse(indent.createdAt))) return InventoryTools.day(indent.createdAt);
     const dStr = formatIndentTableDate(indent);
     if (/^\d{4}-\d{2}-\d{2}$/.test(dStr)) return dStr;
     const parts = dStr.split('/');
@@ -3477,18 +2784,14 @@ function loadIndentsData() {
     const tbody = document.getElementById('indentsTableBody');
     if (!tbody) return;
     
-    // Normalize any legacy missing or undefined dates
-    indentsData.forEach(ind => {
-        if (!ind.date || ind.date === 'undefined') {
-            ind.date = formatIndentTableDate(ind);
-        }
-    });
-
     // Populate outlet filter options if needed
     const outletFilter = document.getElementById('filterIndentsOutlet');
-    if (outletFilter && outletFilter.options.length <= 1) {
-        const vis = (typeof getVisibleOutlets === 'function') ? getVisibleOutlets() : outletsData;
-        outletFilter.innerHTML = '<option value="all">All Outlets</option>' + vis.map(o => `<option value="${o.id}">${o.name}</option>`).join('');
+    if (outletFilter) {
+        const vis = getVisibleOutlets();
+        const previous = outletFilter.value;
+        outletFilter.disabled = vis.length === 1;
+        outletFilter.innerHTML = (vis.length > 1 ? '<option value="all">All Outlets</option>' : '') + vis.map(o => `<option value="${o.id}">${o.name}</option>`).join('');
+        outletFilter.value = vis.some(o => o.id === previous) ? previous : (vis.length === 1 ? vis[0].id : 'all');
     }
     
     // Attach filter listeners once
@@ -3548,7 +2851,7 @@ function loadIndentsData() {
         else if (indent.status === 'Approved') statusHtml = `<span class="status ok">Approved</span>`;
         else statusHtml = `<span class="status low">Rejected</span>`;
         
-        const totalQty = (indent.items || []).reduce((sum, item) => sum + (parseFloat(item.revisedQty) || parseFloat(item.originalQty) || 0), 0);
+        const totalQty = (indent.items || []).reduce((sum, item) => sum + (Number(item.revisedQty ?? item.originalQty) || 0), 0);
         
         let actionBtn = '';
         if (currentUser && currentUser.role === 'admin') {
@@ -3595,7 +2898,7 @@ function openIndentApprovalModal(indentId) {
     let dateDisplay = '-';
     try {
         const d = new Date(rawDate);
-        dateDisplay = !isNaN(d) ? d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : rawDate;
+        dateDisplay = !isNaN(d) ? InventoryTools.timestamp(d) : rawDate;
     } catch(e) {
         dateDisplay = rawDate;
     }
@@ -3838,7 +3141,7 @@ async function submitVendorPurchaseOrder() {
     const newPO = {
         id: 'po_' + Date.now(),
         poNumber: poNumber,
-        date: new Date().toLocaleDateString(),
+        date: InventoryTools.day(),
         createdAt: new Date().toISOString(),
         indentId: indent.id,
         indentNumber: indent.indentNumber || indent.id,
@@ -3903,7 +3206,7 @@ function renderVendorPOTable() {
         return `
             <tr>
                 <td><strong style="color: var(--primary); font-family: monospace;">${po.poNumber}</strong></td>
-                <td>${po.date || '-'}</td>
+                <td>${po.createdAt ? InventoryTools.timestamp(po.createdAt) : (po.date || '-')}</td>
                 <td><strong style="color: #fff;">${po.vendorName}</strong></td>
                 <td><span style="background: rgba(255,190,11,0.1); color: var(--primary); padding: 2px 7px; border-radius: 4px; font-weight: 600; font-size: 0.78rem;">${po.outletName}</span></td>
                 <td>
@@ -3911,7 +3214,7 @@ function renderVendorPOTable() {
                     <div style="font-size: 0.75rem; color: var(--text-muted); max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${itemsSummary}">${itemsSummary}</div>
                 </td>
                 <td><span class="status ok" style="background: rgba(67, 97, 238, 0.15); color: #4895ef; border: 1px solid rgba(67, 97, 238, 0.3); font-weight: 600; padding: 3px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;"><i data-lucide="truck" style="width: 12px; height: 12px;"></i> ${po.status}</span></td>
-                <td>${po.expectedDelivery || 'Not specified'}</td>
+                <td>${po.expectedDelivery || 'Not specified'} ${po.status !== 'Received' ? `<button class="btn btn-outline" data-receive-po="${po.id}">Receive</button>` : ''}</td>
             </tr>
         `;
     }).join('');
@@ -3919,7 +3222,7 @@ function renderVendorPOTable() {
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-window.openConsolidationModal = openConsolidationModal;
+window.openConsolidationModal = () => window.switchToView('viewConsolidateRequests');
 window.openIndentApprovalModal = openIndentApprovalModal;
 window.openVendorPOModal = openVendorPOModal;
 window.submitVendorPurchaseOrder = submitVendorPurchaseOrder;
@@ -4026,7 +3329,7 @@ window.approveRequest = async function(reqId) {
     
     // Check stock
     const currentTotal = getItemTotalQty(item);
-    const available = (item.bought || 0) - currentTotal;
+    const available = committedState.outletStock.find(s => s.item_id === item.id && s.outlet_id === req.outletId)?.quantity || 0;
     
     const approveQtyStr = await window.showPromptModal(`Requested: ${req.qty}. Available in stock: ${available}.\nEnter amount to allocate:`, Math.min(req.qty, available), "Allocate Stock");
     
@@ -4110,7 +3413,7 @@ window.acceptAllSection = async function(secName) {
         if (r.status !== 'Pending') return false;
         if ((r.cuisine || '').toLowerCase() !== (secName || '').toLowerCase()) return false;
         const rOutletId = (r.outletId || '').toLowerCase();
-        return visIds.includes(rOutletId) || (currentUser.assignedLocations && currentUser.assignedLocations.includes('all'));
+        return rOutletId === outlet.id.toLowerCase();
     });
     
     if (pendingInSec.length === 0) {
@@ -4186,7 +3489,8 @@ let activeWorkspaceConsolidation = {
 window.loadConsolidateWorkspace = function() {
     const vis = getVisibleOutlets();
     const visIds = vis.map(o => (o.id || '').toLowerCase());
-    const outlet = vis[0] || outletsData[0] || { id: 'brigade', name: 'BRIGADE' };
+    const outlet = vis.find(o => o.id === OutletSelection.restore()) || vis[0];
+    if (!outlet) return;
     
     activeWorkspaceConsolidation = {
         outletId: outlet.id,
@@ -4196,13 +3500,6 @@ window.loadConsolidateWorkspace = function() {
     
     const outletNameEl = document.getElementById('wsConsolidateOutletName');
     if (outletNameEl) outletNameEl.textContent = outlet.name;
-    
-    // Populate stock item dropdown for extra buffer additions
-    const selStockItem = document.getElementById('wsStockItemSelect');
-    if (selStockItem) {
-        selStockItem.innerHTML = `<option value="">-- Choose Stock Item to Add --</option>` +
-            masterItemsData.map(item => `<option value="${item.id}">${item.name} (${item.unit || 'kg'} - ${item.category || 'General'})</option>`).join('');
-    }
     
     // Wire up top, mid & bottom events once
     ['btnWsSubmitIndent', 'btnWsSubmitIndentTop', 'btnWsSubmitIndentMid'].forEach(id => {
@@ -4221,26 +3518,11 @@ window.loadConsolidateWorkspace = function() {
         }
     });
     
-    const btnToggleAdd = document.getElementById('btnWsToggleAddStock');
-    const panelAddStock = document.getElementById('wsAddStockPanel');
-    if (btnToggleAdd && !btnToggleAdd.dataset.bound) {
-        btnToggleAdd.addEventListener('click', () => {
-            if (panelAddStock) panelAddStock.classList.toggle('hidden');
-        });
-        btnToggleAdd.dataset.bound = 'true';
-    }
-    
-    const btnConfirmAdd = document.getElementById('btnWsAddStockConfirm');
-    if (btnConfirmAdd && !btnConfirmAdd.dataset.bound) {
-        btnConfirmAdd.addEventListener('click', window.addWorkspaceExtraStockItem);
-        btnConfirmAdd.dataset.bound = 'true';
-    }
-    
     // Collect all requests for this supervisor outlet that are 'Accepted' or 'Pending'
     const targetReqs = requestsData.filter(r => {
         if (r.status !== 'Accepted' && r.status !== 'Pending') return false;
         const rOutletId = (r.outletId || '').toLowerCase();
-        return visIds.includes(rOutletId) || (currentUser.assignedLocations && currentUser.assignedLocations.includes('all'));
+        return rOutletId === outlet.id.toLowerCase();
     });
     
     targetReqs.forEach(req => {
@@ -4259,8 +3541,8 @@ window.loadConsolidateWorkspace = function() {
         }
         const q = parseFloat(req.qty) || 0;
         activeWorkspaceConsolidation.groupedItems[req.itemId].originalQty += q;
-        activeWorkspaceConsolidation.groupedItems[req.itemId].revisedQty += q;
-        activeWorkspaceConsolidation.groupedItems[req.itemId].chefRequests.push(req);
+        activeWorkspaceConsolidation.groupedItems[req.itemId].revisedQty += req.revisedQty ?? q;
+        activeWorkspaceConsolidation.groupedItems[req.itemId].chefRequests.push({...req, revisedQty: req.revisedQty ?? q});
     });
     
     window.renderConsolidateWorkspaceTable();
@@ -4284,7 +3566,7 @@ window.renderConsolidateWorkspaceTable = function() {
             <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
                 <i data-lucide="check-circle" style="width: 32px; height: 32px; color: var(--primary);"></i>
                 <div style="font-size: 0.95rem; font-weight: 600; color: var(--text-main);">No Requests Pending Consolidation</div>
-                <div style="font-size: 0.8rem; color: var(--text-muted);">Accept chef requests in <strong>Manage Requests</strong> or click <strong>Add Extra Stock Item</strong> above.</div>
+                <div style="font-size: 0.8rem; color: var(--text-muted);">Chef and supervisor requests raised under Requests → Raise Request appear here.</div>
             </div>
         </td></tr>`;
         if (summaryTextEl) summaryTextEl.textContent = 'No ingredients currently pending consolidation.';
@@ -4333,33 +3615,18 @@ window.renderConsolidateWorkspaceTable = function() {
     tbody.innerHTML = items.map(entry => {
         grandSum += (parseFloat(entry.revisedQty) || 0);
 
-        // Section cells
         const secCellsHtml = sections.map(sec => {
             const secReqs = (entry.chefRequests || []).filter(cr => (cr.cuisine || '').toLowerCase() === sec.toLowerCase());
-            const secQty = secReqs.reduce((acc, cr) => acc + (parseFloat(cr.qty) || 0), 0);
-            if (secQty > 0) {
-                return `<td style="text-align: center; padding: 10px 14px; border-left: 1px solid rgba(255,255,255,0.04); background: rgba(255,190,11,0.02);">
-                    <strong style="color: #ffffff; font-size: 0.94rem;">${secQty}</strong>
-                    <span style="font-size: 0.75rem; color: var(--text-muted); margin-left: 3px;">${entry.unit}</span>
-                </td>`;
-            } else {
-                return `<td style="text-align: center; padding: 10px 14px; color: rgba(255,255,255,0.18); border-left: 1px solid rgba(255,255,255,0.04); font-size: 0.9rem;">-</td>`;
-            }
+            const secQty = secReqs.reduce((sum,cr) => sum + (cr.revisedQty ?? cr.qty), 0);
+            if (!secReqs.length) return '<td style="text-align:center">—</td>';
+            return `<td style="text-align:center;padding:10px 14px"><input aria-label="${entry.itemName} - ${sec}" type="number" min="0" step="any" value="${secQty}" data-cuisine-qty="${entry.itemId}" oninput="updateWorkspaceCuisineQty('${entry.itemId}','${encodeURIComponent(sec)}',this)" style="width:82px;padding:6px;background:var(--dark);color:var(--text-main);border:1px solid var(--border);border-radius:6px"><span style="font-size:.75rem"> ${entry.unit}</span></td>`;
         }).join('');
-
-        // Total input with oninput for LIVE instant updates
-        const totalCell = `<td style="text-align: center; padding: 10px 14px; background: rgba(255,190,11,0.05); border-left: 1px solid rgba(255,190,11,0.25);">
-            <div style="display: flex; align-items: center; justify-content: center; gap: 5px;">
-                <input type="number" step="any" min="0" value="${entry.revisedQty}" oninput="updateWorkspaceItemQty('${entry.itemId}', this.value)" style="width: 82px; padding: 5px 6px; font-size: 0.95rem; font-weight: 700; background: #0d0d0d; color: var(--primary); border: 1px solid var(--border-gold); border-radius: 6px; text-align: center;">
-                <span style="font-size: 0.76rem; color: var(--text-muted); font-weight: 600;">${entry.unit}</span>
-            </div>
-        </td>`;
+        const totalCell = `<td style="text-align:center;padding:10px 14px;background:rgba(255,190,11,.08)"><output id="wsItemTotal_${entry.itemId}">${entry.revisedQty}</output> ${entry.unit}</td>`;
 
         // Note / comments
         const noteCell = `<td style="padding: 10px 14px; border-left: 1px solid rgba(255,255,255,0.04);">
             <div style="display: flex; align-items: center; gap: 6px;">
                 <input type="text" placeholder="Reason / note..." value="${entry.comment || ''}" oninput="updateWorkspaceItemComment('${entry.itemId}', this.value)" style="width: 100%; padding: 5px 8px; font-size: 0.82rem; background: #0d0d0d; color: #fff; border: 1px solid var(--border); border-radius: 5px;">
-                ${entry.originalQty === 0 ? `<button class="btn btn-outline" style="padding: 3px 6px; font-size: 0.68rem; border-color: var(--danger); color: var(--danger);" onclick="removeWorkspaceExtraItem('${entry.itemId}')" title="Remove"><i data-lucide="trash-2" style="width: 12px; height: 12px;"></i></button>` : ''}
             </div>
         </td>`;
 
@@ -4381,9 +3648,9 @@ window.renderConsolidateWorkspaceTable = function() {
         let secSum = 0;
         items.forEach(it => {
             const reqs = (it.chefRequests || []).filter(cr => (cr.cuisine || '').toLowerCase() === sec.toLowerCase());
-            secSum += reqs.reduce((acc, cr) => acc + (parseFloat(cr.qty) || 0), 0);
+            secSum += reqs.reduce((acc, cr) => acc + (cr.revisedQty ?? (parseFloat(cr.qty) || 0)), 0);
         });
-        return `<td style="text-align: center; padding: 12px; font-weight: 800; color: var(--primary); border-left: 1px solid rgba(255,255,255,0.06); font-size: 0.92rem;">${secSum.toFixed(1)}</td>`;
+        return `<td data-section-total="${encodeURIComponent(sec)}" style="text-align: center; padding: 12px; font-weight: 800; color: var(--primary); border-left: 1px solid rgba(255,255,255,0.06); font-size: 0.92rem;">${secSum.toFixed(1)}</td>`;
     }).join('');
 
     tbody.innerHTML += `
@@ -4407,15 +3674,18 @@ window.renderConsolidateWorkspaceTable = function() {
 };
 
 window.exportConsolidationToPdf = function() {
+    const invalid = document.querySelector('#wsConsolidateTableBody input:invalid');
+    if (invalid) { invalid.reportValidity(); return; }
     const items = Object.values(activeWorkspaceConsolidation.groupedItems || {});
+    items.forEach(entry => { entry.revisedQty = entry.chefRequests.reduce((sum,r)=>sum+(r.revisedQty ?? r.qty),0); });
     if (items.length === 0) {
         window.showToast("No ingredients to export.", "warning");
         return;
     }
 
     const outletName = activeWorkspaceConsolidation.outletName || 'BRIGADE';
-    const dateStr = new Date().toLocaleDateString();
-    const timeStr = new Date().toLocaleTimeString();
+    const dateStr = InventoryTools.day();
+    const timeStr = InventoryTools.timestamp(new Date());
     const supervisor = (currentUser && currentUser.name) ? currentUser.name : 'Supervisor';
     const indentRef = 'IND-PREVIEW-' + new Date().toISOString().slice(0,10).replace(/-/g,'');
 
@@ -4454,7 +3724,7 @@ window.exportConsolidationToPdf = function() {
         totalPrintQty += (parseFloat(entry.revisedQty) || 0);
         const secCells = sections.map(sec => {
             const secReqs = (entry.chefRequests || []).filter(cr => (cr.cuisine || '').toLowerCase() === sec.toLowerCase());
-            const secQty = secReqs.reduce((acc, cr) => acc + (parseFloat(cr.qty) || 0), 0);
+            const secQty = secReqs.reduce((acc, cr) => acc + (cr.revisedQty ?? (parseFloat(cr.qty) || 0)), 0);
             return `<td style="border: 1px solid #ddd; padding: 8px 10px; text-align: center; font-weight: ${secQty > 0 ? '700' : 'normal'};">
                 ${secQty > 0 ? `${secQty} ${entry.unit}` : '-'}
             </td>`;
@@ -4571,22 +3841,27 @@ window.exportConsolidationToPdf = function() {
     }
 };
 
-window.updateWorkspaceItemQty = function(itemId, val) {
-    if (activeWorkspaceConsolidation.groupedItems[itemId]) {
-        activeWorkspaceConsolidation.groupedItems[itemId].revisedQty = parseFloat(val) || 0;
+window.updateWorkspaceCuisineQty = function(itemId, encodedCuisine, input) {
+    const quantity = Number(input.value);
+    if (!input.value.trim() || !Number.isFinite(quantity) || quantity < 0) {
+        input.setCustomValidity('Enter a non-negative quantity.'); return;
     }
-    
-    // Live update grand total and summary instantly
-    const items = Object.values(activeWorkspaceConsolidation.groupedItems || {});
-    const grandSum = items.reduce((acc, it) => acc + (parseFloat(it.revisedQty) || 0), 0);
-    const grandCell = document.getElementById('wsMatrixGrandTotalCell');
-    if (grandCell) {
-        grandCell.textContent = grandSum.toFixed(1);
-    }
-    const summaryTextEl = document.getElementById('wsFooterSummaryText');
-    if (summaryTextEl) {
-        summaryTextEl.textContent = `Consolidating ${items.length} items (${grandSum.toFixed(1)} units total)`;
-    }
+    input.setCustomValidity('');
+    const entry = activeWorkspaceConsolidation.groupedItems[itemId];
+    if (!entry) return;
+    const cuisine = decodeURIComponent(encodedCuisine);
+    InventoryTools.reviseCuisine(entry, cuisine, quantity);
+    const total = document.getElementById('wsItemTotal_'+itemId);
+    if (total) total.textContent = Number(entry.revisedQty.toFixed(6));
+    const items = Object.values(activeWorkspaceConsolidation.groupedItems);
+    const grandSum = items.reduce((sum,it)=>sum+it.revisedQty,0);
+    document.getElementById('wsMatrixGrandTotalCell').textContent = grandSum.toFixed(1);
+    document.querySelectorAll('[data-section-total]').forEach(cell=>{
+        const section=decodeURIComponent(cell.dataset.sectionTotal);
+        cell.textContent=items.reduce((sum,it)=>sum+(it.chefRequests || []).filter(r=>r.cuisine===section).reduce((s,r)=>s+(r.revisedQty ?? r.qty),0),0).toFixed(1);
+    });
+    const summary=document.getElementById('wsFooterSummaryText');
+    if (summary) summary.textContent=`Consolidating ${items.length} items (${grandSum.toFixed(1)} units total)`;
 };
 
 window.updateWorkspaceItemComment = function(itemId, val) {
@@ -4595,61 +3870,12 @@ window.updateWorkspaceItemComment = function(itemId, val) {
     }
 };
 
-window.removeWorkspaceExtraItem = function(itemId) {
-    if (activeWorkspaceConsolidation.groupedItems[itemId]) {
-        delete activeWorkspaceConsolidation.groupedItems[itemId];
-        window.renderConsolidateWorkspaceTable();
-    }
-};
-
-window.addWorkspaceExtraStockItem = function() {
-    const itemSel = document.getElementById('wsStockItemSelect');
-    const qtyInp = document.getElementById('wsStockItemQty');
-    const reasonInp = document.getElementById('wsStockItemReason');
-    
-    const itemId = itemSel?.value;
-    const qty = parseFloat(qtyInp?.value) || 0;
-    const reason = reasonInp?.value.trim() || 'Supervisor Buffer';
-    
-    if (!itemId) {
-        window.showToast("Please choose an ingredient.", "warning");
-        return;
-    }
-    if (qty <= 0) {
-        window.showToast("Please enter a valid positive quantity.", "warning");
-        return;
-    }
-    
-    const masterItem = masterItemsData.find(i => i.id === itemId);
-    if (!masterItem) return;
-    
-    if (!activeWorkspaceConsolidation.groupedItems[itemId]) {
-        activeWorkspaceConsolidation.groupedItems[itemId] = {
-            itemId: itemId,
-            itemName: masterItem.name,
-            category: masterItem.category || 'General',
-            unit: masterItem.unit || 'kg',
-            originalQty: 0,
-            revisedQty: qty,
-            comment: reason,
-            chefRequests: []
-        };
-    } else {
-        activeWorkspaceConsolidation.groupedItems[itemId].revisedQty += qty;
-        activeWorkspaceConsolidation.groupedItems[itemId].comment = reason;
-    }
-    
-    qtyInp.value = '';
-    reasonInp.value = '';
-    itemSel.value = '';
-    const panel = document.getElementById('wsAddStockPanel');
-    if (panel) panel.classList.add('hidden');
-    
-    window.renderConsolidateWorkspaceTable();
-    window.showToast(`Added ${qty} ${masterItem.unit || 'kg'} of ${masterItem.name} to indent list.`, "success");
-};
-
 window.submitWorkspaceConsolidatedIndent = async function() {
+    const invalid = document.querySelector('#wsConsolidateTableBody input:invalid');
+    if (invalid) { invalid.reportValidity(); return; }
+    Object.values(activeWorkspaceConsolidation.groupedItems || {}).forEach(entry => {
+        entry.revisedQty = entry.chefRequests.reduce((sum,r)=>sum+(r.revisedQty ?? r.qty),0);
+    });
     const items = Object.values(activeWorkspaceConsolidation.groupedItems || {});
     if (items.length === 0) {
         window.showUiModal({
@@ -4676,15 +3902,15 @@ window.submitWorkspaceConsolidatedIndent = async function() {
     );
     if (!confirmed) return;
     
-    const today = new Date().toLocaleDateString();
-    const indentNumber = 'REQ-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + Math.floor(100 + Math.random() * 900);
+    const today = InventoryTools.day();
+    const indentNumber = 'REQ-' + InventoryTools.day().replace(/-/g, '') + '-' + Math.floor(100 + Math.random() * 900);
     const indentId = 'ind_' + Date.now();
     
     const formattedItems = items.map(entry => {
         const breakdown = (entry.chefRequests || []).map(cr => ({
             cuisine: cr.cuisine || 'Cuisine Section',
             chef: cr.chefName || cr.requestedBy || 'Chef',
-            qty: parseFloat(cr.qty) || 0
+            qty: cr.revisedQty ?? (parseFloat(cr.qty) || 0)
         }));
         return {
             itemId: entry.itemId,
@@ -4725,14 +3951,11 @@ window.submitWorkspaceConsolidatedIndent = async function() {
                     targetReq.indentId = indentId;
                     targetReq.forwardedBy = supName;
                     targetReq.forwardedAt = nowIso;
-                    targetReq.revisedQty = parseFloat(entry.revisedQty) || targetReq.qty;
+                    targetReq.revisedQty = cr.revisedQty ?? cr.qty;
                     if (entry.comment) {
                         targetReq.supervisorNote = entry.comment;
                     }
-                    // If single request for this ingredient, update targetReq.qty to revisedQty
-                    if (entry.chefRequests.length === 1) {
-                        targetReq.qty = parseFloat(entry.revisedQty) || targetReq.qty;
-                    }
+
                 }
             });
         } else if (entry.originalQty === 0) {
@@ -4767,7 +3990,7 @@ window.submitWorkspaceConsolidatedIndent = async function() {
     
     window.showUiModal({
         title: "Request Sent to Admin",
-        message: `Consolidated Request <strong>${indentNumber}</strong> (${items.length} items, ${grandUnits.toFixed(1)} units) has been sent to Admin for approval with your updated quantities and notes!`,
+        message: `Consolidated Request ${indentNumber} (${items.length} items, ${grandUnits.toFixed(1)} units) has been sent to Admin for approval with your updated quantities and notes!`,
         type: "success"
     });
     
@@ -5225,14 +4448,7 @@ function renderAdminChefsSection(chefs) {
     // Populate Cuisines Checkboxes
     const cuisinesContainer = document.getElementById('adminChefCuisinesCheckboxes');
     if (cuisinesContainer && cuisinesContainer.children.length === 0) {
-        const availableCuisines = [
-            { id: 'Indian', name: 'Indian', icon: '🍛' },
-            { id: 'Continental', name: 'Continental', icon: '🥗' },
-            { id: 'Tandoor', name: 'Tandoor', icon: '🍢' },
-            { id: 'Chinese', name: 'Chinese', icon: '🍲' },
-            { id: 'Arabic', name: 'Arabic', icon: '🫓' },
-            { id: 'Kerala', name: 'Kerala', icon: '🥥' }
-        ];
+        const availableCuisines = cuisinesData.map(c => ({ ...c, icon: '' }));
         cuisinesContainer.innerHTML = availableCuisines.map(c => `
             <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #fff; cursor: pointer; background: rgba(255,255,255,0.03); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08);">
                 <input type="checkbox" value="${c.name}" class="admin-chef-cuisine-cb" style="accent-color: var(--primary); cursor: pointer;">
@@ -5621,14 +4837,7 @@ function loadAddChefView() {
     // Populate Cuisines Checkboxes
     const cuisinesContainer = document.getElementById('chefCuisinesCheckboxes');
     if (cuisinesContainer && cuisinesContainer.children.length === 0) {
-        const availableCuisines = [
-            { id: 'Indian', name: 'Indian', icon: '🍛' },
-            { id: 'Continental', name: 'Continental', icon: '🥗' },
-            { id: 'Tandoor', name: 'Tandoor', icon: '🍢' },
-            { id: 'Chinese', name: 'Chinese', icon: '🍲' },
-            { id: 'Arabic', name: 'Arabic', icon: '🫓' },
-            { id: 'Kerala', name: 'Kerala', icon: '🥥' }
-        ];
+        const availableCuisines = cuisinesData.map(c => ({ ...c, icon: '' }));
 
         cuisinesContainer.innerHTML = availableCuisines.map(c => `
             <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #fff; cursor: pointer; background: rgba(255,255,255,0.03); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08);">
@@ -5937,37 +5146,3 @@ window.removeLocation = async function(id) {
         window.showToast(`Location ${loc.name} removed.`, "info");
     }
 };
-
-// ============================================================
-// GLOBAL KEYBOARD SHORTCUTS
-// ============================================================
-document.addEventListener('keydown', (e) => {
-    // Only apply if on Master Orders view and a user is logged in
-    if (!currentUser || currentView !== 'viewMasterOrders') return;
-    
-    // Ignore if user is typing in an input, textarea, or select
-    if (document.activeElement) {
-        const activeTag = document.activeElement.tagName.toLowerCase();
-        if (['input', 'textarea', 'select'].includes(activeTag)) return;
-    }
-    
-    const key = e.key.toLowerCase();
-    
-    // Check if the menu is visible to the user
-    const trigger = document.getElementById('storeViewTrigger');
-    if (!trigger) return;
-
-    if (key === 'o') {
-        currentStoreView = 'all';
-        loadDashboardData();
-        return;
-    }
-    
-    const visibleOutlets = currentUser.role === 'admin' ? outletsData : outletsData.filter(o => currentUser.assignedLocations.includes('all') || currentUser.assignedLocations.includes(o.id));
-    const matchedOutlet = visibleOutlets.find(o => o.name.toLowerCase().startsWith(key));
-    
-    if (matchedOutlet) {
-        currentStoreView = matchedOutlet.id;
-        loadDashboardData();
-    }
-});

@@ -47,6 +47,7 @@ function initRequestWizard() {
                 outletSelect.style.display = '';
                 if (wizardOutletDisplay) wizardOutletDisplay.style.display = 'none';
                 outletSelect.innerHTML = vis.map(o => `<option value="${o.id}">${o.name}</option>`).join('');
+                outletSelect.value = OutletSelection.restore();
             }
         }
         
@@ -101,11 +102,7 @@ function initRequestWizard() {
         if (!btn) return;
         // Chef uses the single primary action button directly on the Chef Portal view.
         // Hide sidebar duplicate to keep sidebar clean.
-        if (currentUser && currentUser.role === 'chef') {
-            btn.style.display = 'none';
-        } else {
-            btn.style.display = 'none';
-        }
+        btn.style.display = currentUser?.role === 'supervisor' ? '' : 'none';
     };
     
     document.getElementById('closeRequestWizardBtn')?.addEventListener('click', () => {
@@ -204,7 +201,7 @@ function initRequestWizard() {
         if (typeof showUiModal === 'function') {
             showUiModal({
                 title: 'Requests Submitted',
-                message: 'Ingredient requests submitted successfully to supervisor!',
+                message: currentUser.role === 'supervisor' ? 'Your requests are saved and ready in Consolidate Request.' : 'Ingredient requests submitted successfully to supervisor!',
                 type: 'success',
                 btnText: 'Done'
             });
@@ -214,7 +211,8 @@ function initRequestWizard() {
         if (typeof updateRequestsBadge === 'function') updateRequestsBadge();
         if (typeof updateIndentsBadge === 'function') updateIndentsBadge();
         if (typeof loadRequestsData === 'function') loadRequestsData();
-        if (typeof loadChefPortalData === 'function') loadChefPortalData();
+        if (currentUser.role === 'chef' && typeof loadChefPortalData === 'function') loadChefPortalData();
+        if (currentUser.role === 'supervisor') window.switchToView('viewConsolidateRequests');
     });
     
     // Periodically ensure the button is there (simple robust way to survive view switches)
@@ -244,7 +242,7 @@ window.updateWizardSelectedCount = updateWizardSelectedCount;
 function renderWizardItems() {
     const grid = document.getElementById('wizardItemsGrid');
     if(!grid) return;
-    const items = masterItemsData.filter(i => i.category === currentWizardCat);
+    const items = masterItemsData.filter(i => i.active !== false && i.category === currentWizardCat);
     grid.innerHTML = items.map(item => {
         const selData = wizardSelectedItems[item.id];
         const isSelected = !!selData;

@@ -86,29 +86,31 @@
                 </button>
             </div>
             <nav class="nav-menu">
+                <div class="nav-section-label no-chef">Orders</div>
                 <a href="#" class="nav-item active no-chef" id="navMasterOrders">
                     <i data-lucide="layout-dashboard"></i> Master Orders
                 </a>
-                <div class="nav-group admin-only" id="navGroupStock">
-                    <a href="#" class="nav-item" id="navStock">
-                        <i data-lucide="boxes"></i>
-                        <span>Stock</span>
-                        <i data-lucide="chevron-down" id="navStockChevron" style="width: 14px; height: 14px; margin-left: auto; transition: transform 0.25s ease;"></i>
-                    </a>
-                    <div class="nav-submenu" id="navStockSubmenu">
-                        <a href="#" class="nav-subitem" id="navAddItems">
-                            <i data-lucide="package-plus" style="width: 14px; height: 14px;"></i> Add Item
-                        </a>
+                <a href="#" class="nav-item no-chef" id="navIndents"><i data-lucide="truck"></i>Purchase Orders</a>
+                <div class="nav-group no-chef" id="navGroupStock">
+                    <a href="#" class="nav-item" id="navStock"><i data-lucide="boxes"></i><span>Stock</span><i data-lucide="chevron-down" id="navStockChevron" style="width:14px;height:14px;margin-left:auto"></i></a>
+                    <div class="nav-submenu open" id="navStockSubmenu">
+                        <a href="#" class="nav-subitem admin-only" data-inventory="overview">Stock Overview</a>
+                        <a href="#" class="nav-subitem" data-inventory="receipt">Receive Stock</a>
+                        <a href="#" class="nav-subitem" data-inventory="distribute">Distribute to Cuisine</a>
+                        <a href="#" class="nav-subitem" data-inventory="adjust">Stock Adjustments</a>
+                        <a href="#" class="nav-subitem" data-inventory="history">Stock History</a>
+                        <a href="#" class="nav-subitem admin-only" data-inventory="assign">Assign Legacy Stock</a>
                     </div>
                 </div>
                 <div class="nav-group no-chef" id="navGroupRequests">
                     <a href="#" class="nav-item" id="navRequests">
                         <i data-lucide="clipboard-list"></i>
-                        <span>Requests</span>
+                        <span style="flex: 1;">Requests</span>
                         <span id="pendingRequestsBadge" class="hidden" style="background: var(--primary); color: var(--dark); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 0.7rem; margin-left: auto; font-weight: bold; line-height: 1;">0</span>
                         <i data-lucide="chevron-down" id="navRequestsChevron" style="width: 14px; height: 14px; margin-left: 6px; transition: transform 0.25s ease;"></i>
                     </a>
                     <div class="nav-submenu" id="navRequestsSubmenu">
+                        <a href="#" class="nav-subitem supervisor-only" id="navSidebarRaiseRequest"><i data-lucide="plus-circle" style="width:14px;height:14px"></i>Raise Request</a>
                         <a href="#" class="nav-subitem" id="navManageRequests">
                             <i data-lucide="list-checks" style="width: 14px; height: 14px;"></i> Manage Request
                         </a>
@@ -120,12 +122,12 @@
                 <a href="#" class="nav-item chef-only-bg hidden" id="navChefPortal">
                     <i data-lucide="clipboard-list"></i> My Requests
                 </a>
-                <a href="#" class="nav-item no-chef" id="navSidebarRaiseRequest" style="margin-top: 10px; background: rgba(255, 230, 0, 0.15); border: 1px solid var(--primary); color: var(--primary);">
-                    <i data-lucide="plus-circle"></i> Raise Request
-                </a>
                 <a href="#" class="nav-item supervisor-only" id="navAddChef">
                     <i data-lucide="chef-hat"></i> Add Chef
                 </a>
+                <div class="nav-section-label admin-only">Administration</div>
+                <a href="#" class="nav-item admin-only" data-inventory="catalog"><i data-lucide="database"></i>Item Catalog</a>
+                <a href="#" class="nav-item admin-only" data-inventory="cuisines"><i data-lucide="utensils"></i>Cuisine Sections</a>
                 <a href="#" class="nav-item admin-only" id="navVendors">
                     <i data-lucide="truck"></i> Vendors
                 </a>
@@ -187,16 +189,12 @@
                                   <i data-lucide="store" style="width: 14px; height: 14px; color: var(--primary);"></i> Outlet:
                               </span>
                               <button type="button" id="storeViewTrigger" class="panel" style="display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--border); background: rgba(20, 20, 22, 0.85); color: var(--text-main); cursor: pointer; font-size: 0.82rem; font-weight: 600; transition: all 0.2s ease;">
-                                  <span id="storeViewSelectedText">Overall View</span>
+                                  <span id="storeViewSelectedText">Select Outlet</span>
                                   <i data-lucide="chevron-down" id="storeViewChevron" style="width: 14px; height: 14px; color: var(--primary); transition: transform 0.2s ease;"></i>
                               </button>
                               <div id="storeViewMenu" class="panel hidden" style="position: absolute; right: 0; top: calc(100% + 6px); min-width: 220px; max-height: 280px; overflow-y: auto; padding: 6px; border-radius: 10px; border: 1px solid var(--border); background: #121214; z-index: 1000; box-shadow: 0 10px 25px rgba(0,0,0,0.6); backdrop-filter: blur(16px);">
                               </div>
                           </div>
-                          <!-- Quick Reset Filter Button -->
-                          <button type="button" id="btnResetOutletFilter" class="btn btn-outline hidden" style="padding: 6px 10px; font-size: 0.75rem; display: flex; align-items: center; gap: 4px; border-color: rgba(255,255,255,0.15); color: var(--text-muted);" title="Reset to Overall View">
-                              <i data-lucide="rotate-ccw" style="width: 12px; height: 12px;"></i> Show All
-                          </button>
                       </div>
                   </header>
 
@@ -220,42 +218,13 @@
 
 
                     <!-- Left: Table -->
-                    <div class="table-container panel">
+                    <div class="panel master-stock-panel">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 10px;">
                             <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                                <h3 style="font-size: 0.9rem; margin: 0; white-space: nowrap;">Inventory Allocation</h3>
-                                <div id="outletFilterPills" style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
-                                    <!-- Populated dynamically -->
-                                </div>
-                                <div style="height: 18px; width: 1px; background: var(--border); margin: 0 4px;"></div>
-                                <div style="display: flex; align-items: center; gap: 6px;">
-                                    <label for="cuisineFilterSelect" style="font-size: 0.74rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;">
-                                        <i data-lucide="utensils" style="width: 12px; height: 12px; color: var(--primary);"></i> Cuisine:
-                                    </label>
-                                    <select id="cuisineFilterSelect" class="cuisine-select">
-                                        <option value="all">All Cuisines</option>
-                                        <option value="Indian">🍛 Indian</option>
-                                        <option value="Continental">🥗 Continental</option>
-                                        <option value="Tandoor">🍢 Tandoor</option>
-                                        <option value="Chinese">🍲 Chinese</option>
-                                        <option value="Arabic">🫓 Arabic</option>
-                                        <option value="Kerala">🥥 Kerala</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="status-legend" style="display: flex; gap: 16px; font-size: 0.75rem; color: var(--text-muted); flex-shrink: 0;">
-                                <span style="display: flex; align-items: center; gap: 6px;">
-                                    <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--success);"></span> In Stock
-                                </span>
-                                <span style="display: flex; align-items: center; gap: 6px;">
-                                    <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--warning);"></span> Pending PO
-                                </span>
-                                <span style="display: flex; align-items: center; gap: 6px;">
-                                    <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--danger);"></span> Low Stock
-                                </span>
+                                <div id="masterStockFilters" class="inventory-filters"></div>
                             </div>
                         </div>
-                        <table id="inventoryTable">
+                        <div class="table-container"><table id="inventoryTable">
                             <thead>
                                 <tr id="inventoryTableHeader">
                                     <!-- Populated dynamically -->
@@ -264,7 +233,7 @@
                             <tbody id="inventoryTableBody">
                                 <!-- Populated dynamically -->
                             </tbody>
-                        </table>
+                        </table></div>
                     </div>
                 </div>
             </div>
@@ -376,7 +345,7 @@
                 <header class="dash-header">
                     <div class="header-title">
                         <h1>Consolidate <span class="text-primary">Requests</span></h1>
-                        <p>Matrix breakdown of chef requests across kitchen sections. Adjust quantities and export or send to Admin.</p>
+                        <p>Chef and supervisor requests by cuisine. Edit cuisine quantities; totals update automatically.</p>
                     </div>
                     <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                         <div id="wsConsolidateOutletBadge" style="display: flex; align-items: center; gap: 8px; padding: 7px 14px; background: rgba(255,190,11,0.08); border: 1px solid rgba(255,190,11,0.25); border-radius: 8px; font-size: 0.85rem; color: var(--text-main);">
@@ -399,22 +368,7 @@
                         <button class="btn btn-primary" id="btnWsSubmitIndentMid" style="padding: 7px 16px; font-size: 0.82rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; box-shadow: 0 2px 10px rgba(255,190,11,0.25);">
                             <i data-lucide="send" style="width: 14px; height: 14px;"></i> Send Request To Admin
                         </button>
-                        <button class="btn btn-outline" id="btnWsToggleAddStock" style="padding: 7px 14px; font-size: 0.82rem; display: flex; align-items: center; gap: 6px; border-color: var(--border-gold); color: var(--primary);">
-                            <i data-lucide="plus" style="width: 14px; height: 14px;"></i> Add Extra Stock Item
-                        </button>
-                    </div>
-                </div>
 
-                <!-- Extra Stock Item Form (collapsible) -->
-                <div id="wsAddStockPanel" class="panel hidden" style="padding: 16px; margin-bottom: 18px; border: 1px dashed var(--border-gold); background: rgba(0,0,0,0.4); border-radius: 10px;">
-                    <h4 style="margin: 0 0 10px 0; font-size: 0.92rem; color: var(--primary); display: flex; align-items: center; gap: 6px;">
-                        <i data-lucide="plus-circle" style="width: 16px; height: 16px;"></i> Add Supervisor Stock Requirement
-                    </h4>
-                    <div style="display: grid; grid-template-columns: 2fr 1fr 2fr auto; gap: 10px; align-items: center;">
-                        <select id="wsStockItemSelect" style="padding: 8px 12px; background: var(--dark); color: white; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem;"></select>
-                        <input type="number" id="wsStockItemQty" min="0.1" step="any" placeholder="Quantity" style="padding: 8px 12px; background: var(--dark); color: white; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem;">
-                        <input type="text" id="wsStockItemReason" placeholder="Reason / Comment" style="padding: 8px 12px; background: var(--dark); color: white; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem;">
-                        <button class="btn btn-primary" id="btnWsAddStockConfirm" style="padding: 8px 16px; font-size: 0.85rem;">Add to Request</button>
                     </div>
                 </div>
 
@@ -1122,6 +1076,8 @@
         </main>
     </div>
 
+    <script src="js/inventory-tools.js"></script>
+    <script src="js/inventory-ui.js"></script>
     <script src="js/api-data.js?v=d1"></script>
     <script src="js/app.js?v=d1"></script>
     <script src="js/wizard.js?v=d1"></script>
@@ -1432,89 +1388,6 @@
                         <i data-lucide="send" style="width: 14px; height: 14px;"></i> Confirm & Send PO to Vendor
                     </button>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL: ADD ITEM (ADMIN) -->
-    <div id="modalAddItem" class="modal hidden" style="position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); z-index: 10000; display: flex; align-items: center; justify-content: center;">
-        <div class="panel" style="width: 90%; max-width: 480px; background: #121214; border: 1px solid var(--border); border-radius: 16px; padding: 24px; position: relative; box-shadow: 0 20px 50px rgba(0,0,0,0.8);">
-            <button type="button" class="icon-btn" id="closeAddItemModalBtn" style="position: absolute; top: 16px; right: 16px; cursor: pointer;" title="Close">
-                <i data-lucide="x"></i>
-            </button>
-            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
-                <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(255,190,11,0.15); border: 1px solid rgba(255,190,11,0.3); display: flex; align-items: center; justify-content: center; color: var(--primary);">
-                    <i data-lucide="package-plus" style="width: 22px; height: 22px;"></i>
-                </div>
-                <div>
-                    <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700;">Add New <span class="text-primary">Item</span></h2>
-                    <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">Add an item or ingredient to the master inventory catalog</p>
-                </div>
-            </div>
-            
-            <div style="display: flex; flex-direction: column; gap: 14px;">
-                <div class="input-group" style="margin: 0; position: relative;">
-                    <label for="newItemName" style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 5px; display: block;">Item Name *</label>
-                    <input type="text" id="newItemName" placeholder="e.g. Basmati Rice, Chicken Breast, Olive Oil..." style="width: 100%; background: var(--dark); color: #fff; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.88rem;" autocomplete="off">
-                    <div id="newItemSuggestions" class="panel hidden" style="position: absolute; top: calc(100% + 4px); left: 0; right: 0; max-height: 220px; overflow-y: auto; z-index: 10001; background: #121214; border: 1px solid var(--border-gold); border-radius: 8px; box-shadow: 0 12px 35px rgba(0,0,0,0.85); padding: 4px;"></div>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                    <div class="input-group" style="margin: 0;">
-                        <label for="newItemUnit" style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 5px; display: block;">Unit *</label>
-                        <select id="newItemUnit" style="width: 100%; background: var(--dark); color: #fff; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.88rem;">
-                            <option value="" disabled selected>Select Unit</option>
-                            <option value="kg">kg (Kilograms)</option>
-                            <option value="g">g (Grams)</option>
-                            <option value="L">L (Liters)</option>
-                            <option value="ml">ml (Milliliters)</option>
-                            <option value="pcs">pcs (Pieces)</option>
-                            <option value="box">Box</option>
-                            <option value="pkt">pkt (Packet)</option>
-                        </select>
-                    </div>
-                    <div class="input-group" style="margin: 0;">
-                        <label for="newItemCategory" style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 5px; display: block;">Category *</label>
-                        <select id="newItemCategory" style="width: 100%; background: var(--dark); color: #fff; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.88rem;">
-                            <option value="Meat">Meat</option>
-                            <option value="Vegetables">Vegetables</option>
-                            <option value="Grocery">Grocery</option>
-                            <option value="Dry">Dry</option>
-                            <option value="Canned">Canned</option>
-                            <option value="Dairy">Dairy</option>
-                            <option value="Spices">Spices</option>
-                        </select>
-                    </div>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                    <div class="input-group" style="margin: 0;">
-                        <label for="newItemCuisine" style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 5px; display: block;">Cuisine Section *</label>
-                        <select id="newItemCuisine" style="width: 100%; background: var(--dark); color: #fff; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.88rem;">
-                            <option value="Indian" selected>Indian</option>
-                            <option value="Continental">Continental</option>
-                            <option value="Tandoor">Tandoor</option>
-                            <option value="Chinese">Chinese</option>
-                            <option value="Arabic">Arabic</option>
-                            <option value="Kerala">Kerala</option>
-                        </select>
-                    </div>
-                    <div class="input-group" style="margin: 0;">
-                        <label for="newItemVendor" style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 5px; display: block;">Supplier / Vendor</label>
-                        <select id="newItemVendor" style="width: 100%; background: var(--dark); color: #fff; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.88rem;">
-                            <!-- Populated dynamically -->
-                        </select>
-                    </div>
-                </div>
-                <div class="input-group" style="margin: 0;">
-                    <label for="newItemBought" style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 5px; display: block;">Initial Bought Stock</label>
-                    <input type="number" id="newItemBought" placeholder="Initial Quantity (Bought)" min="0" style="width: 100%; background: var(--dark); color: #fff; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.88rem;">
-                </div>
-            </div>
-            
-            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border);">
-                <button type="button" class="btn btn-outline" id="cancelAddItemModalBtn" style="padding: 9px 18px; font-size: 0.88rem; cursor: pointer;">Cancel</button>
-                <button type="button" class="btn btn-primary" id="addItemBtn" style="padding: 9px 20px; font-size: 0.88rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
-                    <i data-lucide="plus" style="width: 15px; height: 15px;"></i> Add Item
-                </button>
             </div>
         </div>
     </div>

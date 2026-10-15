@@ -46,10 +46,13 @@ export function project(state, user) {
       item.bought = Object.values(item.allocations).reduce((sum, q) => sum + q, 0);
     }
   }
+  result.outletStock = (result.outletStock || []).filter(s => hasOutlet(user, s.outlet_id));
+  result.stockHistory = (result.stockHistory || []).filter(s => s.outlet_id ? hasOutlet(user, s.outlet_id) : user.role === 'admin');
+  if (user.role !== 'admin') result.legacyStock = [];
   return result;
 }
 
-export function validateChanges(state, changes, actor) {
+export function validateChanges(state, changes, actor, stockAction = false) {
   const next = clone(state);
   const touched = [];
   if (!Array.isArray(changes) || changes.length < 1 || changes.length > 150) fail('Submit between 1 and 150 record changes.');
@@ -71,7 +74,25 @@ export function validateChanges(state, changes, actor) {
         if (old[field] !== data[field]) fail('Record references cannot change.');
       }
     }
-    if (!data && entity === 'items' && old?.bought) fail('An item with stock history cannot be removed.');
+    if (entity === 'items') {
+      if (!data) fail('Deactivate catalog items instead of deleting them.');
+      if (actor.role !== 'admin') fail('Only admins can manage catalog items.', 403);
+      for (const field of ['bought', 'allocations', 'consumed']) {
+        const expected = old?.[field] ?? (field === 'bought' ? 0 : {});
+        if (!same(data[field] ?? expected, expected)) fail('Use stock transactions to change quantities.');
+        data[field] = clone(expected);
+      }
+      data.name = safeText(data.name, 'Item name').trim();
+      if ((!old || old.name.trim().toLowerCase() !== data.name.toLowerCase()) && next.items.some(i => i.id !== key && i.name.trim().toLowerCase() === data.name.toLowerCase())) fail('Item name already exists.', 409);
+      if (data.cuisine && !next.cuisines.some(c => c.name === data.cuisine)) fail('Choose an existing cuisine.');
+      if (data.active !== undefined && typeof data.active !== 'boolean') fail('Invalid active status.');
+      if (old && old.unit !== data.unit && ((state.stockHistory || []).some(m => m.item_id === key) || old.bought || Object.values(old.allocations || {}).some(Boolean) || (state.legacyStock || []).some(s=>s.item_id===key && (s.quantity || s.issue)))) fail('Unit cannot change after stock transactions.');
+    }
+    if (!stockAction && data && ['requests','indents','purchase_orders'].includes(entity) && ((!old && ['Approved','Received'].includes(data.status)) || (old && old.status !== data.status && ['Approved','Received'].includes(data.status)))) fail('Use the approval or receiving action.');
+    if (data && !old && ['requests','indents','purchase_orders'].includes(entity)) {
+      const ids = entity === 'requests' ? [data.itemId] : (data.items || []).map(i => i.itemId);
+      if (ids.some(itemId => next.items.find(i => i.id === itemId)?.active === false)) fail('Choose active catalog items.');
+    }
     if (actor.role !== 'admin') {
       if (entity === 'requests') {
         const r = old || data;
@@ -98,15 +119,7 @@ export function validateChanges(state, changes, actor) {
           if (!u.assignedLocations?.length || u.assignedLocations.some(o => o === 'all' || !hasOutlet(actor, o))) fail('Chef outlet access denied.', 403);
         }
       } else if (entity === 'items') {
-        if (!old || !data) fail('Only admins can manage catalog items.', 403);
-        const visibleOld = project({ ...state, items: [old] }, actor).items[0];
-        if (!same(without(data, ['consumed']), without(visibleOld, ['consumed']))) fail('Only outlet consumption may be changed.', 403);
-        const merged = clone(old);
-        for (const [outlet, quantity] of Object.entries(data.consumed || {})) {
-          if (!hasOutlet(actor, outlet) || quantity < (old.consumed?.[outlet] || 0)) fail('Invalid consumption change.', 403);
-          merged.consumed[outlet] = quantity;
-        }
-        Object.assign(data, merged);
+        fail('Only admins can manage catalog items.',403);
       } else fail('Administrator permission required.', 403);
     }
     if (data && entity === 'requests' && !old) {
@@ -122,12 +135,22 @@ export function validateChanges(state, changes, actor) {
       if (['Approved', 'Rejected'].includes(old.status) && data.status !== old.status) fail('Completed workflow cannot be reopened.', 409);
       if (old.status === 'Approved' && !same(data, old)) fail('Approved records are immutable.', 409);
     }
+    if (!data && entity === 'outlets' && ((state.outletStock || []).some(s => s.outlet_id === key && s.quantity > 0) || (state.stockHistory || []).some(s => s.outlet_id === key))) fail('An outlet with stock history cannot be removed.');
     if (!data && old && ['requests', 'indents', 'purchase_orders'].includes(entity) && !['Pending', 'Accepted', 'Pending Approval'].includes(old.status)) fail('Completed records cannot be deleted.', 409);
     const index = next[entity].findIndex(row => row.id === key);
     if (data) {
       if (index < 0) next[entity].unshift(data); else next[entity][index] = data;
     } else next[entity].splice(index, 1);
     touched.push({ entity, key, old, data });
+  }
+  // Forwarded requests must stay attached to the indent that owns their quantities.
+  if (!stockAction) for (const t of touched.filter(t => t.entity === 'requests')) {
+    const linkedId = t.old?.indentId || t.data?.indentId;
+    if (!linkedId) continue;
+    const parent = touched.find(p => p.entity === 'indents' && p.key === linkedId);
+    if (!parent) fail('Edit linked requests through their consolidated indent.', 409);
+    if (!parent.data && t.data?.indentId) fail('Remove the indent link when deleting an indent.');
+    if (parent.data && (!t.data || t.data.indentId !== linkedId)) fail('Keep consolidated request links intact.');
   }
   // Cross-record validation uses the resulting state, never the browser's role.
   // Keep catalog display names consistent when a vendor is renamed.
@@ -159,23 +182,13 @@ export function validateChanges(state, changes, actor) {
   for (const item of next.items) {
     safeText(item.name, 'Item name'); safeText(item.unit, 'Unit'); safeText(item.category, 'Category');
     if (!vendors.has(item.vendor)) fail('Choose an existing vendor.');
-    number(item.bought, 'Stock bought');
-    let total = 0;
-    for (const [outlet, q] of Object.entries(item.allocations || {})) {
-      if (!outlets.has(outlet)) fail('Invalid stock outlet.');
-      total += number(q, 'Allocation');
-    }
-    if (total > item.bought + 1e-8) fail(`Insufficient central stock for ${item.name}.`, 409);
-    for (const [outlet, q] of Object.entries(item.consumed || {})) {
-      if (!outlets.has(outlet)) fail('Invalid consumption outlet.');
-      number(q, 'Consumption');
-      if (q > (item.allocations?.[outlet] || 0) + 1e-8) fail(`Consumption exceeds available stock for ${item.name}.`, 409);
-    }
   }
+
   for (const r of next.requests) {
     if (!items.has(r.itemId) || !outlets.has(r.outletId)) fail('Unknown request item or outlet.');
     if (!['Pending', 'Accepted', 'Sent to Admin', 'Consolidated', 'Approved', 'Rejected', 'PO Raised'].includes(r.status)) fail('Invalid request status.');
     number(r.qty, 'Request quantity', true);
+    if (r.revisedQty !== undefined) number(r.revisedQty, 'Revised request quantity');
     if (!next.cuisines.some(c => c.name === r.cuisine) && !['Supervisor Extra', 'Store Stock'].includes(r.cuisine)) fail('Choose a valid cuisine.');
     if (r.indentId && !next.indents.some(i => i.id === r.indentId && i.outletId === r.outletId)) fail('Invalid indent link.');
   }
@@ -188,6 +201,22 @@ export function validateChanges(state, changes, actor) {
     for (const row of indent.items) {
       if (!items.has(row.itemId) || seen.has(row.itemId)) fail('Invalid or duplicate indent item.');
       seen.add(row.itemId); number(row.originalQty, 'Original quantity'); number(row.revisedQty, 'Revised quantity');
+      const changed = touched.find(t=>t.entity==='indents' && t.key===indent.id);
+      if (changed && !stockAction && row.cuisineBreakdown) {
+        const linked = next.requests.filter(r=>r.indentId===indent.id && r.itemId===row.itemId);
+        const sum = linked.reduce((total,r)=>total+(r.revisedQty ?? r.qty),0);
+        if (Math.abs(sum-row.revisedQty)>1e-8) fail('Consolidated total must equal the cuisine quantities.');
+        const breakdownSum = row.cuisineBreakdown.reduce((total,r)=>total+number(r.qty,'Cuisine quantity'),0);
+        if (Math.abs(breakdownSum-row.revisedQty)>1e-8) fail('Cuisine breakdown must match the consolidated total.');
+        const cuisines = new Set([...linked.map(r=>r.cuisine), ...row.cuisineBreakdown.map(r=>r.cuisine)]);
+        for (const cuisine of cuisines) {
+          const requested = linked.filter(r=>r.cuisine===cuisine).reduce((sum,r)=>sum+(r.revisedQty ?? r.qty),0);
+          const displayed = row.cuisineBreakdown.filter(r=>r.cuisine===cuisine).reduce((sum,r)=>sum+r.qty,0);
+          if (Math.abs(requested-displayed)>1e-8) fail('Cuisine breakdown does not match revised request quantities.');
+        }
+
+      }
+
     }
   }
   for (const po of next.purchase_orders) {
@@ -195,7 +224,14 @@ export function validateChanges(state, changes, actor) {
     safeText(po.poNumber, 'PO number');
     if (!Array.isArray(po.items) || !po.items.length) fail('Purchase order needs items.');
     if (po.indentId && !next.indents.some(i => i.id === po.indentId && i.outletId === po.outletId)) fail('Invalid PO indent.');
-    for (const row of po.items) { if (!items.has(row.itemId)) fail('Unknown PO item.'); number(row.qty, 'PO quantity', true); }
+    const previous = state.purchase_orders.find(p => p.id === po.id);
+    for (const row of po.items) {
+      if (!items.has(row.itemId)) fail('Unknown PO item.');
+      number(row.qty, 'PO quantity', true);
+      number(row.receivedQty ?? 0, 'Received quantity');
+      if ((row.receivedQty ?? 0) > row.qty) fail('Received quantity exceeds order quantity.');
+      if (!stockAction && (row.receivedQty ?? 0) !== (previous?.items.find(r=>r.itemId===row.itemId)?.receivedQty ?? 0)) fail('Use purchase-order receiving to change received quantities.');
+    }
   }
   // A newly approved indent must allocate exactly its approved quantities and
   // approve its linked requests in the same command. Partial changes roll back.
@@ -208,7 +244,7 @@ export function validateChanges(state, changes, actor) {
     }
     for (const req of next.requests.filter(r => r.indentId === t.key)) if (req.status !== 'Approved') fail('Linked requests must be approved atomically.');
   }
-  for (const [key, quantity] of expectedAllocations) {
+  for (const [key, quantity] of stockAction ? [] : expectedAllocations) {
     const split = key.lastIndexOf(':');
     const itemId = key.slice(0, split), outlet = key.slice(split + 1);
     const before = state.items.find(i => i.id === itemId)?.allocations?.[outlet] || 0;
@@ -219,7 +255,7 @@ export function validateChanges(state, changes, actor) {
   for (const t of touched.filter(t => t.entity === 'requests' && t.data?.status === 'Approved' && t.old?.status !== 'Approved')) {
     if (!t.old) fail('Create requests before approving them.');
     const indentApproval = touched.some(i => i.entity === 'indents' && i.key === t.data.indentId && i.data?.status === 'Approved' && i.old?.status !== 'Approved');
-    if (indentApproval) continue;
+    if (indentApproval || stockAction) continue;
     if (t.data.indentId) fail('Approve linked requests through their indent.');
     const before = state.items.find(i => i.id === t.data.itemId)?.allocations?.[t.data.outletId] || 0;
     const after = items.get(t.data.itemId)?.allocations?.[t.data.outletId] || 0;
@@ -239,7 +275,7 @@ export function validateChanges(state, changes, actor) {
         const before = state.items.find(i => i.id === line.itemId);
         const after = items.get(line.itemId);
         const quantity = line.qty - (previous.receivedQty || 0);
-        if (Math.abs(after.bought - before.bought - quantity) > 1e-8 || Math.abs((after.allocations[t.data.outletId] || 0) - (before.allocations[t.data.outletId] || 0) - quantity) > 1e-8) fail('Order receiving stock does not match delivery.');
+        if (!stockAction && (Math.abs(after.bought - before.bought - quantity) > 1e-8 || Math.abs((after.allocations[t.data.outletId] || 0) - (before.allocations[t.data.outletId] || 0) - quantity) > 1e-8)) fail('Order receiving stock does not match delivery.');
       }
     }
   }

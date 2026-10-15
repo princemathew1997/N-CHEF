@@ -87,3 +87,44 @@ business data. Local and production accounts are separate.
 
 ## 📄 License
 ISC
+
+## Item catalog and outlet stock
+
+Administration → Item Catalog manages item metadata and active status. Only admins
+can create or edit catalog items. Catalog creation never adds stock. Units become
+read-only after stock history exists; existing duplicate names are flagged for
+review, while new duplicates are rejected.
+
+Admins and supervisors use Stock to receive quantities into permitted outlets,
+distribute quantities to cuisine sections, record physical-count adjustments with
+reasons, and inspect transaction history. Distribution deducts immediately; there
+is no second consumption deduction or separate cuisine balance. Request approval
+and purchase-order receiving use this same ledger.
+
+Migration `0005_outlet_stock.sql` preserves original item payloads and prior movement
+history, creates opening outlet quantities from allocations minus consumption,
+and retains shared remainder as unassigned legacy stock. Admins assign that
+remainder through Stock → Assign Legacy Stock. Inconsistent legacy data is flagged
+and blocked from receipts/distributions until an admin verifies counts and saves
+reconciliation with a reason. Original quantities remain visible for review.
+Apply migrations before deploying this version; production migration and deployment
+are separate from local testing.
+
+For a disposable local preview: `npm run build` then `node scripts/qa-server.mjs`.
+Open `http://127.0.0.1:8888`, using `qa_admin` / `qa-only-password-2026`.
+The in-memory test database resets when the preview server restarts.
+
+Master Orders reports one permitted outlet at a time, restoring the last outlet
+selected by each user. Its category/item filters and IST From/To dates control
+opening stock, receipts (including legacy assignments), per-cuisine distributions,
+adjustments, and remaining stock. Today is calculated in Asia/Kolkata. Logged
+instants remain stored in UTC and are displayed with explicit IST timestamps.
+Stock Overview is admin-only; supervisors use Master Orders and their permitted
+stock actions. Stock forms use searchable item selection and lock the outlet when
+only one is assigned.
+
+Supervisors raise their own requirements under Requests → Raise Request. These
+persist as ordinary outlet requests and appear with chef requests in consolidation.
+Edit quantities in the cuisine columns; ingredient and grand totals are calculated
+and cannot be edited directly. Revised quantities and the cuisine breakdown are
+saved together and used for stock distribution on approval.
