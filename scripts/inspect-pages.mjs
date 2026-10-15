@@ -1,0 +1,10 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+const config = readFileSync(join(process.env.APPDATA, 'xdg.config/.wrangler/config/default.toml'), 'utf8');
+const token = config.match(/^oauth_token\s*=\s*"([^"]+)"/m)?.[1];
+if (!token) throw new Error('Wrangler OAuth credential is unavailable.');
+const res = await fetch('https://api.cloudflare.com/client/v4/accounts/5461025e548c01fea04a40b509473036/pages/projects/nchef', { headers: { Authorization: `Bearer ${token}` } });
+const data = await res.json();
+if (!data.success) throw new Error(JSON.stringify(data.errors));
+const p = data.result;
+console.log(JSON.stringify({ name: p.name, subdomain: p.subdomain, production_branch: p.production_branch, domains: p.domains, production_stage: p.canonical_deployment?.latest_stage, deployment_url: p.canonical_deployment?.url, services: p.deployment_configs?.production?.services }, null, 2));

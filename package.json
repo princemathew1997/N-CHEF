@@ -4,7 +4,13 @@
   "description": "Commercial multi-outlet kitchen inventory management, cuisine sections indents & stock tracking platform.",
   "main": "js/app.js",
   "scripts": {
-    "start": "python -m http.server 8000"
+    "start": "npm run build && wrangler dev --port 8000 --ip 127.0.0.1",
+    "build": "node scripts/build.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:database": "python -m unittest discover -s tests -v",
+    "db:local": "wrangler d1 migrations apply DB --local",
+    "db:remote": "wrangler d1 migrations apply DB --remote",
+    "deploy:pages": "npm run build && node scripts/deploy-pages.mjs"
   },
   "keywords": [
     "kitchen-management",
@@ -13,5 +19,11 @@
     "stock-tracker",
     "indents"
   ],
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "acorn": "^8.19.0",
+    "esbuild": "0.28.2",
+    "miniflare": "5.20261012.0-beta",
+    "wrangler": "4.151.0"
+  }
 }
