@@ -78,12 +78,13 @@ order lines, permissions, and ledger entries remain queryable with SQL.
 Removed records are deactivated for history. Referenced catalog entries cannot
 be removed while still in use; items with stock history cannot be deleted.
 
-Explicit server actions handle central receipts, outlet consumption, full
-purchase-order receiving, and individual/bulk approvals. Central stock must
-exist before approval. Receiving a purchase order adds its remaining quantity
-directly to the destination outlet and can happen only once. Partial deliveries
-are not currently exposed. A dispatch workflow separate from approval retains
-the existing app behavior; approval allocates stock directly to the outlet.
+Explicit server actions receive stock into an outlet, distribute it to a cuisine,
+record physical-count adjustments, receive full purchase orders, and approve
+requests. Admins and supervisors can operate only within permitted outlets;
+request/indent approval remains admin-only. Distribution and approval immediately
+deduct outlet stock; cuisines are labels rather than separately held balances.
+Purchase orders can be received exactly once. Partial deliveries are not exposed.
+Catalog creation and metadata edits never change stock quantities.
 
 Because the existing interface uses HTML template strings, API text validation
 currently rejects markup, quotes, and backslashes in business display fields.
@@ -98,11 +99,15 @@ Passwords are not subject to that display-field restriction.
 | POST `/api/login`, POST `/api/logout`, GET `/api/session` | Server sessions |
 | GET `/api/state` | Scoped, confirmed state |
 | POST `/api/changes` | Validated record changes |
-| POST `/api/stock/receipt` | Admin central receiving |
-| POST `/api/stock/consume` | Consumption within assigned outlets |
+| POST `/api/stock/receipt` | Admin/supervisor outlet receiving, with vendor |
+| POST `/api/stock/distribute` | Issue outlet stock to a cuisine |
+| POST `/api/stock/adjust` | Set verified outlet count with required reason |
+| POST `/api/stock/assign` | Admin assigns unassigned legacy stock |
+| POST `/api/stock/reconcile` | Admin verifies inconsistent legacy remainder |
+| POST `/api/cuisines/add` | Admin creates a cuisine section |
 | POST `/api/purchase-orders/receive` | Admin/supervisor full PO receiving |
 | POST `/api/indents/approve`, POST `/api/indents/approve-all` | Atomic approvals |
-| POST `/api/requests/approve` | Individual unlinked request allocation |
+| POST `/api/requests/approve` | Individual unlinked request distribution |
 | GET `/api/health` | Database connectivity |
 
 ### Run, test, deploy
@@ -141,3 +146,45 @@ Never ship the disposable QA app or its test credentials. Production starts
 with no accounts until an owner completes setup; do not add demo users.
 
 GitHub ownership transfer and Wix domain connection remain separate tasks.
+
+## Outlet stock release (migration 0005)
+
+This release must deploy the database migration and API together. Schedule a short
+maintenance window and stop inventory entry while upgrading. Take a fresh remote
+D1 export into ignored `backups/` before applying `0005_outlet_stock.sql`, then
+apply the migration, deploy `nchef-api`, and publish Pages from the same commit.
+Do not upload the disposable QA server or seed production with test users.
+
+The migration preserves original item payloads and existing movement records.
+Opening outlet balances are allocations minus consumption. The remaining shared
+balance is retained in `legacy_stock`; only an admin can assign it to outlets.
+Invalid legacy totals are flagged and blocked from receipts/distribution until
+an admin verifies outlet counts and reconciles the unassigned remainder with a
+reason. Original values remain available on the reconciliation screen.
+
+Migration 0005 also fences writes to the retired JSON stock fields. An old API
+version will fail stock writes rather than silently update the wrong ledger after
+migration. Metadata-only edits are still allowed. Refresh all browser clients once
+the new API and Pages assets are live; stale clients must not keep submitting old
+workflows. Inventory reads, balances, history, and revision are fetched in a single
+D1 batch so clients cannot combine different stock snapshots.
+
+Before reopening entry, verify `/api/health`, admin login/catalog access, scoped
+supervisor outlet controls, one receipt/distribution or count adjustment, and the
+IST Master Orders report against the new history. Verify migration issues and
+unassigned balances before using affected items. Check logs for API errors and
+repeated revision conflicts. CI validates JS/API tests, SQLite migrations, static
+assets, and a Worker dry-run package without deployment credentials.
+
+Do not roll back only the API or remove the migration after new stock transactions.
+The legacy JSON and old balances intentionally stop changing at migration time.
+Prefer a forward fix. A database restore must be coordinated with the matching old
+API and Pages version during maintenance; reconcile any transactions recorded
+after the backup before accepting new entries.
+
+`/api/state` includes scoped `outletStock`, `legacyStock` (admin-only), and
+`stockHistory`. UTC instants are stored unchanged; the UI uses Asia/Kolkata for
+explicit IST timestamps and report boundaries. History is append-only. Both global
+revision checks and operation IDs apply to stock commands. Read-only reports need
+full history to reconstruct opening/closing counts; archive/pagination must preserve
+these calculations if introduced later.

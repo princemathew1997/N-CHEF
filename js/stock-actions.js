@@ -1,247 +1,156 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const view = document.getElementById('viewMasterOrders');
-    if (!view) return;
+// Catalog metadata and outlet stock use separate server commands.
+(() => {
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const titles = { overview:'Stock Overview', catalog:'Item Catalog', receipt:'Receive Stock', distribute:'Distribute to Cuisine', adjust:'Stock Adjustments', history:'Stock History', assign:'Assign Legacy Stock', cuisines:'Cuisine Sections' };
+    const adminPages = ['overview','catalog','assign','cuisines'];
+    const allowedOutlets = () => OutletSelection.allowed();
+    const options = (rows, value, label) => rows.map(r => `<option value="${esc(value(r))}">${esc(label(r))}</option>`).join('');
+    const table = (headers, rows) => `<div class="table-container"><table><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.length ? rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${headers.length}">No records yet.</td></tr>`}</tbody></table></div>`;
+    const field = (label, control) => `<label>${label}${control}</label>`;
+    const select = (name, contents) => `<select name="${name}" required>${contents}</select>`;
+    let page = 'overview', editing = null, search = '';
+    let panel;
+    const error = e => window.showUiModal?.({title:'Change was not saved',message:e.message,type:'warning'});
+    const activeItems = () => masterItemsData.filter(i => i.active !== false);
+    const quantity = (item, outlet) => committedState?.outletStock?.find(s=>s.item_id===item && s.outlet_id===outlet)?.quantity || 0;
+    const outletSelect = () => OutletSelection.markup();
 
-    // Create Quick Stock Actions toolbar
-    const toolbar = document.createElement('div');
-    toolbar.id = 'stockActionsToolbar';
-    toolbar.className = 'stock-actions-toolbar';
-    view.prepend(toolbar);
-
-    const createButton = (label, iconName, action, adminOnly = false) => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'btn btn-outline stock-action-btn' + (adminOnly ? ' admin-only' : '');
-        button.innerHTML = `<i data-lucide="${iconName}" style="width:14px;height:14px;color:var(--primary);flex-shrink:0;"></i> <span>${label}</span>`;
-        button.addEventListener('click', action);
-        toolbar.append(button);
-        return button;
-    };
-
-    // Modal creation with proper fixed overlay and n.chef theme styling
-    const modal = document.createElement('div');
-    modal.id = 'stockActionModal';
-    modal.className = 'modal hidden';
-    modal.innerHTML = `
-        <div class="panel stock-modal-panel" style="width:100%;max-width:480px;border:1px solid var(--border-gold);box-shadow:0 20px 50px rgba(0,0,0,0.85);border-radius:12px;position:relative;animation:modalSlideUp 0.25s cubic-bezier(0.16,1,0.3,1);">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--border);">
-                <div style="display:flex;align-items:center;gap:10px;">
-                    <div id="stockActionIconBox" style="width:36px;height:36px;border-radius:8px;background:rgba(255,190,11,0.12);display:flex;align-items:center;justify-content:center;color:var(--primary);">
-                        <i data-lucide="package-plus" style="width:20px;height:20px;"></i>
-                    </div>
-                    <div>
-                        <h3 id="stockActionTitle" style="margin:0;font-size:1.05rem;font-weight:700;color:#fff;"></h3>
-                        <p id="stockActionSubtitle" style="margin:2px 0 0 0;font-size:0.76rem;color:var(--text-muted);"></p>
-                    </div>
-                </div>
-                <button type="button" class="icon-btn" id="stockActionCloseBtn" style="color:var(--text-muted);cursor:pointer;padding:4px;border-radius:6px;" title="Close">
-                    <i data-lucide="x" style="width:18px;height:18px;"></i>
-                </button>
-            </div>
-            <form id="stockActionForm" style="display:flex;flex-direction:column;gap:14px;">
-                <div id="stockItemLabel" class="input-group" style="margin:0;">
-                    <label for="stockActionItem" style="font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:6px;display:block;">Item *</label>
-                    <select id="stockActionItem" style="width:100%;background:var(--dark);color:#fff;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.88rem;outline:none;" required></select>
-                </div>
-                <div id="stockOutletLabel" class="input-group" style="margin:0;">
-                    <label for="stockActionOutlet" style="font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:6px;display:block;">Outlet *</label>
-                    <select id="stockActionOutlet" style="width:100%;background:var(--dark);color:#fff;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.88rem;outline:none;" required></select>
-                </div>
-                <div id="stockQtyLabel" class="input-group" style="margin:0;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                        <label for="stockActionQty" style="font-size:0.8rem;font-weight:600;color:var(--text-muted);">Quantity *</label>
-                        <span id="stockActionUnitBadge" style="font-size:0.75rem;color:var(--primary);font-weight:600;"></span>
-                    </div>
-                    <input id="stockActionQty" type="number" min="0.001" step="any" placeholder="Enter quantity" style="width:100%;background:var(--dark);color:#fff;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.88rem;outline:none;" required>
-                </div>
-                <div id="stockPoLabel" class="input-group" style="margin:0;">
-                    <label for="stockActionPO" style="font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:6px;display:block;">Purchase Order *</label>
-                    <select id="stockActionPO" style="width:100%;background:var(--dark);color:#fff;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.88rem;outline:none;" required></select>
-                </div>
-                <div id="stockActionHintBox" style="background:rgba(255,190,11,0.08);border:1px solid rgba(255,190,11,0.25);border-radius:8px;padding:10px 12px;display:flex;align-items:flex-start;gap:8px;">
-                    <i data-lucide="info" style="width:16px;height:16px;color:var(--primary);flex-shrink:0;margin-top:2px;"></i>
-                    <p id="stockActionHint" style="margin:0;font-size:0.78rem;color:var(--text-muted);line-height:1.4;"></p>
-                </div>
-                <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px;padding-top:14px;border-top:1px solid var(--border);">
-                    <button type="button" class="btn btn-outline" id="stockActionCancel" style="padding:9px 18px;font-size:0.88rem;cursor:pointer;">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="stockActionSubmitBtn" style="padding:9px 20px;font-size:0.88rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
-                        <i data-lucide="check" style="width:15px;height:15px;"></i> Save Update
-                    </button>
-                </div>
-            </form>
-        </div>
-    `;
-    document.body.append(modal);
-
-    let mode = '';
-
-    const updateUnitBadge = () => {
-        const itemSel = document.getElementById('stockActionItem');
-        const badge = document.getElementById('stockActionUnitBadge');
-        if (!itemSel || !badge) return;
-        const selectedItem = (typeof masterItemsData !== 'undefined' ? masterItemsData : []).find(i => i.id === itemSel.value);
-        badge.textContent = selectedItem ? `Unit: ${selectedItem.unit}` : '';
-    };
-
-    const fill = (selectId, values, label) => {
-        const select = document.getElementById(selectId);
-        if (!select) return;
-        select.replaceChildren();
-        if (!values || values.length === 0) {
-            const opt = document.createElement('option');
-            opt.value = '';
-            opt.textContent = 'None available';
-            select.append(opt);
-            return;
+    const reportFilters = {category:'',item:'',from:InventoryTools.day(),to:InventoryTools.day()};
+    const overviewFilters = {outlet:'',category:'',item:''};
+    const numberText = value => Number(value.toFixed(6)).toLocaleString('en-IN');
+    const categories = () => [...new Set(masterItemsData.map(i=>i.category))].sort();
+    const categoryOptions = () => '<option value="">All Categories</option>'+options(categories(),c=>c,c=>c);
+    function overview(content) {
+        content.innerHTML='<div class="inventory-filters">'+field('Outlet',OutletSelection.markup('overviewOutlet',true))+field('Category',select('category',categoryOptions()))+field('Item','<div id="overviewItemPicker"></div>')+'</div><div id="overviewRows"></div>';
+        const category=content.querySelector('[name=category]');category.value=overviewFilters.category;
+        const outlet=content.querySelector('[name=overviewOutlet]');
+        if(outlet.tagName==='SELECT')outlet.value=overviewFilters.outlet;
+        let picker;
+        const draw=()=>{
+            overviewFilters.outlet=outlet.value;overviewFilters.category=category.value;
+            const rows=allowedOutlets().filter(o=>!outlet.value || o.id===outlet.value).flatMap(o=>masterItemsData.filter(i=>(i.active!==false || quantity(i.id,o.id)>0) && (!category.value || i.category===category.value) && (!overviewFilters.item || i.id===overviewFilters.item)).map(i=>[esc(o.name),esc(i.name),esc(i.category),numberText(quantity(i.id,o.id)),esc(i.unit)]));
+            content.querySelector('#overviewRows').innerHTML=table(['Outlet','Item','Category','Available','Unit'],rows);
+        };
+        const mountPicker=()=>{const items=masterItemsData.filter(i=>!category.value || i.category===category.value);if(!items.some(i=>i.id===overviewFilters.item))overviewFilters.item='';picker=createItemPicker(content.querySelector('#overviewItemPicker'),items,{optional:true,selected:overviewFilters.item,onChange:id=>{overviewFilters.item=id;draw();}});};
+        category.onchange=()=>{mountPicker();draw();};outlet.onchange=draw;mountPicker();draw();
+    }
+    window.renderOutletDashboard = () => {
+        OutletSelection.restore();
+        const tbody=document.getElementById('inventoryTableBody');if(!tbody)return;
+        const filters=document.getElementById('masterStockFilters');
+        if(!filters.dataset.bound){
+            filters.innerHTML=field('Category',select('category',categoryOptions()))+field('Item','<div id="masterItemPicker"></div>')+field('From (IST)','<input type="date" name="from">')+field('To (IST)','<input type="date" name="to">')+'<p id="reportError" role="alert"></p>';
+            filters.querySelector('[name=category]').onchange=e=>{reportFilters.category=e.target.value;reportFilters.item='';mountPicker();draw();};
+            for(const name of ['from','to']){filters.querySelector('[name='+name+']').value=reportFilters[name];filters.querySelector('[name='+name+']').onchange=e=>{reportFilters[name]=e.target.value;draw();};}
+            filters.dataset.bound='true';
         }
-        for (const value of values) {
-            const option = document.createElement('option');
-            option.value = value.id;
-            option.textContent = label(value);
-            select.append(option);
+        const category=filters.querySelector('[name=category]');category.innerHTML=categoryOptions();category.value=reportFilters.category;
+        function mountPicker(){const items=masterItemsData.filter(i=>!reportFilters.category || i.category===reportFilters.category);if(!items.some(i=>i.id===reportFilters.item))reportFilters.item='';createItemPicker(filters.querySelector('#masterItemPicker'),items,{optional:true,selected:reportFilters.item,onChange:id=>{reportFilters.item=id;draw();}});}
+        function draw(){
+            try {
+                const items=masterItemsData.filter(i=>(!reportFilters.category || i.category===reportFilters.category) && (!reportFilters.item || i.id===reportFilters.item));
+                const result=InventoryTools.report(items,committedState.outletStock,committedState.stockHistory,currentStoreView,reportFilters.from,reportFilters.to);
+                const headings=['Item','Unit','Opening Stock','Received',...result.cuisines.map(c=>c+' Usage'),'Adjustments','Remaining Stock'];
+                document.getElementById('inventoryTableHeader').innerHTML=headings.map(h=>'<th>'+esc(h)+'</th>').join('');
+                tbody.innerHTML=result.rows.map(r=>'<tr>'+[esc(r.item.name),esc(r.item.unit),numberText(r.opening),numberText(r.received),...result.cuisines.map(c=>numberText(r.usage[c])),numberText(r.adjustments),numberText(r.remaining)].map(v=>'<td>'+v+'</td>').join('')+'</tr>').join('') || `<tr><td colspan="${headings.length}">No stock activity matches these filters.</td></tr>`;
+                const metrics={metricTotalItems:result.rows.length,metricActiveOutlets:result.rows.filter(r=>Object.values(r.usage).some(q=>q>0)).length,metricLowStock:result.rows.filter(r=>r.remaining<=5).length};
+                for(const [id,val] of Object.entries(metrics))document.getElementById(id).textContent=val;
+                document.getElementById('metricTotalItemsLabel').textContent='Items in Report';document.getElementById('metricActiveOutletsLabel').textContent='Items Used';document.getElementById('metricLowStockLabel').textContent='Low Remaining Stock';
+                filters.querySelector('#reportError').textContent='';
+            } catch(e){filters.querySelector('#reportError').textContent=e.message;tbody.innerHTML='';}
         }
+        mountPicker();draw();OutletSelection.renderHeader();
     };
-
-    const closeModal = () => {
-        modal.classList.add('hidden');
-    };
-
-    const open = selected => {
-        mode = selected;
-        const poMode = mode === 'purchase-orders/receive';
-        const isReceipt = mode === 'stock/receipt';
-        
-        const titleEl = document.getElementById('stockActionTitle');
-        const subtitleEl = document.getElementById('stockActionSubtitle');
-        const iconBox = document.getElementById('stockActionIconBox');
-
-        if (poMode) {
-            if (titleEl) titleEl.textContent = 'Receive Purchase Order';
-            if (subtitleEl) subtitleEl.textContent = 'Acknowledge physical delivery into the store outlet.';
-            if (iconBox) iconBox.innerHTML = '<i data-lucide="truck" style="width:20px;height:20px;"></i>';
-        } else if (isReceipt) {
-            if (titleEl) titleEl.textContent = 'Receive Central Stock';
-            if (subtitleEl) subtitleEl.textContent = 'Add incoming stock delivery into the central warehouse.';
-            if (iconBox) iconBox.innerHTML = '<i data-lucide="package-plus" style="width:20px;height:20px;"></i>';
-        } else {
-            if (titleEl) titleEl.textContent = 'Record Outlet Consumption';
-            if (subtitleEl) subtitleEl.textContent = 'Log consumed ingredients used by this store kitchen.';
-            if (iconBox) iconBox.innerHTML = '<i data-lucide="utensils" style="width:20px;height:20px;"></i>';
+    function render() {
+        if (!panel || !currentUser) return;
+        if (adminPages.includes(page) && currentUser.role !== 'admin') { window.switchToView('viewMasterOrders'); return; }
+        panel.innerHTML = `<header class="dash-header"><div><h1>${titles[page]}</h1><p>${page==='catalog'?'Manage item details here. Receive quantities through Stock.':'Stock is held by outlet. Cuisine distributions deduct stock immediately.'}</p></div></header><div class="panel inventory-workspace" id="inventoryContent"></div>`;
+        const content=panel.querySelector('#inventoryContent');
+        if(page==='overview') overview(content);
+        if(page==='catalog') {
+            const item=editing ? masterItemsData.find(i=>i.id===editing) : null;
+            const locked=item && (committedState.stockHistory.some(m=>m.item_id===item.id) || item.bought>0);
+            content.innerHTML=`<form id="catalogForm" class="inventory-form">
+                <h3>${item?'Edit Item':'Add Catalog Item'}</h3>
+                ${field('Item name',`<input name="name" required maxlength="200" value="${esc(item?.name)}">`)}
+                ${field('Category',`<input name="category" required maxlength="200" value="${esc(item?.category || 'Grocery')}">`)}
+                ${field('Unit',`<input name="unit" required maxlength="200" value="${esc(item?.unit || 'kg')}" ${locked?'readonly':''}>${locked?'<small>Unit is locked because stock history exists.</small>':''}`)}
+                ${field('Preferred vendor',select('vendor', options(vendorsData,v=>v.name,v=>v.name)))}
+                ${field('Cuisine label',select('cuisine',options(cuisinesData,c=>c.name,c=>c.name)))}
+                ${field('Status','<select name="active"><option value="true">Active</option><option value="false">Inactive</option></select>')}
+                <div><button class="btn btn-primary">${item?'Save Changes':'Add to Catalog'}</button> <button class="btn btn-outline" type="button" id="catalogReset">Clear</button></div>
+                </form><label class="inventory-search">Search catalog<input id="catalogSearch" placeholder="Search name or category" value="${esc(search)}"></label><div id="catalogRows"></div>`;
+            const form=content.querySelector('form');
+            if(item){form.elements.vendor.value=item.vendor;form.elements.cuisine.value=item.cuisine || cuisinesData[0]?.name;form.elements.active.value=String(item.active!==false);}
+            const renderRows=()=>{
+                const matches=masterItemsData.filter(i=>(i.name+' '+i.category).toLowerCase().includes(search.toLowerCase()));
+                content.querySelector('#catalogRows').innerHTML=table(['Item','Category','Unit','Vendor','Cuisine','Status','Action'],matches.map(i=>[esc(i.name)+(masterItemsData.some(other=>other.id!==i.id && other.name.trim().toLowerCase()===i.name.trim().toLowerCase())?' <small>Duplicate name — review</small>':''),esc(i.category),esc(i.unit),esc(i.vendor),esc(i.cuisine),i.active===false?'Inactive':'Active',`<button class="btn btn-outline" data-edit="${esc(i.id)}">Edit</button>`]));
+                content.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{editing=b.dataset.edit;render();});
+            };renderRows();
+            content.querySelector('#catalogSearch').oninput=e=>{search=e.target.value;renderRows();};
+            content.querySelector('#catalogReset').onclick=()=>{editing=null;render();};
+            form.onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(form));const original=item || {id:crypto.randomUUID(),bought:0,allocations:{},consumed:{}};const value={...original,...data,active:data.active==='true'};
+                await submit(form,async()=>{await runDatabaseAction('changes',{changes:[{entity:'items',key:value.id,value}]});editing=null;});};
         }
-
-        for (const [element, show] of [
-            ['stockItemLabel', !poMode],
-            ['stockQtyLabel', !poMode],
-            ['stockOutletLabel', mode === 'stock/consume'],
-            ['stockPoLabel', poMode]
-        ]) {
-            const el = document.getElementById(element);
-            if (el) {
-                el.style.display = show ? 'block' : 'none';
-                const inputOrSelect = el.querySelector('input,select');
-                if (inputOrSelect) {
-                    inputOrSelect.disabled = !show;
-                    inputOrSelect.required = show;
-                }
+        if(['receipt','distribute','adjust','assign'].includes(page)) {
+            const items=['adjust','assign'].includes(page)?masterItemsData:activeItems();
+            content.innerHTML=`<form id="outletStockForm" class="inventory-form">
+            ${field('Outlet',outletSelect())}${field('Item','<div id="stockItemPicker"></div>')}
+            <p id="availableStock"></p>
+            ${page==='receipt'?field('Vendor',select('vendor',options(vendorsData,v=>v.name,v=>v.name))):''}
+            ${page==='distribute'?field('Cuisine',select('cuisine',options(cuisinesData,c=>c.name,c=>c.name))):''}
+            ${field(page==='adjust'?'Actual on-hand quantity':'Quantity',`<input name="quantity" type="number" step="any" min="${page==='adjust'?'0':'0.00000001'}" required>`)}
+            ${field(page==='adjust'?'Reason (required)':'Note',`<input name="reason" maxlength="500" ${page==='adjust'?'required':''}>`)}
+            <button class="btn btn-primary">${titles[page]}</button></form><div id="legacyDetails"></div>`;
+            const form=content.querySelector('form');
+            const update=()=>{content.querySelector('#availableStock').textContent=form.elements.itemId.value ? `Available: ${quantity(form.elements.itemId.value,form.elements.outletId.value)}` : 'Select an item to see available stock.';};form.onchange=()=>{OutletSelection.choose(form.elements.outletId.value);update();};createItemPicker(content.querySelector('#stockItemPicker'),items,{onChange:update});update();
+            form.onsubmit=e=>{e.preventDefault();const data=Object.fromEntries(new FormData(form));data.quantity=Number(data.quantity);submit(form,()=>runDatabaseAction('stock/'+page,data));};
+            if(page==='assign')content.querySelector('#legacyDetails').innerHTML=table(['Item','Unassigned quantity','Reconciliation'],(committedState.legacyStock || []).filter(s=>s.quantity!==0 || s.issue).map(s=>[esc(masterItemsData.find(i=>i.id===s.item_id)?.name),esc(s.quantity),esc(s.issue || 'Ready to assign')]));
+        }
+        if(page==='assign') {
+            const issues=(committedState.legacyStock || []).filter(s=>s.issue);
+            if(issues.length) {
+                const original = document.createElement('div');
+                original.innerHTML=table(['Item','Original bought','Original outlet allocations','Original consumed'],issues.map(s=>{const i=masterItemsData.find(i=>i.id===s.item_id);return [esc(i?.name),esc(i?.bought),esc(JSON.stringify(i?.allocations)),esc(JSON.stringify(i?.consumed))];}));content.append(original);
+                const form=document.createElement('form');form.className='inventory-form';
+                form.innerHTML='<h3>Reconcile Legacy Stock</h3><p>Review the original quantities and verify outlet counts through Stock Adjustments. Enter the verified remaining unassigned quantity below.</p>'+field('Item','<div class="reconcile-picker"></div>')+field('Verified unassigned quantity','<input name="quantity" type="number" min="0" step="any" required>')+field('Reconciliation reason','<input name="reason" required maxlength="500">')+'<button class="btn btn-primary">Save Reconciliation</button>';
+                form.onsubmit=e=>{e.preventDefault();const data=Object.fromEntries(new FormData(form));data.quantity=Number(data.quantity);submit(form,()=>runDatabaseAction('stock/reconcile',data));};content.append(form);createItemPicker(form.querySelector('.reconcile-picker'),masterItemsData.filter(i=>issues.some(s=>s.item_id===i.id)));
             }
         }
-
-        fill('stockActionItem', typeof masterItemsData !== 'undefined' ? masterItemsData : [], item => `${item.name} (${item.category} • ${item.unit})`);
-        
-        const outlets = (typeof getVisibleOutlets === 'function') ? getVisibleOutlets() : (typeof outletsData !== 'undefined' ? outletsData : []);
-        fill('stockActionOutlet', outlets, item => item.name);
-        
-        // If a specific store is currently filtered, pre-select it
-        if (typeof currentStoreView !== 'undefined' && currentStoreView !== 'all') {
-            const outletSel = document.getElementById('stockActionOutlet');
-            if (outletSel && outlets.some(o => o.id === currentStoreView)) {
-                outletSel.value = currentStoreView;
-            }
+        if(page==='history') {
+            content.innerHTML=field('Filter by outlet',OutletSelection.markup('historyOutlet',currentUser.role==='admin'))+ '<div id="historyRows"></div>';
+            const update=()=>{const outlet=content.querySelector('[name=historyOutlet]').value;content.querySelector('#historyRows').innerHTML=table(['Date','Outlet','Item','Action','Change','Balance','Unit','Cuisine','Vendor','Reason','Person'],committedState.stockHistory.filter(m=>!outlet || m.outlet_id===outlet).map(m=>[esc(InventoryTools.timestamp(m.created_at)),esc(outletsData.find(o=>o.id===m.outlet_id)?.name),esc(m.item_name),esc(m.kind),esc(m.delta),esc(m.quantity),esc(m.unit),esc(m.cuisine),esc(m.vendor),esc(m.reason),esc(m.actor_name)]));};content.querySelector('[name=historyOutlet]').onchange=update;update();
         }
-
-        const pendingPOs = (typeof purchaseOrdersData !== 'undefined' ? purchaseOrdersData : []).filter(po => po.status !== 'Received');
-        fill('stockActionPO', pendingPOs, po => `${po.poNumber} — ${po.outletName || po.outletId}`);
-
-        const submitBtn = document.getElementById('stockActionSubmitBtn');
-        if (poMode && pendingPOs.length === 0) {
-            if (submitBtn) submitBtn.disabled = true;
-            document.getElementById('stockActionHint').textContent = 'There are no pending purchase orders awaiting delivery reception.';
-        } else {
-            if (submitBtn) submitBtn.disabled = false;
-            document.getElementById('stockActionHint').textContent = poMode 
-                ? 'Receives all remaining quantities from this purchase order into its assigned outlet stock.'
-                : isReceipt
-                    ? 'Increases central warehouse stock for this item. Stock becomes available for store distribution.'
-                    : 'Records ingredient consumption for the selected store. Storage balance will update immediately.';
+        if(page==='cuisines') {
+            content.innerHTML=`<form class="inventory-form"><h3>Add Cuisine Section</h3>${field('Name','<input name="name" required maxlength="200">')}<button class="btn btn-primary">Add Section</button></form>`+table(['Cuisine section'],cuisinesData.map(c=>[esc(c.name)]));
+            const form=content.querySelector('form');form.onsubmit=e=>{e.preventDefault();submit(form,()=>runDatabaseAction('cuisines/add',{name:form.elements.name.value}));};
         }
-
-        document.getElementById('stockActionQty').value = '';
-        updateUnitBadge();
-
-        modal.classList.remove('hidden');
-        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+    async function submit(form, action) {
+        const buttons=form.querySelectorAll('button');buttons.forEach(b=>b.disabled=true);
+        try {await action();render();window.renderOutletDashboard();window.showToast?.('Saved successfully','success');}
+        catch(e){try{applyServerState(await apiRequest('state'));}catch{} error(e);}
+        finally{buttons.forEach(b=>b.disabled=false);}
+    }
+    window.showInventoryView = view => {
+        if(!view.startsWith('inventory:')) return false;
+        if(!currentUser || currentUser.role==='chef') {window.switchToView('viewChefPortal');return true;}
+        page=view.slice(10);if(!titles[page])page='overview';
+        if(adminPages.includes(page) && currentUser.role!=='admin'){window.switchToView('viewMasterOrders');return true;}
+        panel?.classList.remove('hidden');render();
+        if(!adminPages.includes(page)) { document.getElementById('navStockSubmenu')?.classList.add('open'); document.getElementById('navStockChevron').style.transform='rotate(180deg)'; }
+        document.querySelectorAll('[data-inventory]').forEach(a=>a.classList.toggle('active',a.dataset.inventory===page));
+        document.getElementById('mobileActivePage').textContent=titles[page];
+        return true;
     };
-
-    document.getElementById('stockActionItem')?.addEventListener('change', updateUnitBadge);
-
-    // Create buttons with icons
-    createButton('Receive central stock', 'package-plus', () => open('stock/receipt'), true);
-    createButton('Record consumption', 'utensils', () => open('stock/consume'));
-    const receivePO = createButton('Receive purchase order', 'truck', () => open('purchase-orders/receive'));
-    receivePO.classList.add('no-chef');
-
-    // Close handlers
-    document.getElementById('stockActionCancel')?.addEventListener('click', closeModal);
-    document.getElementById('stockActionCloseBtn')?.addEventListener('click', closeModal);
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) closeModal();
+    document.addEventListener('DOMContentLoaded',()=>{
+        panel=document.createElement('div');panel.id='viewInventory';panel.className='hidden';document.getElementById('viewMasterOrders').parentElement.append(panel);
+        document.querySelectorAll('[data-inventory]').forEach(a=>a.onclick=e=>{e.preventDefault();window.switchToView('inventory:'+a.dataset.inventory);});
+        document.addEventListener('click',async e=>{
+            const button=e.target.closest('[data-receive-po]');if(!button)return;
+            button.disabled=true;try {await runDatabaseAction('purchase-orders/receive',{poId:button.dataset.receivePo});window.renderVendorPOTable?.();}catch(e){error(e);}finally{button.disabled=false;}
+        });
+        const oldSync=window.onLiveSyncReceived;window.onLiveSyncReceived=()=>{oldSync?.();if(currentView.startsWith('inventory:') && !panel.contains(document.activeElement))render();};
+        window.openAddItemModal=()=>{editing=null;window.switchToView('inventory:catalog');};
     });
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
-    });
-
-    // Form submit
-    document.getElementById('stockActionForm').addEventListener('submit', async event => {
-        event.preventDefault();
-        const submitBtn = document.getElementById('stockActionSubmitBtn');
-        const origBtnHtml = submitBtn ? submitBtn.innerHTML : '';
-        if (submitBtn) {
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="spinner" style="display:inline-block;width:14px;height:14px;border:2px solid #000;border-top-color:transparent;border-radius:50%;animation:spin 0.6s linear infinite;margin-right:6px;"></span> Saving...';
-        }
-
-        try {
-            const itemId = document.getElementById('stockActionItem')?.value;
-            const outletId = document.getElementById('stockActionOutlet')?.value;
-            const quantity = Number(document.getElementById('stockActionQty')?.value);
-            const poId = document.getElementById('stockActionPO')?.value;
-
-            await runDatabaseAction(mode, { itemId, outletId, quantity, poId });
-            closeModal();
-            if (typeof loadDashboardData === 'function') loadDashboardData();
-            if (typeof window.showToast === 'function') {
-                window.showToast('Stock update saved successfully.', 'success');
-            }
-        } catch (error) {
-            if (typeof window.showUiModal === 'function') {
-                window.showUiModal({
-                    title: 'Stock Update Failed',
-                    message: error.message || 'Could not save stock action. Please try again.',
-                    type: 'warning'
-                });
-            } else if (typeof window.showToast === 'function') {
-                window.showToast(error.message || 'Error saving stock action.', 'danger');
-            } else {
-                alert(error.message || 'Error saving stock action.');
-            }
-        } finally {
-            if (submitBtn) {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = origBtnHtml;
-                if (typeof lucide !== 'undefined') lucide.createIcons();
-            }
-        }
-    });
-
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-});
+})();

@@ -39,3 +39,11 @@ test('valid shortcuts select only assigned outlets', () => {
     assert.equal(app.context.currentStoreView, 'brigade');
     assert.equal(app.redraws(), 1);
 });
+
+test('overall-view shortcut is removed', () => {
+    const app = harness({ role:'admin', assignedLocations:['all'] });
+    app.context.currentStoreView='brigade';
+    app.handler({key:'o'});
+    assert.equal(app.context.currentStoreView,'brigade');
+    assert.equal(app.redraws(),0);
+});

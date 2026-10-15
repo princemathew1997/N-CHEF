@@ -1,3 +1,4 @@
+import { stockCommand } from './stock.mjs';
 import { digest, equalSecret, getSessionToken, hashPassword, randomToken, sessionCookie, verifyPassword } from './auth.mjs';
 import { clone, fail, hasOutlet, id, number, project, safeText, validateChanges } from './model.mjs';
 import { persistChanges, readState } from './database.mjs';
@@ -106,6 +107,25 @@ export default {
         await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await digest(getSessionToken(request))).run();
         return response({ ok: true }, 200, { 'Set-Cookie': sessionCookie(request, '', 0) });
       }
+      if (path === '/api/cuisines/add' && request.method === 'POST') {
+        if (actor.role !== 'admin') fail('Administrator permission required.', 403);
+        const input = await body(request); id(input.operationId);
+        const prior = await env.DB.prepare('SELECT actor_id FROM command_receipts WHERE id=?').bind(input.operationId).first();
+        if (prior) { if (prior.actor_id !== actor.id) fail('Command access denied.',403); return response(project(await readState(env.DB),actor)); }
+        const state = await readState(env.DB);
+        if (input.revision !== state.revision) fail('Data changed. Refresh and try again.',409);
+        const name = safeText(input.name, 'Cuisine name').trim();
+        if (state.cuisines.some(c => c.name.toLowerCase() === name.toLowerCase())) fail('Cuisine already exists.',409);
+        try { await env.DB.batch([
+          env.DB.prepare('INSERT INTO revision_guards VALUES (?,?)').bind(input.operationId,state.revision),
+          env.DB.prepare('INSERT INTO command_receipts VALUES (?,?,?,?)').bind(input.operationId,actor.id,state.revision,Math.floor(Date.now()/1000)),
+          env.DB.prepare('INSERT INTO cuisines VALUES (?,?)').bind(crypto.randomUUID(),name),
+          env.DB.prepare('INSERT INTO audit_events(id,actor_id,action,entity_type,entity_id) VALUES (?,?,?,?,?)').bind(crypto.randomUUID(),actor.id,'create','cuisines',name),
+          env.DB.prepare('DELETE FROM revision_guards WHERE command_id=?').bind(input.operationId),
+          env.DB.prepare('UPDATE app_revision SET revision=revision+1 WHERE id=1')
+        ]); } catch (e) { if (/STALE_REVISION|UNIQUE constraint/.test(e.message)) fail('Data changed. Refresh and try again.',409); throw e; }
+        return response(project(await readState(env.DB),actor));
+      }
       if (path === '/api/changes' && request.method === 'POST') {
         const input = await body(request);
         id(input.operationId);
@@ -121,7 +141,7 @@ export default {
         const { next, touched } = validateChanges(state, input.changes, current);
         return response(await persistChanges(env.DB, state, next, touched, current, input.operationId));
       }
-      if (['/api/stock/receipt', '/api/stock/consume', '/api/purchase-orders/receive', '/api/indents/approve', '/api/indents/approve-all', '/api/requests/approve'].includes(path) && request.method === 'POST') {
+      if (['/api/stock/receipt', '/api/stock/distribute', '/api/stock/adjust', '/api/stock/assign', '/api/stock/reconcile', '/api/purchase-orders/receive', '/api/indents/approve', '/api/indents/approve-all', '/api/requests/approve'].includes(path) && request.method === 'POST') {
         const input = await body(request);
         id(input.operationId);
         const prior = await env.DB.prepare('SELECT actor_id FROM command_receipts WHERE id = ?').bind(input.operationId).first();
@@ -133,10 +153,27 @@ export default {
           return response(project(state, current));
         }
         if (input.revision !== state.revision) fail('Data changed on another device. Refresh and try again.', 409);
+        let stock = { outletStock: clone(state.outletStock), legacyStock: clone(state.legacyStock), movements: [] };
+        const transact = (kind, input) => {
+          const result = stockCommand({ ...state, ...stock }, current, input, kind);
+          stock = { ...result, movements: [...stock.movements, ...result.movements] };
+        };
         const changes = [];
         const modify = (entity, data) => {
           const existing = changes.find(c => c.entity === entity && c.key === data.id);
           if (existing) existing.value = data; else changes.push({ entity, key: data.id, value: data });
+        };
+        const distributeIndent = (indent, line) => {
+          if (!line.revisedQty) return;
+          const linked = state.requests.filter(r => r.indentId === indent.id && r.itemId === line.itemId && (r.revisedQty ?? r.qty) > 0);
+          const total = linked.reduce((sum,r)=>sum+(r.revisedQty ?? r.qty),0);
+          if (!total) { transact('distribute',{itemId:line.itemId,outletId:indent.outletId,quantity:line.revisedQty,cuisine:indent.cuisine || 'Supervisor Extra',reason:'Indent '+indent.indentNumber}); return; }
+          let remaining=line.revisedQty;
+          linked.forEach((r,index)=>{
+            const quantity=index===linked.length-1?remaining:line.revisedQty*(r.revisedQty ?? r.qty)/total;
+            remaining-=quantity;
+            if(quantity>0) transact('distribute',{itemId:line.itemId,outletId:indent.outletId,quantity,cuisine:r.cuisine,reason:'Indent '+indent.indentNumber});
+          });
         };
         const itemFor = itemId => {
           const existing = changes.find(c => c.entity === 'items' && c.key === itemId);
@@ -144,17 +181,8 @@ export default {
           if (!item) fail('Item does not exist.', 404);
           return clone(item);
         };
-        if (path === '/api/stock/receipt') {
-          if (current.role !== 'admin') fail('Only admins can receive central stock.', 403);
-          const item = itemFor(input.itemId);
-          item.bought += number(input.quantity, 'Receipt quantity', true);
-          modify('items', item);
-        } else if (path === '/api/stock/consume') {
-          if (!hasOutlet(current, input.outletId)) fail('Outlet access denied.', 403);
-          const item = itemFor(input.itemId);
-          item.consumed ||= {};
-          item.consumed[input.outletId] = (item.consumed[input.outletId] || 0) + number(input.quantity, 'Consumption quantity', true);
-          modify('items', item);
+        if (path.startsWith('/api/stock/')) {
+          transact(path.split('/').pop(), input);
         } else if (path === '/api/purchase-orders/receive') {
           if (current.role === 'chef') fail('Only admins or supervisors can receive orders.', 403);
           const po = clone(state.purchase_orders.find(p => p.id === input.poId) || null);
@@ -164,58 +192,56 @@ export default {
             const quantity = line.qty - (line.receivedQty || 0);
             if (quantity <= 0) continue;
             const item = itemFor(line.itemId);
-            item.bought += quantity;
-            item.allocations[po.outletId] = (item.allocations[po.outletId] || 0) + quantity;
+            transact('receipt', { itemId: item.id, outletId: po.outletId, quantity, vendor: state.vendors.find(v => v.id === po.vendorId)?.name });
             line.receivedQty = line.qty;
-            modify('items', item);
+
           }
           po.status = 'Received'; po.receivedBy = current.name; po.receivedAt = new Date().toISOString();
           modify('purchase_orders', po);
         } else if (path === '/api/indents/approve-all') {
-          if (current.role !== 'admin') fail('Only admins can approve stock.', 403);
-          const selected = r => input.outletId === 'all' || r.outletId === input.outletId;
+          if (current.role !== 'admin') fail('Only admins can approve consolidated requests.', 403);
+          const selected = r => hasOutlet(current, r.outletId) && (input.outletId === 'all' || r.outletId === input.outletId);
           for (const original of state.indents.filter(i => i.status === 'Pending Approval' && selected(i))) {
             const indent = clone(original); indent.status = 'Approved';
             for (const line of indent.items) {
               const item = itemFor(line.itemId);
-              item.allocations[indent.outletId] = (item.allocations[indent.outletId] || 0) + line.revisedQty;
-              modify('items', item);
+              distributeIndent(indent, line);
             }
             modify('indents', indent);
             for (const req of state.requests.filter(r => r.indentId === indent.id)) modify('requests', { ...req, status: 'Approved' });
           }
           for (const req of state.requests.filter(r => !r.indentId && ['Pending', 'Accepted', 'Sent to Admin'].includes(r.status) && selected(r))) {
             const item = itemFor(req.itemId);
-            item.allocations[req.outletId] = (item.allocations[req.outletId] || 0) + req.qty;
-            modify('items', item); modify('requests', { ...req, status: 'Approved' });
+            transact('distribute', { itemId: item.id, outletId: req.outletId, quantity: req.qty, cuisine: req.cuisine, reason: 'Request approval' }); modify('requests', { ...req, status: 'Approved' });
           }
           if (!changes.length) fail('No pending requests or indents to approve.', 409);
         } else {
-          if (current.role !== 'admin') fail('Only admins can approve stock.', 403);
+          if (current.role !== 'admin') fail('Only admins can approve consolidated requests.', 403);
           if (path === '/api/indents/approve') {
             const indent = clone(state.indents.find(i => i.id === input.indentId) || null);
             if (!indent || indent.status !== 'Pending Approval') fail('Indent is not awaiting approval.', 409);
+            if (!hasOutlet(current, indent.outletId)) fail('Outlet access denied.', 403);
             indent.status = 'Approved';
             for (const line of indent.items) {
               const item = itemFor(line.itemId);
-              item.allocations[indent.outletId] = (item.allocations[indent.outletId] || 0) + line.revisedQty;
-              modify('items', item);
+              distributeIndent(indent, line);
             }
             modify('indents', indent);
             for (const req of state.requests.filter(r => r.indentId === indent.id)) modify('requests', { ...req, status: 'Approved' });
           } else {
             const req = clone(state.requests.find(r => r.id === input.requestId) || null);
             if (!req || !['Pending', 'Accepted', 'Sent to Admin'].includes(req.status) || req.indentId) fail('Request is not awaiting individual approval.', 409);
+            if (!hasOutlet(current, req.outletId)) fail('Outlet access denied.', 403);
             const quantity = number(input.quantity, 'Approval quantity', true);
             const item = itemFor(req.itemId);
-            item.allocations[req.outletId] = (item.allocations[req.outletId] || 0) + quantity;
+            transact('distribute', { itemId: item.id, outletId: req.outletId, quantity, cuisine: req.cuisine, reason: 'Request approval' });
             req.status = 'Approved'; req.qty = quantity;
-            modify('items', item); modify('requests', req);
+            modify('requests', req);
           }
         }
         // All changes above are derived on the server after explicit action permissions.
-        const { next, touched } = validateChanges(state, changes, { ...current, role: 'admin' });
-        return response(await persistChanges(env.DB, state, next, touched, current, input.operationId));
+        const { next, touched } = changes.length ? validateChanges(state, changes, { ...current, role: 'admin' }, true) : { next: state, touched: [] };
+        return response(await persistChanges(env.DB, state, next, touched, current, input.operationId, stock));
       }
       fail('Endpoint not found.', 404);
     } catch (error) {
