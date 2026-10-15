@@ -592,6 +592,27 @@ window.switchToView = function(viewName, subDivision = null) {
     currentView = viewName;
     localStorage.setItem('nchef_active_view', viewName);
 
+    // Sync mobile active page indicator and auto-close mobile navigation drawer
+    const mobilePageTitles = {
+        viewMasterOrders: 'Master Orders',
+        viewRequests: 'Manage Requests',
+        viewConsolidateRequests: 'Consolidate Request',
+        viewIndents: 'Indents',
+        viewChefPortal: 'My Requests',
+        viewVendors: 'Vendors',
+        viewLocations: 'Locations',
+        viewUsers: 'Users',
+        viewAddChef: 'Add Chef'
+    };
+    const mobileActiveTitleEl = document.getElementById('mobileActivePage');
+    if (mobileActiveTitleEl) {
+        mobileActiveTitleEl.textContent = mobilePageTitles[viewName] || 'Dashboard';
+    }
+    const mobileDrawer = document.getElementById('appSidebar');
+    const mobileBackdrop = document.getElementById('mobileDrawerBackdrop');
+    if (mobileDrawer) mobileDrawer.classList.remove('mobile-open');
+    if (mobileBackdrop) mobileBackdrop.classList.add('hidden');
+
     switch(viewName) {
         case 'viewMasterOrders':
             if (viewMaster) viewMaster.classList.remove('hidden');
@@ -812,6 +833,60 @@ function initNavigation() {
         navAddChef.addEventListener('click', (e) => {
             e.preventDefault();
             window.switchToView('viewAddChef');
+        });
+    }
+
+    // Desktop Sidebar Collapse Toggle
+    const sidebarCollapseBtn = document.getElementById('sidebarCollapseBtn');
+    const dashboardLayout = document.getElementById('page-dashboard');
+    const isSidebarCollapsed = localStorage.getItem('nchef_sidebar_collapsed') === 'true';
+    if (isSidebarCollapsed && dashboardLayout) {
+        dashboardLayout.classList.add('sidebar-collapsed');
+    }
+
+    if (sidebarCollapseBtn && dashboardLayout) {
+        sidebarCollapseBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            dashboardLayout.classList.toggle('sidebar-collapsed');
+            const collapsed = dashboardLayout.classList.contains('sidebar-collapsed');
+            localStorage.setItem('nchef_sidebar_collapsed', collapsed ? 'true' : 'false');
+            sidebarCollapseBtn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar (Compact View)';
+            const icon = document.getElementById('sidebarCollapseIcon');
+            if (icon) {
+                icon.setAttribute('data-lucide', collapsed ? 'chevron-right' : 'chevron-left');
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            }
+        });
+    }
+
+    // Mobile Menu Toggle and Drawer
+    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+    const mobileDrawerCloseBtn = document.getElementById('mobileDrawerCloseBtn');
+    const mobileDrawerBackdrop = document.getElementById('mobileDrawerBackdrop');
+    const appSidebar = document.getElementById('appSidebar') || document.querySelector('.sidebar');
+    const mobileLogoutBtn = document.getElementById('mobileLogoutBtn');
+
+    const openMobileDrawer = (e) => {
+        if (e) e.preventDefault();
+        if (appSidebar) appSidebar.classList.add('mobile-open');
+        if (mobileDrawerBackdrop) mobileDrawerBackdrop.classList.remove('hidden');
+    };
+
+    const closeMobileDrawer = (e) => {
+        if (e) e.preventDefault();
+        if (appSidebar) appSidebar.classList.remove('mobile-open');
+        if (mobileDrawerBackdrop) mobileDrawerBackdrop.classList.add('hidden');
+    };
+
+    if (mobileMenuBtn) mobileMenuBtn.addEventListener('click', openMobileDrawer);
+    if (mobileDrawerCloseBtn) mobileDrawerCloseBtn.addEventListener('click', closeMobileDrawer);
+    if (mobileDrawerBackdrop) mobileDrawerBackdrop.addEventListener('click', closeMobileDrawer);
+
+    if (mobileLogoutBtn) {
+        mobileLogoutBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const logoutBtn = document.getElementById('logoutBtn');
+            if (logoutBtn) logoutBtn.click();
         });
     }
 }

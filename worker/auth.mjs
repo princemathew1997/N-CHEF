@@ -11,8 +11,8 @@ export async function equalSecret(a, b) {
   return crypto.subtle.verify('HMAC', key, signature, encoder.encode(String(b)));
 }
 export async function hashPassword(password, salt = randomToken()) {
-  if (typeof password !== 'string' || password.length < 12 || password.length > 128) {
-    throw Object.assign(new Error('Passwords must contain 12–128 characters.'), { status: 400 });
+  if (typeof password !== 'string' || password.length < 1 || password.length > 128) {
+    throw Object.assign(new Error('Password is required (up to 128 characters).'), { status: 400 });
   }
   const key = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits']);
   const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: encoder.encode(salt), iterations: 100000, hash: 'SHA-256' }, key, 256);

@@ -5,15 +5,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Create Quick Stock Actions toolbar
     const toolbar = document.createElement('div');
     toolbar.id = 'stockActionsToolbar';
-    toolbar.style.cssText = 'display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0 16px 0;';
+    toolbar.className = 'stock-actions-toolbar';
     view.prepend(toolbar);
 
     const createButton = (label, iconName, action, adminOnly = false) => {
         const button = document.createElement('button');
         button.type = 'button';
-        button.className = 'btn btn-outline' + (adminOnly ? ' admin-only' : '');
-        button.style.cssText = 'display:inline-flex;align-items:center;gap:7px;padding:7px 14px;font-size:0.8rem;font-weight:600;border-radius:20px;cursor:pointer;transition:all 0.2s cubic-bezier(0.16,1,0.3,1);';
-        button.innerHTML = `<i data-lucide="${iconName}" style="width:14px;height:14px;color:var(--primary);"></i> <span>${label}</span>`;
+        button.className = 'btn btn-outline stock-action-btn' + (adminOnly ? ' admin-only' : '');
+        button.innerHTML = `<i data-lucide="${iconName}" style="width:14px;height:14px;color:var(--primary);flex-shrink:0;"></i> <span>${label}</span>`;
         button.addEventListener('click', action);
         toolbar.append(button);
         return button;
@@ -23,9 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const modal = document.createElement('div');
     modal.id = 'stockActionModal';
     modal.className = 'modal hidden';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
     modal.innerHTML = `
-        <div class="panel" style="width:100%;max-width:480px;padding:26px;border:1px solid var(--border-gold);box-shadow:0 20px 50px rgba(0,0,0,0.85);border-radius:12px;position:relative;animation:modalSlideUp 0.25s cubic-bezier(0.16,1,0.3,1);">
+        <div class="panel stock-modal-panel" style="width:100%;max-width:480px;border:1px solid var(--border-gold);box-shadow:0 20px 50px rgba(0,0,0,0.85);border-radius:12px;position:relative;animation:modalSlideUp 0.25s cubic-bezier(0.16,1,0.3,1);">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--border);">
                 <div style="display:flex;align-items:center;gap:10px;">
                     <div id="stockActionIconBox" style="width:36px;height:36px;border-radius:8px;background:rgba(255,190,11,0.12);display:flex;align-items:center;justify-content:center;color:var(--primary);">
