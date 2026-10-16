@@ -1,4 +1,5 @@
 import { stockCommand } from './stock.mjs';
+import { raiseVendorOrders } from './purchase-orders.mjs';
 import { digest, equalSecret, getSessionToken, hashPassword, randomToken, sessionCookie, verifyPassword } from './auth.mjs';
 import { clone, fail, hasOutlet, id, number, project, safeText, validateChanges } from './model.mjs';
 import { persistChanges, readState } from './database.mjs';
@@ -125,6 +126,22 @@ export default {
           env.DB.prepare('UPDATE app_revision SET revision=revision+1 WHERE id=1')
         ]); } catch (e) { if (/STALE_REVISION|UNIQUE constraint/.test(e.message)) fail('Data changed. Refresh and try again.',409); throw e; }
         return response(project(await readState(env.DB),actor));
+      }
+      if (path === '/api/purchase-orders/raise' && request.method === 'POST') {
+        const input = await body(request);
+        id(input.operationId);
+        const prior = await env.DB.prepare('SELECT actor_id FROM command_receipts WHERE id = ?').bind(input.operationId).first();
+        if (prior) {
+          if (prior.actor_id !== actor.id) fail('Command access denied.',403);
+          return response(project(await readState(env.DB),actor));
+        }
+        const state = await readState(env.DB);
+        if (!Number.isSafeInteger(input.revision) || input.revision !== state.revision) fail('Data changed. Refresh and try again.',409);
+        const current = state.users.find(u=>u.id===actor.id);
+        if (!current) fail('Account is inactive.',401);
+        const changes = raiseVendorOrders(state,current,input);
+        const {next,touched} = validateChanges(state,changes,current);
+        return response(await persistChanges(env.DB,state,next,touched,current,input.operationId));
       }
       if (path === '/api/changes' && request.method === 'POST') {
         const input = await body(request);

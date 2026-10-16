@@ -3031,163 +3031,11 @@ function openIndentApprovalModal(indentId) {
 }
 
 function openVendorPOModal() {
-    const indent = indentsData.find(i => i.id === activeReviewingIndentId);
-    if (!indent) return;
-    
-    const poModal = document.getElementById('modalVendorPO');
-    if (!poModal) return;
-    
-    document.getElementById('poModalRef').textContent = indent.indentNumber || indent.id;
-    document.getElementById('poModalOutlet').textContent = indent.outletName || 'Outlet';
-    
-    // Vendor options
-    const vendorSel = document.getElementById('poVendorSelect');
-    if (vendorSel) {
-        if (!vendorsData || vendorsData.length === 0) {
-            vendorSel.innerHTML = '<option value="" disabled selected>No vendors registered (Go to Vendors page to add)</option>';
-        } else {
-            vendorSel.innerHTML = vendorsData.map((v, idx) => `<option value="${v.id || v.name}" ${idx === 0 ? 'selected' : ''}>${v.name}</option>`).join('');
-        }
-    }
-    
-    // Default delivery date: tomorrow
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const dateInput = document.getElementById('poDeliveryDate');
-    if (dateInput) {
-        dateInput.value = tomorrow.toISOString().split('T')[0];
-    }
-    
-    // Populate items table with editable quantities and notes
-    const poTableBody = document.getElementById('poItemsTableBody');
-    if (poTableBody) {
-        poTableBody.innerHTML = (indent.items || []).map(it => `
-            <tr>
-                <td>
-                    <strong style="color: var(--text-main);">${it.itemName}</strong>
-                    <div style="font-size: 0.72rem; color: var(--text-muted);">${it.category || ''}</div>
-                </td>
-                <td style="color: var(--text-muted);">${it.unit || 'units'}</td>
-                <td>
-                    <input type="number" class="po-item-qty" data-item-id="${it.itemId}" value="${it.revisedQty || it.originalQty || 1}" min="0.1" step="any" style="width: 90px; padding: 6px 8px; font-size: 0.85rem; background: var(--dark); color: #fff; border: 1px solid var(--border); border-radius: 4px; text-align: center; font-weight: 700;">
-                </td>
-                <td>
-                    <input type="text" class="po-item-note" data-item-id="${it.itemId}" value="${it.comment || ''}" placeholder="Note for vendor" style="width: 100%; padding: 6px 8px; font-size: 0.8rem; background: var(--dark); color: #fff; border: 1px solid var(--border); border-radius: 4px;">
-                </td>
-            </tr>
-        `).join('');
-    }
-    
-    const notesInput = document.getElementById('poNotesInput');
-    if (notesInput) notesInput.value = '';
-    
-    poModal.classList.remove('hidden');
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+    return VendorOrderUI.open();
 }
 
 async function submitVendorPurchaseOrder() {
-    const indent = indentsData.find(i => i.id === activeReviewingIndentId);
-    if (!indent) return;
-    
-    const vendorSel = document.getElementById('poVendorSelect');
-    const selectedVendorIdOrName = vendorSel ? vendorSel.value : '';
-    if (!selectedVendorIdOrName) {
-        window.showUiModal({
-            title: "Select Vendor",
-            message: "Please select a vendor/supplier to raise the Purchase Order to.",
-            type: "warning"
-        });
-        return;
-    }
-    
-    const vendorObj = vendorsData.find(v => (v.id === selectedVendorIdOrName || v.name === selectedVendorIdOrName)) || { name: selectedVendorIdOrName, id: 'v_' + Date.now() };
-    const deliveryDate = document.getElementById('poDeliveryDate')?.value || '';
-    const generalNotes = document.getElementById('poNotesInput')?.value.trim() || '';
-    
-    // Collect item quantities from inputs
-    const qtyInputs = document.querySelectorAll('.po-item-qty');
-    const noteInputs = document.querySelectorAll('.po-item-note');
-    
-    const orderedItems = [];
-    qtyInputs.forEach(input => {
-        const itemId = input.dataset.itemId;
-        const qtyVal = parseFloat(input.value) || 0;
-        const matchingOrig = (indent.items || []).find(it => it.itemId === itemId);
-        const matchingNoteInput = Array.from(noteInputs).find(n => n.dataset.itemId === itemId);
-        const itemNote = matchingNoteInput ? matchingNoteInput.value.trim() : '';
-        
-        if (matchingOrig && qtyVal > 0) {
-            orderedItems.push({
-                itemId: itemId,
-                itemName: matchingOrig.itemName,
-                unit: matchingOrig.unit,
-                category: matchingOrig.category,
-                qty: qtyVal,
-                notes: itemNote
-            });
-        }
-    });
-    
-    if (orderedItems.length === 0) {
-        window.showUiModal({
-            title: "No Items",
-            message: "Please specify a positive quantity for at least one ingredient.",
-            type: "warning"
-        });
-        return;
-    }
-    
-    const poNumber = 'PO-' + new Date().toISOString().slice(0,10).replace(/-/g, '') + '-' + Math.floor(100 + Math.random() * 900);
-    const newPO = {
-        id: 'po_' + Date.now(),
-        poNumber: poNumber,
-        date: InventoryTools.day(),
-        createdAt: new Date().toISOString(),
-        indentId: indent.id,
-        indentNumber: indent.indentNumber || indent.id,
-        vendorId: vendorObj.id,
-        vendorName: vendorObj.name,
-        outletId: indent.outletId,
-        outletName: indent.outletName,
-        items: orderedItems,
-        expectedDelivery: deliveryDate,
-        notes: generalNotes,
-        status: 'PO Raised',
-        raisedBy: currentUser ? currentUser.name : 'Admin'
-    };
-    
-    purchaseOrdersData.unshift(newPO);
-    
-    // Update Indent status
-    indent.status = `PO Raised (${vendorObj.name})`;
-    indent.poNumber = poNumber;
-    indent.vendorName = vendorObj.name;
-    
-    // Update linked chef requests
-    requestsData.forEach(r => {
-        if (r.indentId === indent.id) {
-            r.status = 'PO Raised';
-            r.poNumber = poNumber;
-            r.vendorName = vendorObj.name;
-        }
-    });
-    
-    await saveData();
-    
-    // Close modals
-    document.getElementById('modalVendorPO')?.classList.add('hidden');
-    document.getElementById('modalIndentApproval')?.classList.add('hidden');
-    
-    window.showUiModal({
-        title: "Purchase Order Raised",
-        message: `Purchase Order ${poNumber} has been successfully raised to ${vendorObj.name} for ${indent.outletName}.`,
-        type: "success"
-    });
-    
-    loadRequestsData();
-    loadIndentsData();
-    renderVendorPOTable();
-    loadDashboardData();
+    return VendorOrderUI.submit();
 }
 
 function renderVendorPOTable() {
@@ -3195,7 +3043,7 @@ function renderVendorPOTable() {
     if (!tbody) return;
     
     if (!purchaseOrdersData || purchaseOrdersData.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">No Purchase Orders raised yet. When an Admin approves a supervisor request and clicks "Raise to Vendor", the PO will appear here.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 24px;">No purchase orders yet. Use Raise to Vendor on a pending consolidated request to create separate vendor orders.</td></tr>`;
         return;
     }
     
@@ -3215,6 +3063,7 @@ function renderVendorPOTable() {
                 </td>
                 <td><span class="status ok" style="background: rgba(67, 97, 238, 0.15); color: #4895ef; border: 1px solid rgba(67, 97, 238, 0.3); font-weight: 600; padding: 3px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;"><i data-lucide="truck" style="width: 12px; height: 12px;"></i> ${po.status}</span></td>
                 <td>${po.expectedDelivery || 'Not specified'} ${po.status !== 'Received' ? `<button class="btn btn-outline" data-receive-po="${po.id}">Receive</button>` : ''}</td>
+                <td><button class="btn btn-primary" data-po-pdf="${VendorOrders.escape(po.id)}">Download PDF</button> <button class="btn btn-outline" data-po-print="${VendorOrders.escape(po.id)}">View / Print</button></td>
             </tr>
         `;
     }).join('');
