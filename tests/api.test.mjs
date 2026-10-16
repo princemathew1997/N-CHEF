@@ -8,9 +8,10 @@ let mf, db;
 const origin = 'http://localhost';
 const adminPassword = 'test-admin-password-2026';
 const userPassword = 'test-outlet-password-2026';
+const testReleaseCommit = 'a'.repeat(40);
 let adminCookie, adminId, chefCookie, supervisorCookie, chefId, supervisorId;
-async function request(path, method = 'GET', input, cookie = adminCookie) {
-    const res = await mf.dispatchFetch(origin + '/api/' + path, { method, headers: { Origin: origin, 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) }, body: input ? JSON.stringify(input) : undefined });
+async function request(path, method = 'GET', input, cookie = adminCookie, clientRelease = testReleaseCommit) {
+    const res = await mf.dispatchFetch(origin + '/api/' + path, { method, headers: { Origin: origin, 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}), ...(clientRelease ? {'X-NCHEF-Client-Release':clientRelease} : {}) }, body: input ? JSON.stringify(input) : undefined });
     return { status: res.status, data: await res.json(), cookie: res.headers.get('set-cookie')?.split(';')[0] };
 }
 async function save(changes, cookie = adminCookie, revision) {
@@ -19,7 +20,7 @@ async function save(changes, cookie = adminCookie, revision) {
 }
 before(async () => {
     const bundle = await build({ entryPoints: ['worker/index.mjs'], bundle: true, format: 'esm', platform: 'browser', write: false });
-    mf = new Miniflare(convertV4MiniflareOptions({ modules: true, script: bundle.outputFiles[0].text, compatibilityDate: '2026-10-14', d1Databases: ['DB'], bindings: { SETUP_TOKEN: 'test-setup-token' } }));
+    mf = new Miniflare(convertV4MiniflareOptions({ modules: true, script: bundle.outputFiles[0].text, compatibilityDate: '2026-10-14', d1Databases: ['DB'], bindings: { SETUP_TOKEN: 'test-setup-token', NCHEF_RELEASE_COMMIT:testReleaseCommit, NCHEF_RELEASE_VERSION:'1.0.0' } }));
     db = await mf.getD1Database('DB');
     for (const file of readdirSync('migrations').filter(f => f.endsWith('.sql')).sort()) {
         const sql = readFileSync('migrations/' + file, 'utf8');
@@ -224,4 +225,16 @@ test('vendor orders save atomically, retry safely and receive per supplier', asy
     assert.equal(received.data.purchase_orders.find(p=>p.id===orders[0].id).status,'Received');
     assert.equal(received.data.purchase_orders.find(p=>p.id===orders[1].id).status,'PO Raised');
     assert.equal(received.data.outletStock.find(b=>b.item_id===orders[0].items[0].itemId&&b.outlet_id==='brigade').quantity,3);
+});
+
+test('deployed release health and stale-browser guards protect writes without altering transactions',async()=>{
+    const health=await request('health','GET',undefined,'');
+    assert.equal(health.status,200);assert.equal(health.data.release.commit,testReleaseCommit);assert.equal(health.data.release.version,'1.0.0');
+    const before=(await request('state')).data;
+    for(const clientRelease of [null,'b'.repeat(40)]) {
+        const result=await request('changes','POST',{revision:before.revision,operationId:crypto.randomUUID(),changes:[{entity:'vendors',key:'stale-vendor',value:{id:'stale-vendor',name:'Should not save'}}]},adminCookie,clientRelease);
+        assert.equal(result.status,409);assert.match(result.data.error,/Refresh this page/);
+    }
+    const after=(await request('state')).data;
+    assert.equal(after.revision,before.revision);assert.equal(after.vendors.some(v=>v.id==='stale-vendor'),false);assert.deepEqual(after.outletStock,before.outletStock);
 });

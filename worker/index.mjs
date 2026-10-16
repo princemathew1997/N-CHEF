@@ -1,4 +1,5 @@
 import { stockCommand } from './stock.mjs';
+import { releaseInfo, requireCurrentClient } from './release.mjs';
 import { raiseVendorOrders } from './purchase-orders.mjs';
 import { digest, equalSecret, getSessionToken, hashPassword, randomToken, sessionCookie, verifyPassword } from './auth.mjs';
 import { clone, fail, hasOutlet, id, number, project, safeText, validateChanges } from './model.mjs';
@@ -49,7 +50,7 @@ export default {
       }
       if (path === '/api/health' && request.method === 'GET') {
         await env.DB.prepare('SELECT revision FROM app_revision WHERE id = 1').first();
-        return response({ ok: true });
+        return response({ ok: true, release:releaseInfo(env) });
       }
       if (path === '/api/setup-status' && request.method === 'GET') {
         const first = await env.DB.prepare('SELECT id FROM setup_lock WHERE id = 1').first();
@@ -98,6 +99,7 @@ export default {
         return response({ user: actor, state: project(state, actor) }, 200, { 'Set-Cookie': sessionCookie(request, token) });
       }
       const actor = await actorFor(request, env.DB);
+      requireCurrentClient(request, env, path);
       if (['/api/session', '/api/state'].includes(path) && request.method === 'GET') {
         const state = await readState(env.DB);
         const current = state.users.find(u => u.id === actor.id);
