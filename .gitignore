@@ -17,6 +17,7 @@ backups/
 __pycache__/
 dist/
 screenshots/
+tmp/pdfs/
 
 # OS and Editor files
 .DS_Store

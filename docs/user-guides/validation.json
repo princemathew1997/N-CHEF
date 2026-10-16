@@ -1,0 +1,30 @@
+{
+  "date": "2026-10-16",
+  "environment": "Disposable in-memory QA server; fictional users and transactions",
+  "checks": [
+    "Admin creates supervisor",
+    "Admin creates location",
+    "Admin creates vendor",
+    "Admin adds cuisine",
+    "Admin creates catalog item",
+    "Supervisor creates chef",
+    "Supervisor edits chef cuisine",
+    "Supervisor receives stock",
+    "Chef submits request",
+    "Supervisor submits own requirement",
+    "Supervisor revises and consolidates requests",
+    "Admin approval distributes stock",
+    "Admin rejects consolidated request",
+    "Adjustment sets actual on-hand balance",
+    "Separate distribution deducts stock",
+    "Vendor defaults and order-only overrides verified in browser",
+    "Missing vendor blocks save",
+    "One saved order and PDF per vendor",
+    "Vendor PDF and print view exclude other supplier items and notes",
+    "Existing saved orders reopen without duplicate creation",
+    "Admin receives one vendor order without receiving the others"
+  ],
+  "limitations": [
+    "Sidebar Purchase Orders opens consolidated requests; actual PO table is in the Admin Vendors screen, so Supervisor has no normal PO receiving navigation."
+  ]
+}

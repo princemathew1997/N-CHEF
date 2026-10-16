@@ -106,9 +106,19 @@ Passwords are not subject to that display-field restriction.
 | POST `/api/stock/reconcile` | Admin verifies inconsistent legacy remainder |
 | POST `/api/cuisines/add` | Admin creates a cuisine section |
 | POST `/api/purchase-orders/receive` | Admin/supervisor full PO receiving |
+| POST `/api/purchase-orders/raise` | Admin creates one order per chosen vendor from a pending consolidated request |
 | POST `/api/indents/approve`, POST `/api/indents/approve-all` | Atomic approvals |
 | POST `/api/requests/approve` | Individual unlinked request distribution |
 | GET `/api/health` | Database connectivity |
+
+Vendor order creation accepts `revision`, `operationId`, `indentId`, optional
+`expectedDelivery` (YYYY-MM-DD), and `items` with `itemId`, `vendorId`, positive
+`qty` and optional vendor-only `notes`. The server derives item names, units,
+outlet and vendor names, creates distinct PO numbers, links requests and changes
+the indent status in one existing revision-guarded batch. A retry of the same
+operation returns confirmed state; another order operation for that indent is
+rejected. No stock movement occurs until receipt or a separate stock issue.
+The endpoint uses existing tables and JSON payload fields; no migration is needed.
 
 ### Run, test, deploy
 

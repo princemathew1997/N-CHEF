@@ -602,6 +602,7 @@
                                     <th>Ingredients Ordered</th>
                                     <th>Status</th>
                                     <th>Expected Delivery</th>
+                                    <th>Vendor document</th>
                                 </tr>
                             </thead>
                             <tbody id="vendorPOTableBody"></tbody>
@@ -1079,7 +1080,9 @@
     <script src="js/inventory-tools.js"></script>
     <script src="js/inventory-ui.js"></script>
     <script src="js/api-data.js?v=d1"></script>
+    <script src="js/vendor-orders.js"></script>
     <script src="js/app.js?v=d1"></script>
+    <script src="js/vendor-order-ui.js"></script>
     <script src="js/wizard.js?v=d1"></script>
     <script src="js/stock-actions.js?v=d1"></script>
     <script>
@@ -1330,7 +1333,7 @@
 
     <!-- RAISE TO VENDOR / PURCHASE ORDER MODAL -->
     <div id="modalVendorPO" class="modal hidden" style="position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 10000; display: flex; align-items: center; justify-content: center;">
-        <div class="panel" style="width: 90%; max-width: 680px; max-height: 90vh; overflow-y: auto; background: #121214; border: 1px solid var(--border-gold); border-radius: 16px; padding: 24px; position: relative;">
+        <div class="panel" style="width: 95%; max-width: 1100px; max-height: 90vh; overflow-y: auto; background: #121214; border: 1px solid var(--border-gold); border-radius: 16px; padding: 24px; position: relative;">
             <button class="icon-btn" id="closeVendorPOModalBtn" style="position: absolute; top: 16px; right: 16px;"><i data-lucide="x"></i></button>
             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
                 <div style="width: 44px; height: 44px; border-radius: 10px; background: rgba(255,190,11,0.15); color: var(--primary); display: flex; align-items: center; justify-content: center;">
@@ -1338,7 +1341,7 @@
                 </div>
                 <div>
                     <h2 style="margin: 0; font-size: 1.25rem;">Raise Request to <span class="text-primary">Vendor</span></h2>
-                    <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0;">Create a purchase order for consolidated ingredients to replenish store stock.</p>
+                    <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0;">Check each item's vendor. Save separate orders, then download a PDF for each vendor.</p>
                 </div>
             </div>
 
@@ -1347,13 +1350,12 @@
                 <div><span style="color: var(--text-muted);">Destination Outlet:</span> <strong id="poModalOutlet">-</strong></div>
             </div>
 
-            <!-- Vendor Select and PO Date -->
+            <div id="poVendorResults" class="hidden"></div>
+            <div id="poVendorEditor">
+            <!-- Vendor assignments are per item and apply only to this order. -->
             <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-bottom: 16px;">
                 <div>
-                    <label style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; display: block;">Select Vendor / Supplier</label>
-                    <select id="poVendorSelect" style="background: var(--dark); color: #fff; padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.88rem;">
-                        <!-- Dynamically filled with vendorsData -->
-                    </select>
+                    <p>Vendors start from each item's saved preferred vendor. Change any vendor below for this order. Notes are shared only with that item's vendor.</p>
                 </div>
                 <div>
                     <label style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; display: block;">Expected Delivery</label>
@@ -1362,13 +1364,14 @@
             </div>
 
             <!-- Items Table -->
-            <div class="panel table-container" style="background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; max-height: 240px; overflow-y: auto;">
+            <div class="panel table-container" style="background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; max-height: 400px; overflow: auto;">
                 <table style="width: 100%; font-size: 0.85rem;">
                     <thead>
                         <tr>
                             <th>Ingredient</th>
                             <th>Unit</th>
                             <th style="width: 120px;">Order Qty</th>
+                            <th>Vendor / Supplier</th>
                             <th>Notes</th>
                         </tr>
                     </thead>
@@ -1376,16 +1379,13 @@
                 </table>
             </div>
 
-            <div style="margin-bottom: 20px;">
-                <label style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; display: block;">PO Notes / Instructions</label>
-                <input type="text" id="poNotesInput" placeholder="Delivery instructions / notes" style="background: var(--dark); color: #fff; padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem;">
             </div>
 
             <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); padding-top: 14px;">
                 <button class="btn btn-outline" id="poModalCancelBtn">Cancel</button>
                 <div style="display: flex; gap: 8px;">
                     <button class="btn btn-primary" id="btnConfirmSendPO" style="display: inline-flex; align-items: center; gap: 6px; font-weight: 600;">
-                        <i data-lucide="send" style="width: 14px; height: 14px;"></i> Confirm & Send PO to Vendor
+                        <i data-lucide="check" style="width: 14px; height: 14px;"></i> Save Vendor Orders
                     </button>
                 </div>
             </div>

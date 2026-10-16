@@ -1,5 +1,17 @@
 # n.chef — Commercial Kitchen Stock Tracker & Indent System
 
+## User guides
+
+See the [role-based user wiki](docs/user-guides/README.md) for illustrated Admin,
+Supervisor and Chef instructions and shareable PDFs. The wiki also records
+[current gaps and limitations](docs/user-guides/implementation-gaps.md).
+
+Raise to Vendor starts each consolidated ingredient with its catalog preferred
+vendor and permits an override for that order. Saving creates one purchase order
+per vendor atomically, without receiving or issuing stock. Download each vendor's
+PDF separately from the saved-order cards or Vendors; supplier communication is
+manual. Vendor documents include only that order's ingredients and vendor notes.
+
 A modern, high-performance web application designed for commercial multi-branch restaurant operations. It coordinates stock requests raised by chefs across multiple cuisine sections, consolidates requirements through outlet supervisors, and routes batch indents to Admin for central approval and warehouse dispatch.
 
 ---

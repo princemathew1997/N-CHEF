@@ -192,3 +192,36 @@ test('secure setup, login, permissions, atomic approval and conflicts', async ()
     for (let i = 0; i < 15; i++) assert.equal((await request('login', 'POST', { username: 'nonexistent', password: 'invalid-password-2026' }, '')).status, 401);
     assert.equal((await request('login', 'POST', { username: 'nonexistent', password: 'invalid-password-2026' }, '')).status, 429);
 });
+
+test('vendor orders save atomically, retry safely and receive per supplier', async () => {
+    chefCookie=(await request('login','POST',{username:'chef_test',password:userPassword},'')).cookie;
+    const vendorA={id:crypto.randomUUID(),name:'Order Supplier A'},vendorB={id:crypto.randomUUID(),name:'Order Supplier B'};
+    const rows=[vendorA,vendorB].map((vendor,index)=>({id:crypto.randomUUID(),name:'Supplier item '+index,category:'Order test',unit:'kg',vendor:vendor.name,bought:0,allocations:{},consumed:{}}));
+    assert.equal((await save([...([vendorA,vendorB].map(value=>({entity:'vendors',key:value.id,value}))),...rows.map(value=>({entity:'items',key:value.id,value}))])).status,200);
+    const indent={id:crypto.randomUUID(),indentNumber:'REQ-VENDOR-TEST',outletId:'brigade',status:'Pending Approval',items:rows.map(row=>({itemId:row.id,originalQty:4,revisedQty:3}))};
+    const sourceRequests=rows.map(row=>({id:crypto.randomUUID(),itemId:row.id,outletId:'brigade',cuisine:'Indian',qty:4,revisedQty:3,status:'Consolidated',indentId:indent.id}));
+    assert.equal((await save([{entity:'indents',key:indent.id,value:indent},...sourceRequests.map(value=>({entity:'requests',key:value.id,value}))])).status,200);
+    const state=(await request('state')).data;
+    const input={indentId:indent.id,expectedDelivery:'2026-10-20',items:rows.map((row,index)=>({itemId:row.id,qty:3,vendorId:[vendorA,vendorB][index].id,notes:'For supplier '+index})),operationId:crypto.randomUUID(),revision:state.revision};
+    assert.equal((await request('purchase-orders/raise','POST',input,chefCookie)).status,403);
+    assert.equal((await request('purchase-orders/raise','POST',{...input,operationId:crypto.randomUUID(),items:[input.items[0],{...input.items[1],vendorId:'missing'}]})).status,400);
+    assert.equal((await request('state')).data.purchase_orders.filter(p=>p.indentId===indent.id).length,0);
+    const result=await request('purchase-orders/raise','POST',input);
+    assert.equal(result.status,200,JSON.stringify(result.data));
+    const orders=result.data.purchase_orders.filter(p=>p.indentId===indent.id);
+    assert.equal(orders.length,2);assert.deepEqual(orders.map(p=>p.items.length),[1,1]);
+    assert.equal(result.data.stockHistory.length,state.stockHistory.length);
+    assert.deepEqual(result.data.outletStock,state.outletStock);
+    assert.equal(result.data.indents.find(i=>i.id===indent.id).status,'PO Raised (2 vendors)');
+    for(const source of sourceRequests){const linked=result.data.requests.find(r=>r.id===source.id);assert.equal(linked.status,'PO Raised');assert.deepEqual(linked.purchaseOrderIds,orders.filter(p=>p.items.some(i=>i.itemId===source.itemId)).map(p=>p.id));}
+    assert.equal((await request('purchase-orders/raise','POST',input)).status,200);
+    assert.equal((await request('state')).data.purchase_orders.filter(p=>p.indentId===indent.id).length,2);
+    const duplicate={...input,revision:(await request('state')).data.revision,operationId:crypto.randomUUID()};
+    assert.equal((await request('purchase-orders/raise','POST',duplicate)).status,409);
+    const receive={poId:orders[0].id,revision:(await request('state')).data.revision,operationId:crypto.randomUUID()};
+    const received=await request('purchase-orders/receive','POST',receive);
+    assert.equal(received.status,200,JSON.stringify(received.data));
+    assert.equal(received.data.purchase_orders.find(p=>p.id===orders[0].id).status,'Received');
+    assert.equal(received.data.purchase_orders.find(p=>p.id===orders[1].id).status,'PO Raised');
+    assert.equal(received.data.outletStock.find(b=>b.item_id===orders[0].items[0].itemId&&b.outlet_id==='brigade').quantity,3);
+});
