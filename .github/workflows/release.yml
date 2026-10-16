@@ -1,0 +1,73 @@
+name: Publish release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version matching package.json, for example v1.0.0'
+        required: true
+        default: 'v1.0.0'
+permissions:
+  contents: write
+concurrency:
+  group: nchef-production-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      REQUESTED_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - name: Validate version and reserve a new release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          npm run release:check -- --version "$REQUESTED_VERSION" --remote
+          node --input-type=module -e 'import {version} from "./scripts/lib/releases.mjs"; import {appendFileSync} from "node:fs"; appendFileSync(process.env.GITHUB_ENV,"RELEASE_TAG=v"+version(process.env.REQUESTED_VERSION)+"\n");'
+          RELEASE_TAG="v${REQUESTED_VERSION#v}"
+          if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            echo 'Version already tagged; use a new version.' >&2
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" --draft --target "$(git rev-parse HEAD)" --title "N-CHEF $RELEASE_TAG" --notes-file CHANGELOG.md
+      - name: Validate, deploy and verify the matching API and frontend
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: '5461025e548c01fea04a40b509473036'
+        run: npm run release:deploy -- --version "$REQUESTED_VERSION" --execute
+      - name: Keep a recovery copy in workflow artifacts
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: release-records-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/releases/*.json
+          if-no-files-found: ignore
+          retention-days: 90
+      - name: Preserve release and recovery records, including failed attempts
+        if: always() && env.RELEASE_TAG != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -d dist/releases ]; then
+            gh release upload "$RELEASE_TAG" dist/releases/*.json
+          fi
+      - name: Publish the healthy release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$RELEASE_TAG" --draft=false --latest

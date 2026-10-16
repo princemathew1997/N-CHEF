@@ -135,7 +135,11 @@ Local `npm start` uses a separate D1 database on localhost:8000. Open
 `/setup.html` and use the key from ignored `.dev.vars` to create the local admin.
 Local and production accounts/data are separate.
 
-Deployment order:
+Routine application releases now use the manual, versioned workflow described in
+[Releasing and rollback](RELEASING.md). The release tool stops if migrations are
+pending; it never applies or restores D1 automatically. The following sequence
+is historical first-install/schema-maintenance guidance, not the routine release
+process. Keep inventory entry paused during a coordinated schema change:
 
 ```powershell
 npm run build

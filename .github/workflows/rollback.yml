@@ -1,0 +1,71 @@
+name: Roll back release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Published version to restore, or failed release containing a recovery snapshot'
+        required: true
+      target:
+        description: 'Restore the selected release, or the deployment pair recorded before it'
+        type: choice
+        options: [release, previous-snapshot]
+        default: release
+permissions:
+  contents: write
+concurrency:
+  group: nchef-production-release
+  cancel-in-progress: false
+jobs:
+  rollback:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      REQUESTED_VERSION: ${{ inputs.version }}
+      ROLLBACK_TARGET: ${{ inputs.target }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Download the exact release record
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module -e 'import {version} from "./scripts/lib/releases.mjs"; import {appendFileSync} from "node:fs"; appendFileSync(process.env.GITHUB_ENV,"RELEASE_TAG=v"+version(process.env.REQUESTED_VERSION)+"\n");'
+          RELEASE_TAG="v${REQUESTED_VERSION#v}"
+          FILE=release.json
+          if [ "$ROLLBACK_TARGET" = previous-snapshot ]; then FILE=before.json; fi
+          gh release download "$RELEASE_TAG" --pattern "$FILE" --dir .wrangler/rollback
+      - name: Restore matching frontend and API; preserve database transactions
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ "$ROLLBACK_TARGET" = previous-snapshot ]; then
+            npm run release:rollback -- --manifest .wrangler/rollback/before.json --execute
+          else
+            npm run release:rollback -- --manifest .wrangler/rollback/release.json --version "$REQUESTED_VERSION" --execute
+          fi
+      - name: Keep a recovery audit copy in workflow artifacts
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: rollback-records-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/releases/*.json
+          if-no-files-found: ignore
+          retention-days: 90
+      - name: Preserve rollback audit record
+        if: always() && env.RELEASE_TAG != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -f dist/releases/rollback.json ]; then
+            cp dist/releases/rollback.json "dist/releases/rollback-$GITHUB_RUN_ID.json"
+            gh release upload "$RELEASE_TAG" "dist/releases/rollback-$GITHUB_RUN_ID.json"
+          fi

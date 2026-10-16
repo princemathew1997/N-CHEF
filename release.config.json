@@ -1,0 +1,9 @@
+{
+  "databaseEpoch": "outlet-stock-v1",
+  "accountId": "5461025e548c01fea04a40b509473036",
+  "workerName": "nchef-api",
+  "pagesProject": "nchef",
+  "databaseId": "cdd61c50-94ca-4978-a588-8dce8ceacdc1",
+  "productionBranch": "main",
+  "productionUrl": "https://inventory.nchef.in"
+}

@@ -1,5 +1,12 @@
 # n.chef — Commercial Kitchen Stock Tracker & Indent System
 
+## Releases and rollback
+
+Production uses manual semantic versions starting at **v1.0.0**. See the
+[release and recovery guide](docs/RELEASING.md) for activation, publishing and
+restoring a matching frontend/API deployment pair without resetting stock data.
+Merging to main validates changes; it does not publish a production release.
+
 ## User guides
 
 See the [role-based user wiki](docs/user-guides/README.md) for illustrated Admin,

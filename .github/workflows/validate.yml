@@ -15,6 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
@@ -24,6 +25,10 @@ jobs:
         with:
           python-version: '3.12'
       - run: npm ci
+      - name: Verify existing migrations are immutable
+        env:
+          MIGRATION_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/check-migrations.mjs
       - run: npm test
       - run: npm run test:database
       - run: npm run build

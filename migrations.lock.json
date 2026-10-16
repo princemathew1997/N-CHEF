@@ -1,0 +1,22 @@
+[
+  {
+    "name": "0001_inventory_schema.sql",
+    "sha256": "a1bb5abf7ff9485a56dcd69d34542b25a8b608edb1233fb7df07a0b8e2c040f3"
+  },
+  {
+    "name": "0002_fresh_catalog.sql",
+    "sha256": "f098dd47ce277f30152e5fc2c02222d1d838adea7c92340518f560d2219a6b26"
+  },
+  {
+    "name": "0003_api_storage.sql",
+    "sha256": "aeb076c035b0e1f7fca82b9606010aeb9095dd5436da70d64f02c3053068407e"
+  },
+  {
+    "name": "0004_transaction_guard.sql",
+    "sha256": "cdf70d8727a2f69a38be100c1c27c9b5b8992cc1e5987bc8fdca8ed5ff5887e3"
+  },
+  {
+    "name": "0005_outlet_stock.sql",
+    "sha256": "f6ac8ca1ec2cc525dc59cb9f7f006aaa1cfb184cf877bf9198dec18959d4e1b3"
+  }
+]
