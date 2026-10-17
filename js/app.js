@@ -864,6 +864,48 @@ function initNavigation() {
         });
     }
 
+    // Desktop Display Scale (Percentage / Density) Controller
+    const densityBtn = document.getElementById('uiDensityBtn');
+    const densityLabel = document.getElementById('uiDensityLabel');
+    const scales = ['85%', '75%', '100%'];
+    const scaleValues = { '85%': '0.85', '75%': '0.75', '100%': '1' };
+
+    let currentScale = localStorage.getItem('nchef_ui_scale') || '85%';
+    if (!scales.includes(currentScale)) currentScale = '85%';
+
+    const applyScale = (s) => {
+        currentScale = s;
+        localStorage.setItem('nchef_ui_scale', s);
+        if (dashboardLayout) {
+            if (window.innerWidth > 1024) {
+                dashboardLayout.style.zoom = scaleValues[s] || '0.85';
+            } else {
+                dashboardLayout.style.zoom = '1';
+            }
+        }
+        if (densityLabel) densityLabel.textContent = s;
+        if (densityBtn) densityBtn.title = `Display Scale: ${s} (Click to switch: 85% / 75% / 100%)`;
+    };
+
+    applyScale(currentScale);
+
+    if (densityBtn) {
+        densityBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const nextIdx = (scales.indexOf(currentScale) + 1) % scales.length;
+            applyScale(scales[nextIdx]);
+        });
+    }
+
+    window.addEventListener('resize', () => {
+        if (!dashboardLayout) return;
+        if (window.innerWidth <= 1024) {
+            dashboardLayout.style.zoom = '1';
+        } else {
+            dashboardLayout.style.zoom = scaleValues[currentScale] || '0.85';
+        }
+    });
+
     // Mobile Menu Toggle and Drawer
     const mobileMenuBtn = document.getElementById('mobileMenuBtn');
     const mobileDrawerCloseBtn = document.getElementById('mobileDrawerCloseBtn');
