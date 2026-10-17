@@ -420,7 +420,11 @@ label {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    padding-right: 2px;
 }
 .nav-item {
     display: flex;
@@ -522,6 +526,7 @@ label {
     margin-top: auto;
     padding-top: 12px;
     border-top: 1px solid var(--border);
+    flex-shrink: 0;
 }
 .user-avatar {
     width: 32px;
@@ -545,34 +550,35 @@ label {
 
 /* Main Content */
 .main-content {
-    margin: 12px 14px;
-    padding: 14px 16px;
-    border-radius: 18px;
-    height: calc(100vh - 24px);
+    margin: 10px 12px;
+    padding: 12px 14px;
+    border-radius: 16px;
+    height: calc(100vh - 20px);
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-y: auto !important;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
     position: relative;
     background: rgba(14, 14, 16, 0.94);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
     border: 1px solid var(--border);
     transition: margin 0.2s ease, padding 0.2s ease;
+    scrollbar-gutter: stable;
 }
 
-#viewMasterOrders, #viewUsers {
+#viewMasterOrders,
+#viewUsers,
+#viewLocations,
+#viewVendors,
+#viewChefPortal,
+#viewIndents,
+.user-subdivision-content {
     display: flex;
     flex-direction: column;
-    height: 100%;
-    overflow: hidden;
-}
-
-#viewLocations, #viewVendors {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    overflow-y: auto;
-    padding-right: 4px;
-    padding-bottom: 30px;
+    min-height: min-content;
+    height: auto;
+    overflow: visible !important;
 }
 
 /* Top Header */
@@ -788,21 +794,120 @@ tbody tr:hover {
 .hidden { display: none !important; }
 .page:not(.active) { display: none !important; }
 
+/* Compact Design System for Forms, Inputs & Cards */
+.dash-grid-split {
+    display: grid;
+    grid-template-columns: 1fr 1.15fr;
+    gap: 16px;
+    align-items: start;
+}
+.panel.form-section {
+    padding: 16px 18px !important;
+    border-radius: 14px !important;
+}
+.panel.form-section > div:first-child {
+    margin-bottom: 12px !important;
+    gap: 10px !important;
+}
+.panel.form-section > div:first-child > div:first-child {
+    width: 36px !important;
+    height: 36px !important;
+    border-radius: 10px !important;
+}
+.panel.form-section h3 {
+    font-size: 1.05rem !important;
+}
+.panel.form-section p {
+    font-size: 0.74rem !important;
+}
+.panel.form-section .input-group {
+    margin-bottom: 10px !important;
+}
+.panel.form-section label {
+    font-size: 0.78rem !important;
+    margin-bottom: 4px !important;
+}
+.panel.form-section input:not([type="checkbox"]),
+.panel.form-section select {
+    padding: 7px 11px !important;
+    font-size: 0.84rem !important;
+    border-radius: 7px !important;
+}
+.panel.form-section .btn {
+    padding: 9px 16px !important;
+    font-size: 0.88rem !important;
+    font-weight: 600 !important;
+}
+
+#adminChefCuisinesCheckboxes,
+#supLocationsCheckboxes,
+#chefCuisinesCheckboxes {
+    padding: 8px 10px !important;
+    gap: 6px !important;
+    border-radius: 8px !important;
+    max-height: 140px;
+    overflow-y: auto;
+}
+#adminChefCuisinesCheckboxes label,
+#supLocationsCheckboxes label,
+#chefCuisinesCheckboxes label {
+    margin-bottom: 0 !important;
+    font-size: 0.78rem !important;
+    cursor: pointer;
+}
+
+/* Density Scale Toggle Button in Sidebar */
+.density-toggle-btn {
+    width: 34px;
+    height: 26px;
+    border-radius: 6px;
+    background: rgba(255, 190, 11, 0.08);
+    border: 1px solid rgba(255, 190, 11, 0.3);
+    color: var(--primary);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: inherit;
+}
+.density-toggle-btn:hover {
+    background: rgba(255, 190, 11, 0.2);
+    border-color: var(--primary);
+    transform: scale(1.05);
+}
+
 /* Responsive Media Queries */
+@media (min-width: 1025px) {
+    .dashboard-layout {
+        zoom: 0.85; /* Renders at compact percentage view by default on any browser */
+    }
+}
+@media (min-width: 1025px) and (max-height: 820px) {
+    .dashboard-layout {
+        zoom: 0.80; /* Auto-adjust for 1366x768 / standard laptop screens */
+    }
+}
+
 @media (max-width: 1024px) {
     /* Tablet */
     .dashboard-layout {
+        zoom: 1 !important;
         grid-template-columns: 175px 1fr;
     }
     .main-content {
-        margin: 10px;
-        padding: 12px;
-        height: calc(100vh - 20px);
+        margin: 8px 10px;
+        padding: 10px 12px;
+        height: calc(100vh - 16px);
         border-radius: 14px;
+        overflow-y: auto !important;
     }
-    .dash-grid {
-        grid-template-columns: 1fr;
-        overflow-y: auto;
+    .dash-grid,
+    .dash-grid-split,
+    .dash-grid[style*="1fr 1.15fr"] {
+        grid-template-columns: 1fr !important;
+        overflow-y: visible;
+        gap: 14px !important;
     }
     .table-container {
         height: auto;
