@@ -4,6 +4,16 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 1.1.1 - 2026-10-19
+
+- Show only the expand button in the collapsed desktop sidebar and preserve
+  the full mobile navigation drawer.
+- Keep the Stock menu open when selecting Stock Overview or Assign Legacy Stock.
+- Apply shared phone layouts across screens and dialogs, with vertical page
+  scrolling, horizontally scrollable tables, responsive forms and wrapping actions.
+- Remove frozen first columns on mobile and add a repeatable layout audit for
+  320, 390 and 768 pixel widths.
+
 ## 1.1.0 - 2026-10-19
 
 - Add optional desktop display scales of 85% and 75%, keeping 100% as the default

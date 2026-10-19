@@ -138,7 +138,13 @@
         page=view.slice(10);if(!titles[page])page='overview';
         if(adminPages.includes(page) && currentUser.role!=='admin'){window.switchToView('viewMasterOrders');return true;}
         panel?.classList.remove('hidden');render();
-        if(!adminPages.includes(page)) { document.getElementById('navStockSubmenu')?.classList.add('open'); document.getElementById('navStockChevron').style.transform='rotate(180deg)'; }
+        const stockLink = document.querySelector(`#navStockSubmenu [data-inventory="${page}"]`);
+        if(stockLink) {
+            document.getElementById('navStockSubmenu')?.classList.add('open');
+            document.getElementById('navStock')?.classList.add('active');
+            const chevron = document.getElementById('navStockChevron');
+            if(chevron) chevron.style.transform='rotate(180deg)';
+        }
         document.querySelectorAll('[data-inventory]').forEach(a=>a.classList.toggle('active',a.dataset.inventory===page));
         document.getElementById('mobileActivePage').textContent=titles[page];
         return true;
