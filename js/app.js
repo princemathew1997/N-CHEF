@@ -849,18 +849,26 @@ function initNavigation() {
         dashboardLayout.classList.add('sidebar-collapsed');
     }
 
+    const syncSidebarToggle = () => {
+        if (!sidebarCollapseBtn || !dashboardLayout) return;
+        const collapsed = dashboardLayout.classList.contains('sidebar-collapsed');
+        sidebarCollapseBtn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar (Compact View)';
+        sidebarCollapseBtn.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+        sidebarCollapseBtn.setAttribute('aria-expanded', String(!collapsed));
+        const icon = document.getElementById('sidebarCollapseIcon');
+        if (icon) {
+            icon.setAttribute('data-lucide', collapsed ? 'chevron-right' : 'chevron-left');
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+    };
+    syncSidebarToggle();
     if (sidebarCollapseBtn && dashboardLayout) {
         sidebarCollapseBtn.addEventListener('click', (e) => {
             e.preventDefault();
             dashboardLayout.classList.toggle('sidebar-collapsed');
             const collapsed = dashboardLayout.classList.contains('sidebar-collapsed');
             localStorage.setItem('nchef_sidebar_collapsed', collapsed ? 'true' : 'false');
-            sidebarCollapseBtn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar (Compact View)';
-            const icon = document.getElementById('sidebarCollapseIcon');
-            if (icon) {
-                icon.setAttribute('data-lucide', collapsed ? 'chevron-right' : 'chevron-left');
-                if (typeof lucide !== 'undefined') lucide.createIcons();
-            }
+            syncSidebarToggle();
         });
     }
 

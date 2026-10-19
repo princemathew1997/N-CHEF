@@ -61,6 +61,7 @@ body {
 
 /* Glassmorphism Panel */
 .panel {
+    min-width: 0;
     background: var(--panel-bg);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
@@ -316,7 +317,7 @@ label {
 /* Dashboard Layout */
 .dashboard-layout {
     display: none; /* hidden by default */
-    grid-template-columns: 200px 1fr;
+    grid-template-columns: 200px minmax(0, 1fr);
     height: calc(100vh / var(--ui-scale, 1));
     min-height: calc(100vh / var(--ui-scale, 1));
     overflow: hidden;
@@ -325,8 +326,9 @@ label {
 .dashboard-layout.active {
     display: grid;
 }
+@media (min-width: 769px) {
 .dashboard-layout.sidebar-collapsed {
-    grid-template-columns: 64px 1fr;
+    grid-template-columns: 44px minmax(0, 1fr);
 }
 .dashboard-layout.sidebar-collapsed .sidebar {
     padding: 12px 6px;
@@ -342,7 +344,7 @@ label {
 }
 .dashboard-layout.sidebar-collapsed .sidebar-collapse-toggle {
     margin-left: 0;
-    transform: rotate(180deg);
+    transform: none;
 }
 .dashboard-layout.sidebar-collapsed .nav-item {
     justify-content: center;
@@ -369,6 +371,11 @@ label {
 }
 .dashboard-layout.sidebar-collapsed .user-profile #logoutBtn {
     margin-left: 0;
+}
+.dashboard-layout.sidebar-collapsed .sidebar > :not(.sidebar-logo),
+.dashboard-layout.sidebar-collapsed .sidebar-logo > :not(.sidebar-collapse-toggle) {
+    display: none !important;
+}
 }
 
 /* Visibility Utilities */
@@ -552,6 +559,7 @@ label {
 
 /* Main Content */
 .main-content {
+    min-width: 0;
     margin: 10px 12px;
     padding: 12px 14px;
     border-radius: 16px;
@@ -569,18 +577,29 @@ label {
     scrollbar-gutter: stable;
 }
 
-#viewMasterOrders,
-#viewUsers,
-#viewLocations,
-#viewVendors,
-#viewChefPortal,
-#viewIndents,
+.main-content > [id^="view"],
 .user-subdivision-content {
     display: flex;
     flex-direction: column;
     min-height: min-content;
     height: auto;
     overflow: visible !important;
+    min-width: 0;
+    flex-shrink: 0;
+}
+
+.table-scroll {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.chef-credentials {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
 }
 
 /* Top Header */
@@ -673,7 +692,7 @@ label {
 /* Dashboard Grid (Table + Sidebar) */
 .dash-grid {
     display: grid;
-    grid-template-columns: 1fr 240px;
+    grid-template-columns: minmax(0, 1fr) 240px;
     gap: 12px;
     flex: 1;
     min-height: 0;
@@ -687,6 +706,8 @@ label {
 
 /* Data Table */
 .table-container {
+    min-width: 0;
+    max-width: 100%;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     overflow-y: auto;
@@ -800,7 +821,7 @@ tbody tr:hover {
 .dash-grid.dash-grid-split,
 .dash-grid-split {
     display: grid;
-    grid-template-columns: 1fr 1.15fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
     gap: 16px;
     align-items: start;
 }
@@ -886,7 +907,7 @@ tbody tr:hover {
     .dashboard-layout {
         zoom: 1 !important;
         --ui-scale: 1 !important;
-        grid-template-columns: 175px 1fr;
+        grid-template-columns: 175px minmax(0, 1fr);
         height: 100vh;
         min-height: 100vh;
     }
@@ -901,7 +922,7 @@ tbody tr:hover {
     .dash-grid-split,
     .dash-grid.dash-grid-split,
     .dash-grid[style*="1fr 1.15fr"] {
-        grid-template-columns: 1fr !important;
+        grid-template-columns: minmax(0, 1fr) !important;
         overflow-y: visible;
         gap: 14px !important;
     }
@@ -928,6 +949,13 @@ tbody tr:hover {
 }
 
 @media (max-width: 768px) {
+    #page-login {
+        height: 100dvh;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 16px;
+        align-items: safe center;
+    }
     /* Mobile */
     .mobile-only { display: flex !important; }
     .desktop-only { display: none !important; }
@@ -1064,6 +1092,7 @@ tbody tr:hover {
 
     /* Main Content on Mobile */
     .main-content {
+        min-height: 0;
         margin: 6px;
         padding: 10px;
         border-radius: 12px;
@@ -1134,21 +1163,17 @@ tbody tr:hover {
     }
 
     /* Table Container on Mobile */
+    .chef-credentials {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    #viewAddChef .form-section {
+        min-width: 0;
+    }
     .table-container {
         max-height: none;
         flex: 1;
         min-height: 260px;
         margin-bottom: 10px;
-    }
-    table th:first-child, table td:first-child {
-        position: sticky;
-        left: 0;
-        background: #131316;
-        z-index: 2;
-        box-shadow: 2px 0 5px rgba(0, 0, 0, 0.4);
-    }
-    table th:first-child {
-        z-index: 12;
     }
 
     /* Right Sidebar (Forms) on Mobile */
@@ -1328,7 +1353,6 @@ body.database-saving::after {
 .inventory-workspace input, .inventory-workspace select { width: 100%; padding: 10px; background: var(--dark); color: var(--text-main); border: 1px solid var(--border); border-radius: 8px; }
 .inventory-search { max-width: 420px; margin-bottom: 18px; }
 .inventory-workspace .table-container { overflow-x: auto; }
-.dashboard-layout.sidebar-collapsed .nav-section-label { display: none; }
 @media(max-width: 640px) { .inventory-form { grid-template-columns: 1fr; } .inventory-workspace { padding: 14px; } }
 
 .inventory-filters { display:flex; align-items:flex-start; flex-wrap:wrap; gap:14px; width:100%; margin-bottom:14px; }
@@ -1350,3 +1374,54 @@ body.database-saving::after {
 /* Ingredient cards must fit their grid cells rather than inherit modal sizing. */
 #wizardItemsGrid { grid-template-columns:repeat(auto-fill,minmax(min(200px,100%),1fr)) !important; }
 #wizardItemsGrid > .panel { min-width:0; width:auto; max-width:100%; overflow-wrap:anywhere; }
+
+/* Shared phone layout: pages own vertical scrolling; tables own horizontal scrolling. */
+@media (max-width: 768px) {
+    .dashboard-layout.active {
+        height: 100dvh;
+        min-height: 0;
+    }
+    .main-content {
+        height: auto;
+        flex: 1 1 0;
+    }
+    .sidebar { height: 100dvh; }
+    .main-content .dash-grid,
+    .main-content .dash-grid > *,
+    .modal .panel > *,
+    .responsive-form-grid > * {
+        min-width: 0;
+    }
+    .form-section { min-width: 0; }
+    .main-content .table-container {
+        height: auto;
+        min-height: 0;
+        max-height: none !important;
+        flex: none;
+    }
+    .table-container, .table-scroll {
+        scroll-padding-inline: 10px;
+    }
+    .header-filters, .dash-header > div {
+        min-width: 0;
+        max-width: 100%;
+        flex-wrap: wrap;
+    }
+    .main-content :is(input, select, textarea),
+    .modal :is(input, select, textarea) {
+        min-width: 0;
+        max-width: 100%;
+    }
+    .panel :is(h3, p), .header-title { overflow-wrap: anywhere; }
+    .modal { align-items: flex-start; overflow-y: auto; }
+    .modal > .panel { max-height: calc(100dvh - 20px) !important; }
+    .modal .table-container { height: auto; min-height: 0; flex: none; }
+    .main-content div:has(> .btn),
+    .modal div:has(> .btn) { flex-wrap: wrap; gap: 10px; }
+    #apprModalFooterActions { flex-wrap: wrap; gap: 10px; }
+    #apprModalAdminButtons { min-width: 0; max-width: 100%; }
+}
+@media (max-width: 640px) {
+    .responsive-form-grid { grid-template-columns: minmax(0, 1fr) !important; }
+    #viewChefPortal .metrics-row { grid-template-columns: minmax(0, 1fr) !important; }
+}

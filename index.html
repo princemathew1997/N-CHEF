@@ -219,7 +219,7 @@
                     </div>
                 </div>
 
-                <div class="dash-grid" style="grid-template-columns: 1fr;">
+                <div class="responsive-form-grid dash-grid" style="grid-template-columns: 1fr;">
 
 
                     <!-- Left: Table -->
@@ -333,7 +333,7 @@
                 </div>
 
                 <!-- ALL REQUESTS LIST CONTAINER -->
-                <div id="containerListView" class="dash-grid hidden" style="grid-template-columns: 1fr;">
+                <div id="containerListView" class="responsive-form-grid dash-grid hidden" style="grid-template-columns: 1fr;">
                     <div class="panel table-container">
                         <table>
                             <thead>
@@ -565,7 +565,7 @@
                     </div>
 
                     <!-- RIGHT: Vendors Table -->
-                    <div class="panel table-container" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border); border-radius: 16px; padding: 22px;">
+                    <div class="panel" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border); border-radius: 16px; padding: 22px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                             <div>
                                 <h3 style="margin: 0; font-size: 1.15rem; color: #fff; display: flex; align-items: center; gap: 8px;">
@@ -575,7 +575,7 @@
                             </div>
                             <span id="vendorsCountBadge" style="background: rgba(255,190,11,0.15); color: var(--primary); padding: 4px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 700;">0 Vendors</span>
                         </div>
-                        <div style="overflow-x: auto;">
+                        <div class="table-scroll" tabindex="0" role="region" aria-label="Scrollable table">
                             <table style="width: 100%; font-size: 0.85rem;">
                                 <thead>
                                     <tr>
@@ -666,7 +666,7 @@
                                 <input type="text" id="supFullName" placeholder="Enter supervisor full name" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
                             </div>
 
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                            <div class="responsive-form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
                                 <div class="input-group">
                                     <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Username (Login)</label>
                                     <input type="text" id="supUsername" placeholder="Enter username" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
@@ -682,7 +682,7 @@
                                     <span>Assigned Locations / Outlets</span>
                                     <span style="font-size: 0.72rem; color: var(--primary);">Select outlets supervisor oversees</span>
                                 </label>
-                                <div id="supLocationsCheckboxes" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; background: rgba(0,0,0,0.35); padding: 14px; border: 1px solid var(--border); border-radius: 8px; max-height: 180px; overflow-y: auto;">
+                                <div class="responsive-form-grid" id="supLocationsCheckboxes" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; background: rgba(0,0,0,0.35); padding: 14px; border: 1px solid var(--border); border-radius: 8px; max-height: 180px; overflow-y: auto;">
                                     <!-- Populated dynamically -->
                                 </div>
                             </div>
@@ -696,7 +696,7 @@
                         </div>
 
                         <!-- Supervisors Table -->
-                        <div class="panel table-container" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border); border-radius: 16px; padding: 22px;">
+                        <div class="panel" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border); border-radius: 16px; padding: 22px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                                 <div>
                                     <h3 style="margin: 0; font-size: 1.15rem; color: #fff; display: flex; align-items: center; gap: 8px;">
@@ -706,7 +706,7 @@
                                 </div>
                                 <span id="supCountBadge" style="background: rgba(255,190,11,0.15); color: var(--primary); padding: 4px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 700;">0 Supervisors</span>
                             </div>
-                            <div style="overflow-x: auto;">
+                            <div class="table-scroll" tabindex="0" role="region" aria-label="Scrollable table">
                                 <table style="width: 100%; font-size: 0.85rem;">
                                     <thead>
                                         <tr>
@@ -745,7 +745,7 @@
                                 <input type="text" id="adminChefFullName" placeholder="Enter chef full name" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
                             </div>
 
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+                            <div class="responsive-form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
                                 <div class="input-group">
                                     <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Username (Login)</label>
                                     <input type="text" id="adminChefUsername" placeholder="Enter username" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
@@ -770,7 +770,7 @@
                                     <span>Assign Kitchen Cuisines / Sections</span>
                                     <span style="font-size: 0.72rem; color: var(--primary);">Select all sections chef handles</span>
                                 </label>
-                                <div id="adminChefCuisinesCheckboxes" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; background: rgba(0,0,0,0.35); padding: 14px; border: 1px solid var(--border); border-radius: 8px;">
+                                <div class="responsive-form-grid" id="adminChefCuisinesCheckboxes" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; background: rgba(0,0,0,0.35); padding: 14px; border: 1px solid var(--border); border-radius: 8px;">
                                     <!-- Populated dynamically -->
                                 </div>
                             </div>
@@ -784,7 +784,7 @@
                         </div>
 
                         <!-- Chefs Table -->
-                        <div class="panel table-container" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border); border-radius: 16px; padding: 22px;">
+                        <div class="panel" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border); border-radius: 16px; padding: 22px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                                 <div>
                                     <h3 style="margin: 0; font-size: 1.15rem; color: #fff; display: flex; align-items: center; gap: 8px;">
@@ -794,7 +794,7 @@
                                 </div>
                                 <span id="adminChefCountBadge" style="background: rgba(255,190,11,0.15); color: var(--primary); padding: 4px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 700;">0 Chefs</span>
                             </div>
-                            <div style="overflow-x: auto;">
+                            <div class="table-scroll" tabindex="0" role="region" aria-label="Scrollable table">
                                 <table style="width: 100%; font-size: 0.85rem;">
                                     <thead>
                                         <tr>
@@ -834,7 +834,7 @@
                                 <input type="text" id="adminUserFullName" placeholder="Enter admin full name" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
                             </div>
 
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                            <div class="responsive-form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
                                 <div class="input-group">
                                     <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Username (Login)</label>
                                     <input type="text" id="adminUserUsername" placeholder="Enter username" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
@@ -862,7 +862,7 @@
                         </div>
 
                         <!-- Admins Table -->
-                        <div class="panel table-container" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border); border-radius: 16px; padding: 22px;">
+                        <div class="panel" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border); border-radius: 16px; padding: 22px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                                 <div>
                                     <h3 style="margin: 0; font-size: 1.15rem; color: #fff; display: flex; align-items: center; gap: 8px;">
@@ -872,7 +872,7 @@
                                 </div>
                                 <span id="adminUserCountBadge" style="background: rgba(255,190,11,0.15); color: var(--primary); padding: 4px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 700;">0 Admins</span>
                             </div>
-                            <div style="overflow-x: auto;">
+                            <div class="table-scroll" tabindex="0" role="region" aria-label="Scrollable table">
                                 <table style="width: 100%; font-size: 0.85rem;">
                                     <thead>
                                         <tr>
@@ -891,7 +891,7 @@
 
                 <!-- 4. SUBDIVISION: ALL USERS OVERVIEW -->
                 <div id="userSectionAll" class="user-subdivision-content hidden">
-                    <div class="panel table-container" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border); border-radius: 16px; padding: 24px;">
+                    <div class="panel" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border); border-radius: 16px; padding: 24px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
                             <div>
                                 <h3 style="margin: 0; font-size: 1.15rem; color: #fff; display: flex; align-items: center; gap: 8px;">
@@ -901,7 +901,7 @@
                             </div>
                             <span id="allUsersCountBadge" style="background: rgba(255,190,11,0.15); color: var(--primary); padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; font-weight: 700;">0 Users</span>
                         </div>
-                        <div style="overflow-x: auto;">
+                        <div class="table-scroll" tabindex="0" role="region" aria-label="Scrollable table">
                             <table style="width: 100%; font-size: 0.85rem;">
                                 <thead>
                                     <tr>
@@ -961,7 +961,7 @@
                     </div>
 
                     <!-- RIGHT: Locations Table -->
-                    <div class="panel table-container" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border); border-radius: 16px; padding: 22px;">
+                    <div class="panel" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border); border-radius: 16px; padding: 22px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                             <div>
                                 <h3 style="margin: 0; font-size: 1.15rem; color: #fff; display: flex; align-items: center; gap: 8px;">
@@ -971,7 +971,7 @@
                             </div>
                             <span id="locationsCountBadge" style="background: rgba(255,190,11,0.15); color: var(--primary); padding: 4px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 700;">0 Locations</span>
                         </div>
-                        <div style="overflow-x: auto;">
+                        <div class="table-scroll" tabindex="0" role="region" aria-label="Scrollable table">
                             <table style="width: 100%; font-size: 0.85rem;">
                                 <thead>
                                     <tr>
@@ -1015,7 +1015,7 @@
                             <input type="text" id="chefFullName" placeholder="Enter chef full name" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
                         </div>
 
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+                        <div class="chef-credentials">
                             <div class="input-group">
                                 <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Username (Login)</label>
                                 <input type="text" id="chefUsername" placeholder="Enter username" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
@@ -1038,7 +1038,7 @@
                                 <span>Assign Kitchen Cuisines / Sections</span>
                                 <span style="font-size: 0.72rem; color: var(--primary);">Select all sections chef handles</span>
                             </label>
-                            <div id="chefCuisinesCheckboxes" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; background: rgba(0,0,0,0.35); padding: 14px; border: 1px solid var(--border); border-radius: 8px;">
+                            <div class="responsive-form-grid" id="chefCuisinesCheckboxes" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; background: rgba(0,0,0,0.35); padding: 14px; border: 1px solid var(--border); border-radius: 8px;">
                                 <!-- Checkboxes populated dynamically -->
                             </div>
                         </div>
@@ -1052,7 +1052,7 @@
                     </div>
 
                     <!-- Table of registered chefs -->
-                    <div class="panel table-container" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border); border-radius: 16px; padding: 22px;">
+                    <div class="panel" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border); border-radius: 16px; padding: 22px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                             <div>
                                 <h3 style="margin: 0; font-size: 1.15rem; color: #fff; display: flex; align-items: center; gap: 8px;">
@@ -1062,7 +1062,7 @@
                             </div>
                             <span id="chefCountBadge" style="background: rgba(255,190,11,0.15); color: var(--primary); padding: 4px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 700;">0 Chefs</span>
                         </div>
-                        <div style="overflow-x: auto;">
+                        <div class="table-scroll" tabindex="0" role="region" aria-label="Kitchen chefs table">
                             <table style="width: 100%; font-size: 0.85rem;">
                                 <thead>
                                     <tr>
@@ -1197,7 +1197,7 @@
                     <h4 style="margin: 0 0 10px 0; font-size: 0.9rem; color: var(--primary); display: flex; align-items: center; gap: 6px;">
                         <i data-lucide="plus-circle" style="width: 15px; height: 15px;"></i> Add New Stock Requirement (Supervisor Stock Request)
                     </h4>
-                    <div style="display: grid; grid-template-columns: 2fr 1fr 2fr auto; gap: 10px; align-items: center;">
+                    <div class="responsive-form-grid" style="display: grid; grid-template-columns: 2fr 1fr 2fr auto; gap: 10px; align-items: center;">
                         <select id="supervisorNewStockItem" style="padding: 8px; border-radius: 6px; background: var(--dark); color: var(--text-main); border: 1px solid var(--border);">
                             <!-- populated -->
                         </select>
@@ -1246,7 +1246,7 @@
                             </strong>
                         </div>
                     </div>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; background: rgba(0,0,0,0.25); padding: 12px; border-radius: 8px;">
+                    <div class="responsive-form-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; background: rgba(0,0,0,0.25); padding: 12px; border-radius: 8px;">
                         <div>
                             <span style="font-size: 0.75rem; color: var(--text-muted);">Total Ingredients:</span>
                             <div id="summaryTotalIngredients" style="font-size: 1.1rem; font-weight: bold; color: var(--text-main);">0</div>
@@ -1300,7 +1300,7 @@
             </div>
 
             <!-- Overview Header -->
-            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; background: rgba(0,0,0,0.3); padding: 12px 16px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 20px;">
+            <div class="responsive-form-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; background: rgba(0,0,0,0.3); padding: 12px 16px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 20px;">
                 <div>
                     <span style="font-size: 0.75rem; color: var(--text-muted);">Outlet:</span>
                     <div id="apprModalOutlet" style="font-size: 0.95rem; font-weight: 600;">-</div>
@@ -1352,7 +1352,7 @@
                 </div>
             </div>
 
-            <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.85rem;">
+            <div class="responsive-form-grid" style="background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.85rem;">
                 <div><span style="color: var(--text-muted);">Request Ref:</span> <strong id="poModalRef" style="color: var(--primary);">-</strong></div>
                 <div><span style="color: var(--text-muted);">Destination Outlet:</span> <strong id="poModalOutlet">-</strong></div>
             </div>
@@ -1360,7 +1360,7 @@
             <div id="poVendorResults" class="hidden"></div>
             <div id="poVendorEditor">
             <!-- Vendor assignments are per item and apply only to this order. -->
-            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-bottom: 16px;">
+            <div class="responsive-form-grid" style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-bottom: 16px;">
                 <div>
                     <p>Vendors start from each item's saved preferred vendor. Change any vendor below for this order. Notes are shared only with that item's vendor.</p>
                 </div>
