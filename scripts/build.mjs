@@ -8,7 +8,11 @@ const outputRoot = resolve('dist');
 for (const name of ['site', 'pages']) {
     const target = resolve(outputRoot, name);
     if (dirname(target) !== outputRoot) throw new Error('Invalid build output path.');
-    try { rmSync(target, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } catch {}
+    try {
+        rmSync(target, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    } catch (err) {
+        throw new Error(`Failed to clean build output directory "${target}": ${err.message}`, { cause: err });
+    }
 }
 // Explicit allowlist: never upload source tools, .dev.vars, backups or credentials.
 mkdirSync('dist/site/js', { recursive: true });

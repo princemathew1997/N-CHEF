@@ -867,24 +867,27 @@ function initNavigation() {
     // Desktop Display Scale (Percentage / Density) Controller
     const densityBtn = document.getElementById('uiDensityBtn');
     const densityLabel = document.getElementById('uiDensityLabel');
-    const scales = ['85%', '75%', '100%'];
-    const scaleValues = { '85%': '0.85', '75%': '0.75', '100%': '1' };
+    const scales = ['100%', '85%', '75%'];
+    const scaleValues = { '100%': '1', '85%': '0.85', '75%': '0.75' };
 
-    let currentScale = localStorage.getItem('nchef_ui_scale') || '85%';
-    if (!scales.includes(currentScale)) currentScale = '85%';
+    let currentScale = localStorage.getItem('nchef_ui_scale') || '100%';
+    if (!scales.includes(currentScale)) currentScale = '100%';
 
     const applyScale = (s) => {
         currentScale = s;
         localStorage.setItem('nchef_ui_scale', s);
+        const scaleVal = scaleValues[s] || '1';
         if (dashboardLayout) {
             if (window.innerWidth > 1024) {
-                dashboardLayout.style.zoom = scaleValues[s] || '0.85';
+                dashboardLayout.style.zoom = scaleVal;
+                dashboardLayout.style.setProperty('--ui-scale', scaleVal);
             } else {
                 dashboardLayout.style.zoom = '1';
+                dashboardLayout.style.setProperty('--ui-scale', '1');
             }
         }
         if (densityLabel) densityLabel.textContent = s;
-        if (densityBtn) densityBtn.title = `Display Scale: ${s} (Click to switch: 85% / 75% / 100%)`;
+        if (densityBtn) densityBtn.title = `Display Scale: ${s} (Click to switch: 100% / 85% / 75%)`;
     };
 
     applyScale(currentScale);
@@ -901,8 +904,11 @@ function initNavigation() {
         if (!dashboardLayout) return;
         if (window.innerWidth <= 1024) {
             dashboardLayout.style.zoom = '1';
+            dashboardLayout.style.setProperty('--ui-scale', '1');
         } else {
-            dashboardLayout.style.zoom = scaleValues[currentScale] || '0.85';
+            const scaleVal = scaleValues[currentScale] || '1';
+            dashboardLayout.style.zoom = scaleVal;
+            dashboardLayout.style.setProperty('--ui-scale', scaleVal);
         }
     });
 
