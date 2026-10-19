@@ -76,6 +76,10 @@
         <aside class="sidebar" id="appSidebar">
             <div class="sidebar-logo">
                 <span class="logo-mark"><span class="text-primary" style="margin-right: -6px;">n.</span><span class="logo-text">chef</span></span>
+                <!-- Desktop Display Scale Toggle -->
+                <button type="button" class="icon-btn density-toggle-btn desktop-only" id="uiDensityBtn" title="Display Scale: Click to change (Standard 100% / Compact 85% / Ultra-fit 75%)">
+                    <span id="uiDensityLabel" style="font-size: 0.68rem; font-weight: 800; color: var(--primary);">100%</span>
+                </button>
                 <!-- Desktop Sidebar Collapse Toggle -->
                 <button type="button" class="icon-btn sidebar-collapse-toggle desktop-only" id="sidebarCollapseBtn" title="Collapse sidebar (Compact View)">
                     <i data-lucide="chevron-left" id="sidebarCollapseIcon"></i>
@@ -532,7 +536,7 @@
                     </div>
                 </header>
 
-                <div class="dash-grid" style="grid-template-columns: 1fr 1.15fr; gap: 20px; align-items: start; margin-bottom: 24px;">
+                <div class="dash-grid dash-grid-split" style="margin-bottom: 24px;">
                     <!-- LEFT: Add Vendor Form -->
                     <div class="panel form-section" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border-gold); border-radius: 16px; padding: 24px;">
                         <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
@@ -642,7 +646,7 @@
 
                 <!-- 1. SUBDIVISION: SUPERVISORS -->
                 <div id="userSectionSupervisor" class="user-subdivision-content">
-                    <div class="dash-grid" style="grid-template-columns: 1fr 1.15fr; gap: 20px; align-items: start;">
+                    <div class="dash-grid dash-grid-split">
                         <!-- Add Supervisor Form -->
                         <div class="panel form-section" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border-gold); border-radius: 16px; padding: 24px;">
                             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
@@ -721,7 +725,7 @@
 
                 <!-- 2. SUBDIVISION: CHEFS -->
                 <div id="userSectionChef" class="user-subdivision-content hidden">
-                    <div class="dash-grid" style="grid-template-columns: 1fr 1.15fr; gap: 20px; align-items: start;">
+                    <div class="dash-grid dash-grid-split">
                         <!-- Add Chef Form -->
                         <div class="panel form-section" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border-gold); border-radius: 16px; padding: 24px;">
                             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
@@ -810,7 +814,7 @@
 
                 <!-- 3. SUBDIVISION: ADMINS -->
                 <div id="userSectionAdmin" class="user-subdivision-content hidden">
-                    <div class="dash-grid" style="grid-template-columns: 1fr 1.15fr; gap: 20px; align-items: start;">
+                    <div class="dash-grid dash-grid-split">
                         <!-- Add Admin Form -->
                         <div class="panel form-section" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border-gold); border-radius: 16px; padding: 24px;">
                             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
@@ -924,7 +928,7 @@
                     </div>
                 </header>
 
-                <div class="dash-grid" style="grid-template-columns: 1fr 1.15fr; gap: 20px; align-items: start;">
+                <div class="dash-grid dash-grid-split">
                     <!-- LEFT: Add Location Form -->
                     <div class="panel form-section" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border-gold); border-radius: 16px; padding: 24px;">
                         <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
@@ -991,7 +995,7 @@
                         <p>Register new chefs, assign login credentials, and configure cuisine sections for your outlet.</p>
                     </div>
                 </header>
-                <div class="dash-grid" style="grid-template-columns: 1fr 1.15fr; gap: 20px; align-items: start;">
+                <div class="dash-grid dash-grid-split">
                     <!-- Add Chef Form -->
                     <div class="panel form-section" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border-gold); border-radius: 16px; padding: 24px;">
                         <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">

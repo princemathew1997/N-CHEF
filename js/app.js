@@ -864,6 +864,54 @@ function initNavigation() {
         });
     }
 
+    // Desktop Display Scale (Percentage / Density) Controller
+    const densityBtn = document.getElementById('uiDensityBtn');
+    const densityLabel = document.getElementById('uiDensityLabel');
+    const scales = ['100%', '85%', '75%'];
+    const scaleValues = { '100%': '1', '85%': '0.85', '75%': '0.75' };
+
+    let currentScale = localStorage.getItem('nchef_ui_scale') || '100%';
+    if (!scales.includes(currentScale)) currentScale = '100%';
+
+    const applyScale = (s) => {
+        currentScale = s;
+        localStorage.setItem('nchef_ui_scale', s);
+        const scaleVal = scaleValues[s] || '1';
+        if (dashboardLayout) {
+            if (window.innerWidth > 1024) {
+                dashboardLayout.style.zoom = scaleVal;
+                dashboardLayout.style.setProperty('--ui-scale', scaleVal);
+            } else {
+                dashboardLayout.style.zoom = '1';
+                dashboardLayout.style.setProperty('--ui-scale', '1');
+            }
+        }
+        if (densityLabel) densityLabel.textContent = s;
+        if (densityBtn) densityBtn.title = `Display Scale: ${s} (Click to switch: 100% / 85% / 75%)`;
+    };
+
+    applyScale(currentScale);
+
+    if (densityBtn) {
+        densityBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const nextIdx = (scales.indexOf(currentScale) + 1) % scales.length;
+            applyScale(scales[nextIdx]);
+        });
+    }
+
+    window.addEventListener('resize', () => {
+        if (!dashboardLayout) return;
+        if (window.innerWidth <= 1024) {
+            dashboardLayout.style.zoom = '1';
+            dashboardLayout.style.setProperty('--ui-scale', '1');
+        } else {
+            const scaleVal = scaleValues[currentScale] || '1';
+            dashboardLayout.style.zoom = scaleVal;
+            dashboardLayout.style.setProperty('--ui-scale', scaleVal);
+        }
+    });
+
     // Mobile Menu Toggle and Drawer
     const mobileMenuBtn = document.getElementById('mobileMenuBtn');
     const mobileDrawerCloseBtn = document.getElementById('mobileDrawerCloseBtn');
