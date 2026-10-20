@@ -24,10 +24,10 @@ test('outlet cache is isolated by user and checked after assignments change',()=
     context.currentUser={id:'admin',role:'admin',assignedLocations:['all']};assert.equal(selection.restore(),'brigade');
     context.outletsData=[{id:'cafe',name:'Cafe'}];assert.equal(selection.restore(),'cafe');
 });
-test('supervisor cannot open admin-only overview through a saved route',()=>{
+test('executive chef cannot open admin-only catalog through a saved route',()=>{
     const calls=[];
-    const context={window:{switchToView:view=>calls.push(view)},InventoryTools:globalThis.InventoryTools,document:{addEventListener(){}},currentUser:{role:'supervisor'}};
+    const context={window:{switchToView:view=>calls.push(view)},InventoryTools:globalThis.InventoryTools,document:{addEventListener(){}},currentUser:{role:'executive_chef'}};
     runInNewContext(readFileSync('js/stock-actions.js','utf8'),context);
-    assert.equal(context.window.showInventoryView('inventory:overview'),true);
+    assert.equal(context.window.showInventoryView('inventory:catalog'),true);
     assert.deepEqual(calls,['viewMasterOrders']);
 });

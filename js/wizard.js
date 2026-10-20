@@ -22,7 +22,7 @@ function initRequestWizard() {
         const wizardOutletDisplay = document.getElementById('wizardOutletDisplay');
         if (outletSelect) {
             const vis = (typeof getVisibleOutlets === 'function') ? getVisibleOutlets() : outletsData;
-            const isChef = currentUser && currentUser.role === 'chef';
+            const isChef = currentUser && currentUser.role === 'cuisine_head';
             const isSingle = vis.length === 1;
             
             if (isChef || isSingle) {
@@ -55,7 +55,7 @@ function initRequestWizard() {
         const cuisineSelect = document.getElementById('wizardCuisine');
         const wizardCuisineDisplay = document.getElementById('wizardCuisineDisplay');
         if (cuisineSelect) {
-            const isChef = currentUser && currentUser.role === 'chef';
+            const isChef = currentUser && currentUser.role === 'cuisine_head';
             let chefCuisines = [];
             if (isChef) {
                 const assigned = currentUser.assignedSections || currentUser.assignedCuisines;
@@ -102,7 +102,7 @@ function initRequestWizard() {
         if (!btn) return;
         // Chef uses the single primary action button directly on the Chef Portal view.
         // Hide sidebar duplicate to keep sidebar clean.
-        btn.style.display = currentUser?.role === 'supervisor' ? '' : 'none';
+        btn.style.display = currentUser?.role === 'executive_chef' ? '' : 'none';
     };
     
     document.getElementById('closeRequestWizardBtn')?.addEventListener('click', () => {
@@ -152,7 +152,7 @@ function initRequestWizard() {
 
         const defaultCuisine = (document.getElementById('wizardCuisine')?.value !== 'all') ? document.getElementById('wizardCuisine')?.value : 'Indian';
         let outletId = document.getElementById('wizardOutlet')?.value;
-        if (currentUser && currentUser.role === 'chef') {
+        if (currentUser && currentUser.role === 'cuisine_head') {
             let allocatedOutlet = null;
             if (currentUser.assignedLocations && !currentUser.assignedLocations.includes('all')) {
                 allocatedOutlet = outletsData.find(o => currentUser.assignedLocations.includes(o.id));
@@ -201,7 +201,7 @@ function initRequestWizard() {
         if (typeof showUiModal === 'function') {
             showUiModal({
                 title: 'Requests Submitted',
-                message: currentUser.role === 'supervisor' ? 'Your requests are saved and ready in Consolidate Request.' : 'Ingredient requests submitted successfully to supervisor!',
+                message: currentUser.role === 'executive_chef' ? 'Your requests are saved and ready in Consolidate Request.' : 'Ingredient requests submitted successfully to supervisor!',
                 type: 'success',
                 btnText: 'Done'
             });
@@ -211,8 +211,8 @@ function initRequestWizard() {
         if (typeof updateRequestsBadge === 'function') updateRequestsBadge();
         if (typeof updateIndentsBadge === 'function') updateIndentsBadge();
         if (typeof loadRequestsData === 'function') loadRequestsData();
-        if (currentUser.role === 'chef' && typeof loadChefPortalData === 'function') loadChefPortalData();
-        if (currentUser.role === 'supervisor') window.switchToView('viewConsolidateRequests');
+        if (currentUser.role === 'cuisine_head' && typeof loadChefPortalData === 'function') loadChefPortalData();
+        if (currentUser.role === 'executive_chef') window.switchToView('viewConsolidateRequests');
     });
     
     // Periodically ensure the button is there (simple robust way to survive view switches)
@@ -301,7 +301,7 @@ function renderWizardReview() {
     const tbody = document.getElementById('wizardReviewTableBody');
     if(!tbody) return;
     
-    const isChef = currentUser && currentUser.role === 'chef';
+    const isChef = currentUser && currentUser.role === 'cuisine_head';
     let chefCuisines = [];
     if (isChef) {
         const assigned = currentUser.assignedSections || currentUser.assignedCuisines;
@@ -375,7 +375,7 @@ window.saveUser = async function() {
         ? usersData.find(u => u.username === editUsername)
         : usersData.find(u => u.username === username);
         
-    if(targetUser && role === 'chef') {
+    if(targetUser && role === 'cuisine_head') {
         targetUser.assignedSections = assignedSections;
         targetUser.assignedCuisines = assignedSections;
         if(currentUser && currentUser.username === targetUser.username) {
@@ -391,7 +391,7 @@ const originalEditUser = window.editUser;
 window.editUser = function(username) {
     if(originalEditUser) originalEditUser(username);
     const user = usersData.find(u => u.username === username);
-    if(user && user.role === 'chef') {
+    if(user && user.role === 'cuisine_head') {
         const secGroup = document.getElementById('userSectionsGroup');
         if(secGroup) secGroup.style.display = 'block';
         const assigned = (user.assignedSections || user.assignedCuisines || []).map(s => String(s).toLowerCase());
@@ -417,7 +417,7 @@ document.getElementById('newUserRole')?.addEventListener('change', (e) => {
     const role = e.target.value;
     const secGroup = document.getElementById('userSectionsGroup');
     if(secGroup) {
-        secGroup.style.display = (role === 'chef') ? 'block' : 'none';
+        secGroup.style.display = (role === 'cuisine_head') ? 'block' : 'none';
     }
 });
 

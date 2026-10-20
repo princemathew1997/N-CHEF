@@ -34,21 +34,31 @@ export const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 export function project(state, user) {
   const result = clone(state);
   result.outlets = result.outlets.filter(o => hasOutlet(user, o.id));
-  result.requests = result.requests.filter(r => hasOutlet(user, r.outletId) && (user.role !== 'chef' || ownsRequest(user, r)));
-  result.indents = result.indents.filter(r => hasOutlet(user, r.outletId) && user.role !== 'chef');
-  result.purchase_orders = result.purchase_orders.filter(r => hasOutlet(user, r.outletId) && user.role !== 'chef');
-  result.users = result.users.filter(u => user.role === 'admin' || u.id === user.id || (user.role === 'supervisor' && u.role === 'chef' && u.assignedLocations?.every(o => o !== 'all' && hasOutlet(user, o))));
+  result.requests = result.requests.filter(r => hasOutlet(user, r.outletId) && (user.role !== 'cuisine_head' || ownsRequest(user, r)));
+  result.indents = result.indents.filter(r => hasOutlet(user, r.outletId) && user.role !== 'cuisine_head');
+  result.purchase_orders = result.purchase_orders.filter(r => hasOutlet(user, r.outletId) && user.role !== 'cuisine_head');
+  result.users = result.users.filter(u => user.role === 'admin' || u.id === user.id || (user.role === 'executive_chef' && u.role === 'cuisine_head' && u.assignedLocations?.every(o => o !== 'all' && hasOutlet(user, o))));
   for (const item of result.items) {
     if (user.role !== 'admin') {
+      const centralAvailable=(item.bought || 0)-Object.values(item.allocations || {}).reduce((sum,q)=>sum+q,0);
       item.allocations = Object.fromEntries(Object.entries(item.allocations || {}).filter(([outlet]) => hasOutlet(user, outlet)));
       item.consumed = Object.fromEntries(Object.entries(item.consumed || {}).filter(([outlet]) => hasOutlet(user, outlet)));
-      // No central-store totals are exposed to outlet accounts.
-      item.bought = Object.values(item.allocations).reduce((sum, q) => sum + q, 0);
+      // Keep other outlet allocations private; purchasing accounts can see unassigned central stock.
+      item.bought = Object.values(item.allocations).reduce((sum, q) => sum + q, 0)+(user.role==='purchaser'?Math.max(0,centralAvailable):0);
     }
   }
   result.outletStock = (result.outletStock || []).filter(s => hasOutlet(user, s.outlet_id));
-  result.stockHistory = (result.stockHistory || []).filter(s => s.outlet_id ? hasOutlet(user, s.outlet_id) : user.role === 'admin');
-  if (user.role !== 'admin') result.legacyStock = [];
+  result.stockHistory = (result.stockHistory || []).filter(s => s.outlet_id ? hasOutlet(user, s.outlet_id) : ['admin','purchaser'].includes(user.role));
+  if (!['admin','purchaser'].includes(user.role)) result.legacyStock = [];
+  result.operationRecords=(result.operationRecords || []).filter(r=>{
+    if(r.kind==='notification')return r.userId===user.id;
+    if(['category','unit'].includes(r.kind))return true;
+    if(r.kind==='account_request')return user.role==='admin' || r.requestedBy===user.id;
+    if(!hasOutlet(user,r.outletId))return false;
+    if(user.role==='cuisine_head')return r.kind==='delivery' && (user.assignedSections || user.assignedCuisines || []).includes(r.cuisine) && (!r.recipientId || r.recipientId===user.id);
+    return ['admin','purchaser','executive_chef'].includes(user.role);
+  });
+  if(user.role!=='admin') result.vendors=result.vendors.map(v=>({id:v.id,name:v.name}));
   return result;
 }
 
@@ -82,6 +92,12 @@ export function validateChanges(state, changes, actor, stockAction = false) {
         if (!same(data[field] ?? expected, expected)) fail('Use stock transactions to change quantities.');
         data[field] = clone(expected);
       }
+      if(data.thresholdEnabled!==undefined && typeof data.thresholdEnabled!=='boolean')fail('Invalid threshold toggle.');
+      if(data.thresholdEnabled===true)number(data.threshold,'Threshold');
+      if(state.operationRecords)for(const field of ['category','unit']) {
+        const option=state.operationRecords.find(r=>r.kind===field && r.name.toLowerCase()===String(data[field]).trim().toLowerCase());
+        if(!option)fail('Choose an existing '+field+'.');data[field]=option.name;
+      }
       data.name = safeText(data.name, 'Item name').trim();
       if ((!old || old.name.trim().toLowerCase() !== data.name.toLowerCase()) && next.items.some(i => i.id !== key && i.name.trim().toLowerCase() === data.name.toLowerCase())) fail('Item name already exists.', 409);
       if (data.cuisine && !next.cuisines.some(c => c.name === data.cuisine)) fail('Choose an existing cuisine.');
@@ -94,10 +110,18 @@ export function validateChanges(state, changes, actor, stockAction = false) {
       if (ids.some(itemId => next.items.find(i => i.id === itemId)?.active === false)) fail('Choose active catalog items.');
     }
     if (actor.role !== 'admin') {
-      if (entity === 'requests') {
+      if(actor.role==='purchaser') {
+        if(!['requests','indents'].includes(entity) || !old || !data || !hasOutlet(actor,old.outletId))fail('Purchaser may only edit forwarded orders.',403);
+        if(!['Pending Approval','Consolidated','Sent to Admin'].includes(old.status) || old.status!==data.status)fail('Use an explicit approval action.',403);
+        const fields=entity==='indents'?['items']:['qty','revisedQty','supervisorNote'];
+        if(!same(without(old,fields),without(data,fields)))fail('Only order quantities and notes may change.',403);
+        if(entity==='indents' && (!Array.isArray(data.items) || data.items.length!==old.items.length || data.items.some(row=>!old.items.some(prior=>prior.itemId===row.itemId && prior.originalQty===row.originalQty))))fail('Keep the forwarded order items and original quantities intact.',403);
+      }
+
+      if (actor.role==='purchaser') { /* scoped field checks above */ } else if (entity === 'requests') {
         const r = old || data;
         if (!hasOutlet(actor, r.outletId) || (old && data && old.outletId !== data.outletId)) fail('Outlet access denied.', 403);
-        if (actor.role === 'chef') {
+        if (actor.role === 'cuisine_head') {
           if (old && !ownsRequest(actor, old)) fail('Request access denied.', 403);
           if (old && !['Pending', 'Accepted'].includes(old.status)) fail('Forwarded requests cannot be edited.', 409);
           if (data && old && !same(without(data, ['qty']), without(old, ['qty']))) fail('Chefs can only change the quantity of their request.', 403);
@@ -110,14 +134,11 @@ export function validateChanges(state, changes, actor, stockAction = false) {
           if (old && data && (old.itemId !== data.itemId || old.ownerId !== data.ownerId)) fail('Request identity cannot change.', 403);
         }
       } else if (entity === 'indents') {
-        if (actor.role !== 'supervisor' || !hasOutlet(actor, (old || data).outletId)) fail('Indent access denied.', 403);
+        if (actor.role !== 'executive_chef' || !hasOutlet(actor, (old || data).outletId)) fail('Indent access denied.', 403);
         if (old && old.status !== 'Pending Approval') fail('Completed indents cannot be changed.', 409);
         if (data && (data.status !== 'Pending Approval' || (old && old.outletId !== data.outletId))) fail('Only admins can approve indents.', 403);
       } else if (entity === 'users') {
-        if (actor.role !== 'supervisor' || (old && old.role !== 'chef') || (data && data.role !== 'chef')) fail('User access denied.', 403);
-        for (const u of [old, data].filter(Boolean)) {
-          if (!u.assignedLocations?.length || u.assignedLocations.some(o => o === 'all' || !hasOutlet(actor, o))) fail('Chef outlet access denied.', 403);
-        }
+        fail('Only admins can manage accounts.',403);
       } else if (entity === 'items') {
         fail('Only admins can manage catalog items.',403);
       } else fail('Administrator permission required.', 403);
@@ -133,7 +154,7 @@ export function validateChanges(state, changes, actor, stockAction = false) {
     if (data && old && ['requests', 'indents', 'purchase_orders'].includes(entity)) {
       if (data.ownerId !== old.ownerId) fail('Owner cannot change.');
       if (['Approved', 'Rejected'].includes(old.status) && data.status !== old.status) fail('Completed workflow cannot be reopened.', 409);
-      if (old.status === 'Approved' && !same(data, old)) fail('Approved records are immutable.', 409);
+      if (old.status === 'Approved' && !same(data, old) && !(stockAction && same(without(data,['purchaseOrderIds']),without(old,['purchaseOrderIds'])))) fail('Approved records are immutable.', 409);
     }
     if (!data && entity === 'outlets' && ((state.outletStock || []).some(s => s.outlet_id === key && s.quantity > 0) || (state.stockHistory || []).some(s => s.outlet_id === key))) fail('An outlet with stock history cannot be removed.');
     if (!data && old && ['requests', 'indents', 'purchase_orders'].includes(entity) && !['Pending', 'Accepted', 'Pending Approval'].includes(old.status)) fail('Completed records cannot be deleted.', 409);
@@ -170,15 +191,20 @@ export function validateChanges(state, changes, actor, stockAction = false) {
     if (!/^[a-zA-Z0-9_.-]{3,64}$/.test(user.username || '')) fail('Usernames need 3–64 letters, digits, dots, underscores or hyphens.');
     if (usernames.has(user.username.toLowerCase())) fail('Username already exists.', 409);
     usernames.add(user.username.toLowerCase());
-    if (!['admin', 'supervisor', 'chef'].includes(user.role)) fail('Invalid role.');
+    if (!['admin', 'executive_chef', 'purchaser', 'cuisine_head'].includes(user.role)) fail('Invalid role.');
     safeText(user.name, 'User name');
     if (!Array.isArray(user.assignedLocations) || !user.assignedLocations.length || user.assignedLocations.some(o => o !== 'all' && !outlets.has(o))) fail('Assign valid outlets to each user.');
-    if (user.role === 'chef' && !(user.assignedSections || user.assignedCuisines)?.length) fail('Assign cuisines to each chef.');
+    if (user.role === 'cuisine_head' && !(user.assignedSections || user.assignedCuisines)?.length) fail('Assign cuisines to each chef.');
     for (const c of user.assignedSections || user.assignedCuisines || []) if (!next.cuisines.some(row => row.name === c)) fail('Unknown cuisine.');
   }
   if (!next.users.some(u => u.role === 'admin') || !next.users.some(u => u.id === actor.id)) fail('Keep an admin and your own account active.');
   for (const outlet of next.outlets) { id(outlet.id); safeText(outlet.name, 'Outlet name'); }
-  for (const vendor of next.vendors) safeText(vendor.name, 'Vendor name');
+  for (const vendor of next.vendors) {
+    safeText(vendor.name,'Vendor name');
+    if(vendor.phone && !/^[+0-9 ()-]{5,25}$/.test(vendor.phone))fail('Enter a valid vendor phone number.');
+    if(vendor.gstin && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][A-Z0-9]Z[A-Z0-9]$/.test(vendor.gstin))fail('Enter a valid GSTIN.');
+    if(vendor.fromDate && (!/^\d{4}-\d{2}-\d{2}$/.test(vendor.fromDate) || !Number.isFinite(Date.parse(vendor.fromDate)) || new Date(vendor.fromDate).toISOString().slice(0,10)!==vendor.fromDate))fail('Choose a valid vendor-from date.');
+  }
   for (const item of next.items) {
     safeText(item.name, 'Item name'); safeText(item.unit, 'Unit'); safeText(item.category, 'Category');
     if (!vendors.has(item.vendor)) fail('Choose an existing vendor.');

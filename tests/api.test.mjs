@@ -9,7 +9,7 @@ const origin = 'http://localhost';
 const adminPassword = 'test-admin-password-2026';
 const userPassword = 'test-outlet-password-2026';
 const testReleaseCommit = 'a'.repeat(40);
-let adminCookie, adminId, chefCookie, supervisorCookie, chefId, supervisorId;
+let adminCookie, adminId, chefCookie, supervisorCookie, chefId, supervisorId, purchaserCookie;
 async function request(path, method = 'GET', input, cookie = adminCookie, clientRelease = testReleaseCommit) {
     const res = await mf.dispatchFetch(origin + '/api/' + path, { method, headers: { Origin: origin, 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}), ...(clientRelease ? {'X-NCHEF-Client-Release':clientRelease} : {}) }, body: input ? JSON.stringify(input) : undefined });
     return { status: res.status, data: await res.json(), cookie: res.headers.get('set-cookie')?.split(';')[0] };
@@ -40,12 +40,15 @@ test('secure setup, login, permissions, atomic approval and conflicts', async ()
     adminCookie = login.cookie; adminId = login.data.user.id;
     assert.ok(adminCookie); assert.ok(!JSON.stringify(login.data).includes('password'));
     assert.ok((await db.prepare('SELECT password_hash FROM users WHERE id = ?').bind(adminId).first()).password_hash.startsWith('pbkdf2-sha256:'));
-    const chef = { id: crypto.randomUUID(), username: 'chef_test', name: 'Chef Test', role: 'chef', assignedLocations: ['brigade'], assignedSections: ['Indian'], password: userPassword };
-    const sup = { id: crypto.randomUUID(), username: 'supervisor_test', name: 'Supervisor Test', role: 'supervisor', assignedLocations: ['brigade'], password: userPassword };
+    const chef = { id: crypto.randomUUID(), username: 'chef_test', name: 'Chef Test', role: 'cuisine_head', assignedLocations: ['brigade'], assignedSections: ['Indian'], password: userPassword };
+    const sup = { id: crypto.randomUUID(), username: 'supervisor_test', name: 'Supervisor Test', role: 'executive_chef', assignedLocations: ['brigade'], password: userPassword };
     chefId = chef.id; supervisorId = sup.id;
     assert.equal((await save([{ entity: 'users', key: chef.id, value: chef }, { entity: 'users', key: sup.id, value: sup }])).status, 200);
     chefCookie = (await request('login', 'POST', { username: chef.username, password: userPassword }, '')).cookie;
     supervisorCookie = (await request('login', 'POST', { username: sup.username, password: userPassword }, '')).cookie;
+    const purchaser={id:crypto.randomUUID(),username:'purchaser_test',name:'Purchaser Test',role:'purchaser',assignedLocations:['brigade'],password:userPassword};
+    assert.equal((await save([{entity:'users',key:purchaser.id,value:purchaser}])).status,200);
+    purchaserCookie=(await request('login','POST',{username:purchaser.username,password:userPassword},'')).cookie;
     const chefState = (await request('state', 'GET', undefined, chefCookie)).data;
     assert.equal(chefState.outlets.length, 1);
     assert.deepEqual(chefState.users.map(u => u.id), [chef.id]);
@@ -72,12 +75,11 @@ test('secure setup, login, permissions, atomic approval and conflicts', async ()
     assert.equal((await save(changes)).status, 400); // stock cannot be edited through catalog
     assert.equal((await request('state')).data.indents[0].status, 'Pending Approval');
     const stockAction = async (path, input, cookie = adminCookie) => request(path, 'POST', { ...input, operationId: crypto.randomUUID(), revision: (await request('state', 'GET', undefined, cookie)).data.revision }, cookie);
-    assert.equal((await stockAction('indents/approve',{indentId})).status,409);
     assert.equal((await request('state')).data.indents.find(i=>i.id===indentId).status,'Pending Approval');
-    const receiptInput = { itemId:'item_01',outletId:'brigade',vendor:item.vendor,quantity:10 };
+    const receiptInput = { itemId:'item_01',outletId:'brigade',vendor:item.vendor,quantity:10,unitPrice:12.50 };
     assert.equal((await stockAction('stock/receipt',receiptInput,chefCookie)).status,403);
     assert.equal((await stockAction('stock/receipt',{...receiptInput,outletId:'cafe'},supervisorCookie)).status,403);
-    assert.equal((await stockAction('stock/receipt',receiptInput,supervisorCookie)).status,200);
+    assert.equal((await stockAction('stock/receipt',receiptInput,purchaserCookie)).status,200);
     const before = (await request('state')).data;
     assert.equal((await stockAction('indents/approve',{indentId},supervisorCookie)).status,403);
     const approval = {indentId,operationId:crypto.randomUUID(),revision:before.revision};
@@ -85,24 +87,24 @@ test('secure setup, login, permissions, atomic approval and conflicts', async ()
     assert.equal(result.status,200,JSON.stringify(result.data));
     assert.equal((await request('indents/approve','POST',approval)).status,200);
     const balance=async()=> (await db.prepare("SELECT quantity FROM outlet_stock WHERE item_id='item_01' AND outlet_id='brigade'").first()).quantity;
-    assert.equal(await balance(),5);
-    assert.equal((await stockAction('stock/distribute',{itemId:item.id,outletId:'brigade',cuisine:'Indian',quantity:6},supervisorCookie)).status,409);
-    assert.equal((await stockAction('stock/distribute',{itemId:item.id,outletId:'brigade',cuisine:'Indian',quantity:2.5},supervisorCookie)).status,200);
-    assert.equal(await balance(),2.5);
-    assert.equal((await stockAction('stock/adjust',{itemId:item.id,outletId:'brigade',quantity:3},supervisorCookie)).status,400);
-    assert.equal((await stockAction('stock/adjust',{itemId:item.id,outletId:'brigade',quantity:3,reason:'Physical count'},supervisorCookie)).status,200);
+    assert.equal(await balance(),10);
+    assert.equal((await stockAction('stock/distribute',{itemId:item.id,outletId:'brigade',cuisine:'Indian',quantity:6,requestId},purchaserCookie)).status,409);
+    assert.equal((await stockAction('stock/distribute',{itemId:item.id,outletId:'brigade',cuisine:'Indian',quantity:2.5,requestId},purchaserCookie)).status,200);
+    assert.equal(await balance(),7.5);
+    assert.equal((await stockAction('stock/adjust',{itemId:item.id,outletId:'brigade',quantity:3},purchaserCookie)).status,400);
+    assert.equal((await stockAction('stock/adjust',{itemId:item.id,outletId:'brigade',quantity:3,reason:'Physical count'},purchaserCookie)).status,200);
     assert.equal(await balance(),3);
     const sameStockRevision=(await request('state')).data.revision;
-    const race=await Promise.all([1,2].map(()=>request('stock/distribute','POST',{itemId:item.id,outletId:'brigade',cuisine:'Indian',quantity:2,revision:sameStockRevision,operationId:crypto.randomUUID()},supervisorCookie)));
+    const race=await Promise.all([1,2].map(()=>request('stock/distribute','POST',{itemId:item.id,outletId:'brigade',cuisine:'Indian',quantity:2,requestId,revision:sameStockRevision,operationId:crypto.randomUUID()},purchaserCookie)));
     assert.deepEqual(race.map(r=>r.status).sort(),[200,409]);assert.equal(await balance(),1);
     const poId = crypto.randomUUID();
     const po = { id: poId, poNumber: 'PO-TEST-1', vendorId: 'v_01', outletId: 'brigade', items: [{ itemId: 'item_01', qty: 4 }], status: 'PO Raised' };
     assert.equal((await save([{ entity: 'purchase_orders', key: poId, value: po }])).status, 200);
     const poRevision = (await request('state', 'GET', undefined, supervisorCookie)).data.revision;
-    const receipt = { poId, operationId: crypto.randomUUID(), revision: poRevision };
-    assert.equal((await request('purchase-orders/receive', 'POST', receipt, supervisorCookie)).status, 200);
-    assert.equal((await request('purchase-orders/receive', 'POST', receipt, supervisorCookie)).status, 200);
-    assert.equal((await stockAction('purchase-orders/receive', { poId }, supervisorCookie)).status, 409);
+    const receipt = { poId, prices:{item_01:15}, operationId: crypto.randomUUID(), revision: poRevision };
+    assert.equal((await request('purchase-orders/receive', 'POST', receipt, purchaserCookie)).status, 200);
+    assert.equal((await request('purchase-orders/receive', 'POST', receipt, purchaserCookie)).status, 200);
+    assert.equal((await stockAction('purchase-orders/receive', { poId }, purchaserCookie)).status, 409);
     assert.equal(await balance(),5);
     const catalog={...item,id:'new_catalog',name:'New ingredient',active:true};
     assert.equal((await save([{entity:'items',key:catalog.id,value:catalog}],supervisorCookie)).status,403);
@@ -115,7 +117,7 @@ test('secure setup, login, permissions, atomic approval and conflicts', async ()
     assert.equal((await save([{entity:'items',key:catalog.id,value:null}])).status,400);
     assert.equal((await request('stock/consume','POST',{itemId:item.id,outletId:'brigade',quantity:1})).status,404);
     await db.prepare("UPDATE legacy_stock SET quantity=8 WHERE item_id='item_01'").run();
-    assert.equal((await stockAction('stock/assign',{itemId:item.id,outletId:'brigade',quantity:3},supervisorCookie)).status,403);
+    assert.equal((await stockAction('stock/assign',{itemId:item.id,outletId:'brigade',quantity:3},purchaserCookie)).status,403);
     assert.equal((await stockAction('stock/assign',{itemId:item.id,outletId:'brigade',quantity:3})).status,200);
     assert.equal((await stockAction('stock/assign',{itemId:item.id,outletId:'cafe',quantity:2})).status,200);
     assert.equal((await db.prepare("SELECT quantity FROM legacy_stock WHERE item_id='item_01'").first()).quantity,3);
@@ -132,22 +134,24 @@ test('secure setup, login, permissions, atomic approval and conflicts', async ()
     const standalone={id:crypto.randomUUID(),itemId:item.id,outletId:'cafe',cuisine:'Indian',qty:1,status:'Pending'};
     assert.equal((await save([{entity:'requests',key:standalone.id,value:standalone}])).status,200);
     assert.equal((await stockAction('requests/approve',{requestId:standalone.id,quantity:1},supervisorCookie)).status,403);
+    const standaloneSaved=(await request('state')).data.requests.find(r=>r.id===standalone.id);
+    assert.equal((await save([{entity:'requests',key:standalone.id,value:{...standaloneSaved,status:'Sent to Admin'}}])).status,200);
     const standaloneApproval={requestId:standalone.id,quantity:1,operationId:crypto.randomUUID(),revision:(await request('state')).data.revision};
     assert.equal((await request('requests/approve','POST',standaloneApproval)).status,200);
     assert.equal((await request('requests/approve','POST',standaloneApproval)).status,200);
     assert.equal((await stockAction('requests/approve',{requestId:standalone.id,quantity:1})).status,409);
-    assert.equal((await db.prepare("SELECT quantity FROM outlet_stock WHERE item_id='item_01' AND outlet_id='cafe'").first()).quantity,1);
+    assert.equal((await db.prepare("SELECT quantity FROM outlet_stock WHERE item_id='item_01' AND outlet_id='cafe'").first()).quantity,2);
     const scoped=(await request('state','GET',undefined,supervisorCookie)).data;
     assert.ok(scoped.outletStock.every(s=>s.outlet_id==='brigade'));
     assert.ok(scoped.stockHistory.every(s=>s.outlet_id==='brigade'));
     assert.deepEqual(scoped.legacyStock,[]);
-    assert.ok(scoped.stockHistory.some(m=>m.item_name===item.name && m.unit===item.unit && m.actor_name==='Supervisor Test'));
+    assert.ok(scoped.stockHistory.some(m=>m.item_name===item.name && m.unit===item.unit && m.actor_name==='Purchaser Test'));
     await assert.rejects(db.prepare("DELETE FROM outlet_stock_history").run(),/append only/);
     assert.equal((await save(changes, adminCookie, before.revision)).status, 409);
     // Chef and supervisor requirements consolidate together; edited cuisine quantities drive approval.
     const catalogState=(await request('state')).data;
     const second=catalogState.items.find(i=>i.id==='item_02');
-    assert.equal((await stockAction('stock/receipt',{itemId:second.id,outletId:'brigade',vendor:second.vendor,quantity:20},supervisorCookie)).status,200);
+    assert.equal((await stockAction('stock/receipt',{itemId:second.id,outletId:'brigade',vendor:second.vendor,quantity:20,unitPrice:10},purchaserCookie)).status,200);
     const chefRequirement={id:crypto.randomUUID(),itemId:second.id,outletId:'brigade',cuisine:'Indian',qty:6,status:'Pending'};
     const ownRequirement={id:crypto.randomUUID(),itemId:second.id,outletId:'brigade',cuisine:'Chinese',qty:4,status:'Pending'};
     const chefSaved=await save([{entity:'requests',key:chefRequirement.id,value:chefRequirement}],chefCookie);
@@ -164,6 +168,8 @@ test('secure setup, login, permissions, atomic approval and conflicts', async ()
     const linkedState=(await request('state')).data;
     assert.equal((await save([{entity:'requests',key:chefRequirement.id,value:{...linkedState.requests.find(r=>r.id===chefRequirement.id),revisedQty:99}}],supervisorCookie)).status,409);
     assert.equal((await stockAction('indents/approve',{indentId:combinedId})).status,200);
+    assert.equal((await request('state')).data.outletStock.find(b=>b.item_id===second.id && b.outlet_id==='brigade').quantity,20);
+    for(const [r,q,c] of [[chefRequirement,2.5,'Indian'],[ownRequirement,5,'Chinese']])assert.equal((await stockAction('stock/distribute',{itemId:second.id,outletId:'brigade',cuisine:c,quantity:q,requestId:r.id},purchaserCookie)).status,200);
     const cuisineState=(await request('state')).data;
     const moves=cuisineState.stockHistory.filter(m=>m.item_id===second.id && m.kind==='distribute');
     assert.equal(moves.filter(m=>m.cuisine==='Indian').reduce((sum,m)=>sum-m.delta,0),2.5);
@@ -197,6 +203,7 @@ test('secure setup, login, permissions, atomic approval and conflicts', async ()
 test('vendor orders save atomically, retry safely and receive per supplier', async () => {
     chefCookie=(await request('login','POST',{username:'chef_test',password:userPassword},'')).cookie;
     const vendorA={id:crypto.randomUUID(),name:'Order Supplier A'},vendorB={id:crypto.randomUUID(),name:'Order Supplier B'};
+    await request('operations/category/add','POST',{name:'Order test',revision:(await request('state')).data.revision,operationId:crypto.randomUUID()});
     const rows=[vendorA,vendorB].map((vendor,index)=>({id:crypto.randomUUID(),name:'Supplier item '+index,category:'Order test',unit:'kg',vendor:vendor.name,bought:0,allocations:{},consumed:{}}));
     assert.equal((await save([...([vendorA,vendorB].map(value=>({entity:'vendors',key:value.id,value}))),...rows.map(value=>({entity:'items',key:value.id,value}))])).status,200);
     const indent={id:crypto.randomUUID(),indentNumber:'REQ-VENDOR-TEST',outletId:'brigade',status:'Pending Approval',items:rows.map(row=>({itemId:row.id,originalQty:4,revisedQty:3}))};
@@ -219,7 +226,7 @@ test('vendor orders save atomically, retry safely and receive per supplier', asy
     assert.equal((await request('state')).data.purchase_orders.filter(p=>p.indentId===indent.id).length,2);
     const duplicate={...input,revision:(await request('state')).data.revision,operationId:crypto.randomUUID()};
     assert.equal((await request('purchase-orders/raise','POST',duplicate)).status,409);
-    const receive={poId:orders[0].id,revision:(await request('state')).data.revision,operationId:crypto.randomUUID()};
+    const receive={poId:orders[0].id,prices:{[orders[0].items[0].itemId]:20},revision:(await request('state')).data.revision,operationId:crypto.randomUUID()};
     const received=await request('purchase-orders/receive','POST',receive);
     assert.equal(received.status,200,JSON.stringify(received.data));
     assert.equal(received.data.purchase_orders.find(p=>p.id===orders[0].id).status,'Received');
@@ -237,4 +244,144 @@ test('deployed release health and stale-browser guards protect writes without al
     }
     const after=(await request('state')).data;
     assert.equal(after.revision,before.revision);assert.equal(after.vendors.some(v=>v.id==='stale-vendor'),false);assert.deepEqual(after.outletStock,before.outletStock);
+});
+
+test('four-role workflow, receipt costs, thresholds, delivery issues and approved account requests',async()=>{
+    const cmd=async(path,input,cookie=adminCookie)=>request(path,'POST',{...input,revision:(await request('state','GET',undefined,cookie)).data.revision,operationId:crypto.randomUUID()},cookie);
+    const ok=async promise=>{const r=await promise;assert.equal(r.status,200,JSON.stringify(r.data));return r.data;};
+    supervisorCookie=(await request('login','POST',{username:'supervisor_test',password:userPassword},'')).cookie;
+    chefCookie=(await request('login','POST',{username:'chef_test',password:userPassword},'')).cookie;
+    assert.equal((await request('session','GET',undefined,supervisorCookie)).data.user.role,'executive_chef');
+    const state=await ok(request('state')),item=state.items.find(i=>i.id==='item_03');
+    const receipt={itemId:item.id,outletId:'brigade',vendor:item.vendor,quantity:20,unitPrice:10.25};
+    assert.equal((await cmd('stock/receipt',receipt,supervisorCookie)).status,403);
+    assert.equal((await cmd('stock/receipt',{...receipt,unitPrice:1.001},purchaserCookie)).status,400);
+    const priced=await ok(cmd('stock/receipt',receipt,purchaserCookie));
+    assert.equal(priced.outletStock.find(b=>b.item_id===item.id && b.outlet_id==='brigade').unit_cost_minor,1025);
+    assert.equal(priced.stockHistory.find(m=>m.item_id===item.id && m.kind==='receipt').total_cost_minor,20500);
+    await ok(save([{entity:'items',key:item.id,value:{...item,thresholdEnabled:true,threshold:5}}]));
+    const req={id:crypto.randomUUID(),itemId:item.id,itemName:item.name,outletId:'brigade',cuisine:'Indian',qty:10,status:'Pending'};
+    await ok(save([{entity:'requests',key:req.id,value:req}],chefCookie));
+    const current=(await request('state')).data.requests.find(r=>r.id===req.id);
+    const indent={id:crypto.randomUUID(),indentNumber:'REQ-OPERATIONS',outletId:'brigade',status:'Pending Approval',items:[{itemId:item.id,originalQty:10,revisedQty:10,cuisineBreakdown:[{cuisine:'Indian',qty:10}]}]};
+    await ok(save([{entity:'indents',key:indent.id,value:indent},{entity:'requests',key:req.id,value:{...current,status:'Consolidated',indentId:indent.id}}],supervisorCookie));
+    const forwarded=(await request('state')).data;
+    await ok(save([{entity:'indents',key:indent.id,value:{...forwarded.indents.find(i=>i.id===indent.id),items:[{...indent.items[0],revisedQty:8,cuisineBreakdown:[{cuisine:'Indian',qty:8}]}]}},{entity:'requests',key:req.id,value:{...forwarded.requests.find(r=>r.id===req.id),revisedQty:8}}],purchaserCookie));
+    const approved=await ok(cmd('indents/approve',{indentId:indent.id},purchaserCookie));
+    const balance=s=>s.outletStock.find(b=>b.item_id===item.id && b.outlet_id==='brigade').quantity;
+    assert.equal(balance(approved),20,'Approval does not issue stock');
+    const raised=await ok(cmd('purchase-orders/raise',{indentId:indent.id,items:[{itemId:item.id,qty:8,vendorId:state.vendors.find(v=>v.name===item.vendor).id}]},purchaserCookie));
+    assert.equal(raised.indents.find(i=>i.id===indent.id).status,'Approved','Can purchase after approval');
+    const issued=await ok(cmd('stock/distribute',{itemId:item.id,outletId:'brigade',cuisine:'Indian',quantity:8,requestId:req.id},purchaserCookie));
+    assert.equal(balance(issued),12);
+    const delivery=issued.operationRecords.find(r=>r.kind==='delivery' && r.requestId===req.id);
+    assert.equal((await cmd('operations/deliveries/confirm',{id:delivery.id,receivedQuantity:6,reject:true,reason:'Other',affectedQuantity:2,message:''},chefCookie)).status,400);
+    const reportInput={id:delivery.id,receivedQuantity:6,reject:true,reason:'Less quantity',affectedQuantity:2};
+    const reported=await ok(cmd('operations/deliveries/confirm',reportInput,chefCookie));
+    assert.equal(balance(reported),12,'Confirmation does not deduct stock');
+    for(const cookie of [adminCookie,purchaserCookie,supervisorCookie])assert.ok((await request('state','GET',undefined,cookie)).data.operationRecords.some(n=>n.kind==='notification' && n.sourceId===delivery.id));
+    assert.equal((await cmd('operations/deliveries/resolve',{id:delivery.id,resolution:'wastage',note:'Not received'},purchaserCookie)).status,400);
+    await ok(cmd('operations/deliveries/resolve',{id:delivery.id,resolution:'shortage',note:'Confirmed missing on arrival'},purchaserCookie));
+    assert.equal((await request('state')).data.operationRecords.some(r=>r.kind==='wastage' && r.deliveryId===delivery.id),false);
+    const alerts=async()=> (await request('state')).data.operationRecords.filter(r=>r.kind==='notification' && r.sourceId==='threshold_'+item.id+'_brigade').length;
+    await ok(cmd('stock/adjust',{itemId:item.id,outletId:'brigade',quantity:5,reason:'Physical count'},purchaserCookie));assert.equal(await alerts(),1);
+    await ok(cmd('stock/adjust',{itemId:item.id,outletId:'brigade',quantity:4,reason:'Physical count'},purchaserCookie));assert.equal(await alerts(),1);
+    await ok(cmd('stock/receipt',{...receipt,quantity:10,unitPrice:12},purchaserCookie));
+    await ok(cmd('stock/adjust',{itemId:item.id,outletId:'brigade',quantity:5,reason:'Physical count'},purchaserCookie));assert.equal(await alerts(),2);
+    const other=state.items.find(i=>i.id==='item_04');
+    await ok(cmd('stock/receipt',{itemId:other.id,outletId:'brigade',vendor:other.vendor,quantity:10,unitPrice:15},purchaserCookie));
+    const quality=await ok(cmd('stock/distribute',{itemId:other.id,outletId:'brigade',cuisine:'Indian',quantity:4},purchaserCookie));
+    const bad=quality.operationRecords.filter(r=>r.kind==='delivery' && r.itemId===other.id).at(-1);
+    await ok(cmd('operations/deliveries/confirm',{id:bad.id,receivedQuantity:4,reject:true,reason:'Quality issues',affectedQuantity:2},chefCookie));
+    await ok(cmd('stock/receipt',{itemId:other.id,outletId:'brigade',vendor:other.vendor,quantity:1,unitPrice:20},purchaserCookie));
+    const operationId=crypto.randomUUID(),revision=(await request('state')).data.revision;
+    const resolve={id:bad.id,resolution:'wastage',note:'Spoilage confirmed',operationId,revision};
+    const wasted=await ok(request('operations/deliveries/resolve','POST',resolve,purchaserCookie));
+    const waste=wasted.operationRecords.find(r=>r.kind==='wastage' && r.deliveryId===bad.id);
+    assert.equal(waste.totalCostMinor,4000);
+    assert.equal(wasted.outletStock.find(b=>b.item_id===other.id && b.outlet_id==='brigade').quantity,7,'Issued wastage is not deducted twice');
+    const retried=await ok(request('operations/deliveries/resolve','POST',resolve,purchaserCookie));
+    assert.equal(retried.operationRecords.filter(r=>r.kind==='wastage' && r.deliveryId===bad.id).length,1);
+    const adminState=(await request('state')).data;
+    assert.ok(adminState.operationRecords.some(r=>r.kind==='notification' && r.sourceId===waste.id));
+    const replaceSource=await ok(cmd('stock/distribute',{itemId:other.id,outletId:'brigade',cuisine:'Indian',quantity:2},purchaserCookie));
+    const missing=replaceSource.operationRecords.filter(r=>r.kind==='delivery' && r.itemId===other.id).at(-1);
+    await ok(cmd('operations/deliveries/confirm',{id:missing.id,receivedQuantity:0,reject:true,reason:'Not available',affectedQuantity:2},chefCookie));
+    const replaced=await ok(cmd('operations/deliveries/resolve',{id:missing.id,resolution:'replacement',note:'Issued replacement stock'},purchaserCookie));
+    const replacement=replaced.operationRecords.find(r=>r.kind==='delivery' && r.replacementFor===missing.id);
+    assert.equal(replacement.quantity,2);
+    assert.equal(replaced.outletStock.find(b=>b.item_id===other.id && b.outlet_id==='brigade').quantity,3);
+    await ok(cmd('operations/deliveries/confirm',{id:replacement.id,receivedQuantity:2,reject:true,reason:'Quality issues',affectedQuantity:1},chefCookie));
+    assert.equal((await cmd('operations/deliveries/resolve',{id:replacement.id,resolution:'replacement',note:'Need disposition'},purchaserCookie)).status,400);
+    const returned=await ok(cmd('operations/deliveries/resolve',{id:replacement.id,resolution:'return',note:'Inspected usable goods returned'},purchaserCookie));
+    assert.equal(returned.outletStock.find(b=>b.item_id===other.id && b.outlet_id==='brigade').quantity,4);
+    assert.equal((await cmd('operations/deliveries/resolve',{id:replacement.id,resolution:'return',note:'Duplicate return'},purchaserCookie)).status,409);
+    const date=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+    await ok(cmd('operations/receipts/reconcile',{outletId:'brigade',vendor:other.vendor,date,vendorTotal:170},purchaserCookie));
+    assert.ok((await request('state')).data.operationRecords.some(r=>r.kind==='reconciliation' && r.vendorTotalMinor===17000));
+    assert.equal((await cmd('operations/unit/add',{name:'kg'},purchaserCookie)).status,403);
+    await ok(cmd('operations/unit/add',{name:'Test unit'}));
+    assert.equal((await cmd('operations/unit/add',{name:' TEST UNIT '})).status,409);
+    const requested=await ok(cmd('operations/accounts/request',{name:'New Cuisine Head',role:'cuisine_head',outletId:'brigade',cuisine:'Indian'},purchaserCookie));
+    const account=requested.operationRecords.find(r=>r.kind==='account_request' && r.name==='New Cuisine Head');
+    const user={username:'approved_head',name:account.name,role:'cuisine_head',assignedLocations:['brigade'],assignedSections:['Indian'],password:userPassword};
+    assert.equal((await cmd('operations/accounts/resolve',{id:account.id,approve:true,user},purchaserCookie)).status,403);
+    assert.equal((await save([{entity:'users',key:'forged_head',value:{...user,id:'forged_head'}}],supervisorCookie)).status,403);
+    await ok(cmd('operations/accounts/resolve',{id:account.id,approve:true,user}));
+    assert.equal((await request('login','POST',{username:user.username,password:userPassword},'')).status,200);
+    assert.equal((await cmd('operations/accounts/request',{name:'Out of scope',role:'executive_chef',outletId:'cafe'},purchaserCookie)).status,403);
+    assert.equal((await cmd('stock/distribute',{itemId:other.id,outletId:'brigade',cuisine:'Indian',quantity:1,replacementFor:bad.id},purchaserCookie)).status,403);
+    assert.ok((await request('state','GET',undefined,purchaserCookie)).data.outletStock.every(b=>b.outlet_id==='brigade'));
+});
+
+test('bulk legacy CSV validates the whole sheet and imports atomically with safe retry and duplicate detection',async()=>{
+    const state=(await request('state')).data,item=state.items.find(i=>i.id==='item_01'),other=state.items.find(i=>i.id==='item_02');
+    const {encodeCSV,importHeaders}=await import('../shared/legacy-import.mjs');
+    const good=encodeCSV([importHeaders,['brigade',item.name,item.category,item.unit,2,8.25],['brigade',other.name,other.category,other.unit,3,'']]);
+    const call=(path,input,cookie=purchaserCookie)=>request('stock/legacy-import'+path,'POST',input,cookie);
+    const invalid=encodeCSV([importHeaders,['cafe',item.name,'Typo','bad',-2,1.111],['brigade',other.name,other.category,other.unit,'oops','']]);
+    const bad=await call('/validate',{csv:invalid});assert.equal(bad.status,422);
+    assert.ok(bad.data.errors.some(e=>e.row===2 && e.column==='Category'));assert.ok(bad.data.errors.some(e=>e.row===3 && e.column==='Quantity'));
+    assert.equal((await call('',{csv:invalid,operationId:crypto.randomUUID(),revision:state.revision})).status,422);
+    assert.equal((await request('state')).data.revision,state.revision,'Invalid upload changes nothing');
+    assert.equal((await call('/validate',{csv:good},chefCookie)).status,403);
+    assert.equal((await call('/validate',{csv:good},supervisorCookie)).status,403);
+    const validated=await call('/validate',{csv:good});assert.equal(validated.status,200,JSON.stringify(validated.data));assert.equal(validated.data.rows.length,2);
+    const stale={csv:good,revision:validated.data.revision-1,operationId:crypto.randomUUID()};
+    assert.equal((await call('',stale)).status,409);
+    const input={csv:good,revision:validated.data.revision,operationId:crypto.randomUUID()};
+    const imported=await call('',input);assert.equal(imported.status,200,JSON.stringify(imported.data));
+    for(const [i,qty] of [[item,2],[other,3]]){
+        const before=state.outletStock.find(b=>b.item_id===i.id && b.outlet_id==='brigade');
+        const after=imported.data.outletStock.find(b=>b.item_id===i.id && b.outlet_id==='brigade');
+        assert.equal(after.quantity,(before?.quantity || 0)+qty);
+        assert.equal(after.unit_cost_minor,before?.unit_cost_minor ?? (i.id===item.id?825:null));
+    }
+    assert.equal(imported.data.stockHistory.filter(m=>m.operation_id===input.operationId && m.kind==='opening').length,2);
+    const retry=await call('',input);assert.equal(retry.status,200);assert.equal(retry.data.revision,imported.data.revision);
+    assert.equal((await call('',{...input,revision:imported.data.revision,operationId:crypto.randomUUID()})).status,422);
+    assert.equal((await call('/validate',{csv:good})).status,422);
+    assert.equal((await request('state')).data.revision,imported.data.revision);
+    assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM audit_events WHERE action='legacy_import'").first()).n,1);
+});
+
+test('release health rejects a database missing the operations schema',async()=>{
+    await db.prepare('ALTER TABLE operation_records RENAME TO operation_records_unavailable').run();
+    try {assert.equal((await request('health','GET',undefined,'')).status,500);}
+    finally {await db.prepare('ALTER TABLE operation_records_unavailable RENAME TO operation_records').run();}
+    assert.equal((await request('health','GET',undefined,'')).status,200);
+});
+
+test('release maintenance prevents business writes atomically while health and reads remain available',async()=>{
+    const before=(await request('state')).data;
+    const lock=readFileSync('scripts/sql/release-maintenance-on.sql','utf8');
+    await db.exec(lock.replace(/--[^\n]*/g,'').replace(/\s+/g,' ').trim());
+    try {
+        assert.equal((await request('health','GET',undefined,'')).status,200);
+        const result=await save([{entity:'vendors',key:'maintenance_test_vendor',value:{id:'maintenance_test_vendor',name:'Must not save during maintenance'}}]);
+        assert.equal(result.status,503);assert.match(result.data.error,/temporarily paused/);
+        const after=(await request('state')).data;
+        assert.equal(after.revision,before.revision);
+        assert.equal(after.vendors.some(v=>v.id==='maintenance_test_vendor'),false);
+    } finally {await db.exec(readFileSync('scripts/sql/release-maintenance-off.sql','utf8').replace(/--[^\n]*/g,'').replace(/\s+/g,' ').trim());}
 });

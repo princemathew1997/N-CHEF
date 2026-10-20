@@ -29,18 +29,18 @@ const defaultUsers = [
         assignedLocations: ['all'] 
     },
     {
-        username: 'supervisor',
+        username: 'executive_chef',
         password: '123',
-        role: 'supervisor',
+        role: 'executive_chef',
         name: 'Lora Peterson',
         title: 'Outlet Manager',
         salary: '-',
         assignedLocations: ['all']
     },
     {
-        username: 'chef',
+        username: 'cuisine_head',
         password: '123',
-        role: 'chef',
+        role: 'cuisine_head',
         name: 'Prince',
         title: 'Store Chef',
         salary: '-',
@@ -51,7 +51,7 @@ const defaultUsers = [
     {
         username: 'chef_li',
         password: '123',
-        role: 'chef',
+        role: 'cuisine_head',
         name: 'Chef Li',
         title: 'Section Chef',
         salary: '-',
@@ -63,7 +63,7 @@ const defaultUsers = [
     {
         username: 'chef_tariq',
         password: '123',
-        role: 'chef',
+        role: 'cuisine_head',
         name: 'Chef Tariq',
         title: 'Section Chef',
         salary: '-',
@@ -75,7 +75,7 @@ const defaultUsers = [
     {
         username: 'chef_sasi',
         password: '123',
-        role: 'chef',
+        role: 'cuisine_head',
         name: 'Chef Sasi',
         title: 'Section Chef',
         salary: '-',
@@ -94,12 +94,12 @@ if (usersData.length === 0 || !usersData.some(u => u.name === 'Lora Peterson')) 
 }
 
 // Ensure supervisor user exists and has a valid assigned outlet from outletsData
-let supervisorUser = usersData.find(u => u.username === 'supervisor');
+let supervisorUser = usersData.find(u => u.username === 'executive_chef');
 if (!supervisorUser) {
     supervisorUser = {
-        username: 'supervisor',
+        username: 'executive_chef',
         password: '123',
-        role: 'supervisor',
+        role: 'executive_chef',
         name: 'Lora Peterson',
         title: 'Outlet Manager',
         salary: '-',

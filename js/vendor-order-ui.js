@@ -12,12 +12,12 @@
   }
   function open() {
     const indent=indentsData.find(i=>i.id===activeReviewingIndentId);
-    if(!indent || currentUser?.role!=='admin')return;
+    if(!indent || !['admin','purchaser'].includes(currentUser?.role))return;
     document.getElementById('poModalRef').textContent=indent.indentNumber || indent.id;
     document.getElementById('poModalOutlet').textContent=indent.outletName;
     const existing=purchaseOrdersData.filter(p=>p.indentId===indent.id);
     if(existing.length){showOrders(existing);return;}
-    if(indent.status!=='Pending Approval'){showToast('Only pending consolidated requests can be ordered.','warning');return;}
+    if(!['Pending Approval','Approved'].includes(indent.status)){showToast('Only pending consolidated requests can be ordered.','warning');return;}
     document.getElementById('poVendorEditor').classList.remove('hidden');
     document.getElementById('btnConfirmSendPO').classList.remove('hidden');
     document.getElementById('poModalCancelBtn').textContent='Cancel';
@@ -30,7 +30,7 @@
   }
   async function submit() {
     const indent=indentsData.find(i=>i.id===activeReviewingIndentId);
-    if(!indent || currentUser?.role!=='admin')return;
+    if(!indent || !['admin','purchaser'].includes(currentUser?.role))return;
     const invalid=document.querySelector('#poVendorEditor input:invalid, #poVendorEditor select:invalid');
     if(invalid){invalid.reportValidity();return;}
     const items=[...document.querySelectorAll('#poItemsTableBody [data-po-item]')].map(row=>({itemId:row.dataset.poItem,vendorId:row.querySelector('.po-item-vendor').value,qty:Number(row.querySelector('.po-item-qty').value),notes:row.querySelector('.po-item-note').value.trim()}));

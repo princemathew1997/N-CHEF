@@ -1,5 +1,5 @@
 {
-  "databaseEpoch": "outlet-stock-v1",
+  "databaseEpoch": "operations-v2",
   "accountId": "5461025e548c01fea04a40b509473036",
   "workerName": "nchef-api",
   "pagesProject": "nchef",

@@ -32,7 +32,7 @@ test('reject invalid vendor, duplicate or missing items, bad dates, quantities, 
   }
   assert.throws(()=>raiseVendorOrders(state(),{...actor,role:'supervisor'},input()),e=>e.status===403);
   assert.throws(()=>raiseVendorOrders({...state(),purchase_orders:[{indentId:'indent'}]},actor,input()),e=>e.status===409);
-  assert.throws(()=>raiseVendorOrders({...state(),indents:[{...indent,status:'Approved'}]},actor,input()),e=>e.status===409);
+  assert.throws(()=>raiseVendorOrders({...state(),indents:[{...indent,status:'Rejected'}]},actor,input()),e=>e.status===409);
 });
 test('supplier document contains only that suppliers order and escapes markup',()=>{
   const orders=raiseVendorOrders(state(),actor,input()).filter(c=>c.entity==='purchase_orders').map(c=>c.value);

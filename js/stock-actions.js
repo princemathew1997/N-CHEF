@@ -2,7 +2,7 @@
 (() => {
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const titles = { overview:'Stock Overview', catalog:'Item Catalog', receipt:'Receive Stock', distribute:'Distribute to Cuisine', adjust:'Stock Adjustments', history:'Stock History', assign:'Assign Legacy Stock', cuisines:'Cuisine Sections' };
-    const adminPages = ['overview','catalog','assign','cuisines'];
+    const adminPages = ['catalog','assign','cuisines'];
     const allowedOutlets = () => OutletSelection.allowed();
     const options = (rows, value, label) => rows.map(r => `<option value="${esc(value(r))}">${esc(label(r))}</option>`).join('');
     const table = (headers, rows) => `<div class="table-container"><table><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.length ? rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${headers.length}">No records yet.</td></tr>`}</tbody></table></div>`;
@@ -12,6 +12,8 @@
     let panel;
     const error = e => window.showUiModal?.({title:'Change was not saved',message:e.message,type:'warning'});
     const activeItems = () => masterItemsData.filter(i => i.active !== false);
+    const cost = (item,outlet) => committedState?.outletStock?.find(s=>s.item_id===item && s.outlet_id===outlet)?.unit_cost_minor;
+    const price = minor => minor==null?'Cost unavailable':(minor/100).toLocaleString('en-IN',{style:'currency',currency:'INR'});
     const quantity = (item, outlet) => committedState?.outletStock?.find(s=>s.item_id===item && s.outlet_id===outlet)?.quantity || 0;
     const outletSelect = () => OutletSelection.markup();
 
@@ -28,8 +30,8 @@
         let picker;
         const draw=()=>{
             overviewFilters.outlet=outlet.value;overviewFilters.category=category.value;
-            const rows=allowedOutlets().filter(o=>!outlet.value || o.id===outlet.value).flatMap(o=>masterItemsData.filter(i=>(i.active!==false || quantity(i.id,o.id)>0) && (!category.value || i.category===category.value) && (!overviewFilters.item || i.id===overviewFilters.item)).map(i=>[esc(o.name),esc(i.name),esc(i.category),numberText(quantity(i.id,o.id)),esc(i.unit)]));
-            content.querySelector('#overviewRows').innerHTML=table(['Outlet','Item','Category','Available','Unit'],rows);
+            const rows=allowedOutlets().filter(o=>!outlet.value || o.id===outlet.value).flatMap(o=>masterItemsData.filter(i=>(i.active!==false || quantity(i.id,o.id)>0) && (!category.value || i.category===category.value) && (!overviewFilters.item || i.id===overviewFilters.item)).map(i=>[esc(o.name),esc(i.name),esc(i.category),numberText(quantity(i.id,o.id)),esc(i.unit),price(cost(i.id,o.id)),price(cost(i.id,o.id)==null?null:Math.round(quantity(i.id,o.id)*cost(i.id,o.id)))]));
+            content.querySelector('#overviewRows').innerHTML=table(['Outlet','Item','Category','Available','Unit','Latest unit cost','Remaining value'],rows)+(['admin','purchaser'].includes(currentUser.role)?'<h3>Unassigned central stock</h3>'+table(['Item','Quantity','Status'],(committedState.legacyStock || []).filter(b=>b.quantity || b.issue).map(b=>[esc(masterItemsData.find(i=>i.id===b.item_id)?.name),esc(b.quantity),esc(b.issue || 'Available for admin assignment')])):'');
         };
         const mountPicker=()=>{const items=masterItemsData.filter(i=>!category.value || i.category===category.value);if(!items.some(i=>i.id===overviewFilters.item))overviewFilters.item='';picker=createItemPicker(content.querySelector('#overviewItemPicker'),items,{optional:true,selected:overviewFilters.item,onChange:id=>{overviewFilters.item=id;draw();}});};
         category.onchange=()=>{mountPicker();draw();};outlet.onchange=draw;mountPicker();draw();
@@ -53,7 +55,7 @@
                 const headings=['Item','Unit','Opening Stock','Received',...result.cuisines.map(c=>c+' Usage'),'Adjustments','Remaining Stock'];
                 document.getElementById('inventoryTableHeader').innerHTML=headings.map(h=>'<th>'+esc(h)+'</th>').join('');
                 tbody.innerHTML=result.rows.map(r=>'<tr>'+[esc(r.item.name),esc(r.item.unit),numberText(r.opening),numberText(r.received),...result.cuisines.map(c=>numberText(r.usage[c])),numberText(r.adjustments),numberText(r.remaining)].map(v=>'<td>'+v+'</td>').join('')+'</tr>').join('') || `<tr><td colspan="${headings.length}">No stock activity matches these filters.</td></tr>`;
-                const metrics={metricTotalItems:result.rows.length,metricActiveOutlets:result.rows.filter(r=>Object.values(r.usage).some(q=>q>0)).length,metricLowStock:result.rows.filter(r=>r.remaining<=5).length};
+                const metrics={metricTotalItems:result.rows.length,metricActiveOutlets:result.rows.filter(r=>Object.values(r.usage).some(q=>q>0)).length,metricLowStock:result.rows.filter(r=>r.item.thresholdEnabled && r.remaining<=r.item.threshold).length};
                 for(const [id,val] of Object.entries(metrics))document.getElementById(id).textContent=val;
                 document.getElementById('metricTotalItemsLabel').textContent='Items in Report';document.getElementById('metricActiveOutletsLabel').textContent='Items Used';document.getElementById('metricLowStockLabel').textContent='Low Remaining Stock';
                 filters.querySelector('#reportError').textContent='';
@@ -63,6 +65,7 @@
     };
     function render() {
         if (!panel || !currentUser) return;
+        if(currentUser.role==='executive_chef' && !['overview','history'].includes(page)){window.switchToView('operations:dashboard');return;}
         if (adminPages.includes(page) && currentUser.role !== 'admin') { window.switchToView('viewMasterOrders'); return; }
         panel.innerHTML = `<header class="dash-header"><div><h1>${titles[page]}</h1><p>${page==='catalog'?'Manage item details here. Receive quantities through Stock.':'Stock is held by outlet. Cuisine distributions deduct stock immediately.'}</p></div></header><div class="panel inventory-workspace" id="inventoryContent"></div>`;
         const content=panel.querySelector('#inventoryContent');
@@ -73,15 +76,18 @@
             content.innerHTML=`<form id="catalogForm" class="inventory-form">
                 <h3>${item?'Edit Item':'Add Catalog Item'}</h3>
                 ${field('Item name',`<input name="name" required maxlength="200" value="${esc(item?.name)}">`)}
-                ${field('Category',`<input name="category" required maxlength="200" value="${esc(item?.category || 'Grocery')}">`)}
-                ${field('Unit',`<input name="unit" required maxlength="200" value="${esc(item?.unit || 'kg')}" ${locked?'readonly':''}>${locked?'<small>Unit is locked because stock history exists.</small>':''}`)}
+                ${field('Category',select('category',options((committedState.operationRecords || []).filter(r=>r.kind==='category'),r=>r.name,r=>r.name)))}
+                ${field('Unit',select('unit',options((committedState.operationRecords || []).filter(r=>r.kind==='unit' && (!locked || r.name===item.unit)),r=>r.name,r=>r.name)))}
+                ${field('Low-stock alert enabled',`<input type="checkbox" name="thresholdEnabled" ${item?.thresholdEnabled?'checked':''}>`)}
+                ${field('Threshold per outlet',`<input type="number" min="0" step="any" name="threshold" value="${esc(item?.threshold || 0)}" required>`)}
+                <p><a href="#" onclick="switchToView('operations:category');return false">Manage categories</a> · <a href="#" onclick="switchToView('operations:unit');return false">Manage units</a></p>
                 ${field('Preferred vendor',select('vendor', options(vendorsData,v=>v.name,v=>v.name)))}
                 ${field('Cuisine label',select('cuisine',options(cuisinesData,c=>c.name,c=>c.name)))}
                 ${field('Status','<select name="active"><option value="true">Active</option><option value="false">Inactive</option></select>')}
                 <div><button class="btn btn-primary">${item?'Save Changes':'Add to Catalog'}</button> <button class="btn btn-outline" type="button" id="catalogReset">Clear</button></div>
                 </form><label class="inventory-search">Search catalog<input id="catalogSearch" placeholder="Search name or category" value="${esc(search)}"></label><div id="catalogRows"></div>`;
             const form=content.querySelector('form');
-            if(item){form.elements.vendor.value=item.vendor;form.elements.cuisine.value=item.cuisine || cuisinesData[0]?.name;form.elements.active.value=String(item.active!==false);}
+            if(item){form.elements.category.value=item.category;form.elements.unit.value=item.unit;form.elements.vendor.value=item.vendor;form.elements.cuisine.value=item.cuisine || cuisinesData[0]?.name;form.elements.active.value=String(item.active!==false);}
             const renderRows=()=>{
                 const matches=masterItemsData.filter(i=>(i.name+' '+i.category).toLowerCase().includes(search.toLowerCase()));
                 content.querySelector('#catalogRows').innerHTML=table(['Item','Category','Unit','Vendor','Cuisine','Status','Action'],matches.map(i=>[esc(i.name)+(masterItemsData.some(other=>other.id!==i.id && other.name.trim().toLowerCase()===i.name.trim().toLowerCase())?' <small>Duplicate name — review</small>':''),esc(i.category),esc(i.unit),esc(i.vendor),esc(i.cuisine),i.active===false?'Inactive':'Active',`<button class="btn btn-outline" data-edit="${esc(i.id)}">Edit</button>`]));
@@ -89,32 +95,33 @@
             };renderRows();
             content.querySelector('#catalogSearch').oninput=e=>{search=e.target.value;renderRows();};
             content.querySelector('#catalogReset').onclick=()=>{editing=null;render();};
-            form.onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(form));const original=item || {id:crypto.randomUUID(),bought:0,allocations:{},consumed:{}};const value={...original,...data,active:data.active==='true'};
-                await submit(form,async()=>{await runDatabaseAction('changes',{changes:[{entity:'items',key:value.id,value}]});editing=null;});};
+            form.onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(form));const original=item || {id:crypto.randomUUID(),bought:0,allocations:{},consumed:{}};const value={...original,...data,active:data.active==='true',thresholdEnabled:form.elements.thresholdEnabled.checked,threshold:Number(data.threshold)};
+                await submit(form,async()=>{if(item && JSON.stringify(item)!==JSON.stringify(masterItemsData.find(i=>i.id===item.id)))throw new Error('Item changed. Reopen it before saving.');await runDatabaseAction('changes',{changes:[{entity:'items',key:value.id,value}]});editing=null;});};
         }
         if(['receipt','distribute','adjust','assign'].includes(page)) {
             const items=['adjust','assign'].includes(page)?masterItemsData:activeItems();
             content.innerHTML=`<form id="outletStockForm" class="inventory-form">
             ${field('Outlet',outletSelect())}${field('Item','<div id="stockItemPicker"></div>')}
             <p id="availableStock"></p>
-            ${page==='receipt'?field('Vendor',select('vendor',options(vendorsData,v=>v.name,v=>v.name))):''}
-            ${page==='distribute'?field('Cuisine',select('cuisine',options(cuisinesData,c=>c.name,c=>c.name))):''}
+            ${page==='receipt'?field('Vendor',select('vendor',options(vendorsData,v=>v.name,v=>v.name)))+field('Unit price (INR)','<input name="unitPrice" type="number" min="0" step="0.01" required>')+'<p id="receiptTotal">Total: ₹0.00</p><a href="#" data-operations="receipts">View today’s receipts and invoice comparison</a>':''}
+            ${page==='distribute'?field('Cuisine',select('cuisine',options(cuisinesData,c=>c.name,c=>c.name)))+field('Approved request',select('requestId','<option value="">Choose after selecting item</option>')):''}
             ${field(page==='adjust'?'Actual on-hand quantity':'Quantity',`<input name="quantity" type="number" step="any" min="${page==='adjust'?'0':'0.00000001'}" required>`)}
             ${field(page==='adjust'?'Reason (required)':'Note',`<input name="reason" maxlength="500" ${page==='adjust'?'required':''}>`)}
             <button class="btn btn-primary">${titles[page]}</button></form><div id="legacyDetails"></div>`;
             const form=content.querySelector('form');
-            const update=()=>{content.querySelector('#availableStock').textContent=form.elements.itemId.value ? `Available: ${quantity(form.elements.itemId.value,form.elements.outletId.value)}` : 'Select an item to see available stock.';};form.onchange=()=>{OutletSelection.choose(form.elements.outletId.value);update();};createItemPicker(content.querySelector('#stockItemPicker'),items,{onChange:update});update();
-            form.onsubmit=e=>{e.preventDefault();const data=Object.fromEntries(new FormData(form));data.quantity=Number(data.quantity);submit(form,()=>runDatabaseAction('stock/'+page,data));};
+            const update=()=>{if(page==='receipt')content.querySelector('#receiptTotal').textContent='Total: '+price(Math.round(Number(form.elements.quantity.value || 0)*Math.round(Number(form.elements.unitPrice.value || 0)*100)));if(page==='distribute'){const selected=form.elements.requestId.value;const matches=requestsData.filter(r=>r.status==='Approved' && r.outletId===form.elements.outletId.value && r.itemId===form.elements.itemId.value && r.cuisine===form.elements.cuisine.value);form.elements.requestId.innerHTML='<option value="">Unlinked distribution</option>'+options(matches,r=>r.id,r=>`${r.requestedBy || r.chefName || r.id}: ${r.approvedQuantity ?? r.revisedQty ?? r.qty}`);if(matches.some(r=>r.id===selected))form.elements.requestId.value=selected;else if(matches.length===1)form.elements.requestId.value=matches[0].id;}content.querySelector('#availableStock').textContent=form.elements.itemId.value ? `Available: ${quantity(form.elements.itemId.value,form.elements.outletId.value)}` : 'Select an item to see available stock.';};form.oninput=update;form.onchange=()=>{OutletSelection.choose(form.elements.outletId.value);update();};createItemPicker(content.querySelector('#stockItemPicker'),items,{onChange:update});update();
+            form.onsubmit=e=>{e.preventDefault();const data=Object.fromEntries(new FormData(form));data.quantity=Number(data.quantity);if(data.unitPrice!==undefined)data.unitPrice=Number(data.unitPrice);submit(form,()=>runDatabaseAction('stock/'+page,data));};
             if(page==='assign')content.querySelector('#legacyDetails').innerHTML=table(['Item','Unassigned quantity','Reconciliation'],(committedState.legacyStock || []).filter(s=>s.quantity!==0 || s.issue).map(s=>[esc(masterItemsData.find(i=>i.id===s.item_id)?.name),esc(s.quantity),esc(s.issue || 'Ready to assign')]));
         }
         if(page==='assign') {
+            content.insertAdjacentHTML('afterbegin','<p><a href="#" data-operations="legacy">Bulk opening stock: download a CSV template and import Excel-saved data</a></p>');
             const issues=(committedState.legacyStock || []).filter(s=>s.issue);
             if(issues.length) {
                 const original = document.createElement('div');
                 original.innerHTML=table(['Item','Original bought','Original outlet allocations','Original consumed'],issues.map(s=>{const i=masterItemsData.find(i=>i.id===s.item_id);return [esc(i?.name),esc(i?.bought),esc(JSON.stringify(i?.allocations)),esc(JSON.stringify(i?.consumed))];}));content.append(original);
                 const form=document.createElement('form');form.className='inventory-form';
                 form.innerHTML='<h3>Reconcile Legacy Stock</h3><p>Review the original quantities and verify outlet counts through Stock Adjustments. Enter the verified remaining unassigned quantity below.</p>'+field('Item','<div class="reconcile-picker"></div>')+field('Verified unassigned quantity','<input name="quantity" type="number" min="0" step="any" required>')+field('Reconciliation reason','<input name="reason" required maxlength="500">')+'<button class="btn btn-primary">Save Reconciliation</button>';
-                form.onsubmit=e=>{e.preventDefault();const data=Object.fromEntries(new FormData(form));data.quantity=Number(data.quantity);submit(form,()=>runDatabaseAction('stock/reconcile',data));};content.append(form);createItemPicker(form.querySelector('.reconcile-picker'),masterItemsData.filter(i=>issues.some(s=>s.item_id===i.id)));
+                form.onsubmit=e=>{e.preventDefault();const data=Object.fromEntries(new FormData(form));data.quantity=Number(data.quantity);if(data.unitPrice!==undefined)data.unitPrice=Number(data.unitPrice);submit(form,()=>runDatabaseAction('stock/reconcile',data));};content.append(form);createItemPicker(form.querySelector('.reconcile-picker'),masterItemsData.filter(i=>issues.some(s=>s.item_id===i.id)));
             }
         }
         if(page==='history') {
@@ -134,7 +141,7 @@
     }
     window.showInventoryView = view => {
         if(!view.startsWith('inventory:')) return false;
-        if(!currentUser || currentUser.role==='chef') {window.switchToView('viewChefPortal');return true;}
+        if(!currentUser || currentUser.role==='cuisine_head') {window.switchToView('viewChefPortal');return true;}
         page=view.slice(10);if(!titles[page])page='overview';
         if(adminPages.includes(page) && currentUser.role!=='admin'){window.switchToView('viewMasterOrders');return true;}
         panel?.classList.remove('hidden');render();
@@ -154,9 +161,9 @@
         document.querySelectorAll('[data-inventory]').forEach(a=>a.onclick=e=>{e.preventDefault();window.switchToView('inventory:'+a.dataset.inventory);});
         document.addEventListener('click',async e=>{
             const button=e.target.closest('[data-receive-po]');if(!button)return;
-            button.disabled=true;try {await runDatabaseAction('purchase-orders/receive',{poId:button.dataset.receivePo});window.renderVendorPOTable?.();}catch(e){error(e);}finally{button.disabled=false;}
+            button.disabled=true;try {window.switchToView('operations:purchases');}catch(e){error(e);}finally{button.disabled=false;}
         });
-        const oldSync=window.onLiveSyncReceived;window.onLiveSyncReceived=()=>{oldSync?.();if(currentView.startsWith('inventory:') && !panel.contains(document.activeElement))render();};
+        const oldSync=window.onLiveSyncReceived;window.onLiveSyncReceived=()=>{oldSync?.();if(currentView.startsWith('inventory:') && !panel.querySelector('form') && !panel.contains(document.activeElement))render();};
         window.openAddItemModal=()=>{editing=null;window.switchToView('inventory:catalog');};
     });
 })();

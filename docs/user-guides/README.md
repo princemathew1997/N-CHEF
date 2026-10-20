@@ -1,14 +1,15 @@
 # N-CHEF user wiki
 
-Illustrated English guides for the current application. Revised 16 October 2026. These are standalone documents; no app Help page or deployment is required.
+Current workflow guides revised 20 October 2026. The Markdown guides describe the new operations release. Existing screenshots and PDFs below document the older three-role release and must be regenerated before sharing as current instructions.
 
-For the requested comparison with older requirements, see [implementation gaps and current display limitations](implementation-gaps.md).
+The historical [implementation gaps](implementation-gaps.md) describe the pre-operations release; use the role guides for current behavior.
 
 | Role | Editable wiki | Shareable PDF |
 | --- | --- | --- |
 | Admin | [Admin guide](admin.md) | [Admin PDF](../../output/pdf/nchef-admin-guide.pdf) |
-| Supervisor | [Supervisor guide](supervisor.md) | [Supervisor PDF](../../output/pdf/nchef-supervisor-guide.pdf) |
-| Chef | [Chef guide](chef.md) | [Chef PDF](../../output/pdf/nchef-chef-guide.pdf) |
+| Executive Chef | [Executive Chef guide](supervisor.md) | Legacy PDF only |
+| Purchaser (Supervisor) | [Purchaser guide](purchaser.md) | Not generated |
+| Cuisine Head | [Cuisine Head guide](chef.md) | Legacy PDF only |
 
 ## Screenshots
 

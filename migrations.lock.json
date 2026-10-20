@@ -18,5 +18,17 @@
   {
     "name": "0005_outlet_stock.sql",
     "sha256": "f6ac8ca1ec2cc525dc59cb9f7f006aaa1cfb184cf877bf9198dec18959d4e1b3"
+  },
+  {
+    "name": "0006_operations.sql",
+    "sha256": "c40d7acb65dd70c0308cc60efa36780ff60e2abd6901c3d8371965aba586292c"
+  },
+  {
+    "name": "0007_role_titles.sql",
+    "sha256": "240feccaae234b4534253b4d026d8a23cff3b0bf39b789b337f6316b96bc305a"
+  },
+  {
+    "name": "0008_preserve_issued_requests.sql",
+    "sha256": "29343af37e758c529a82bffb9e174936ac8d61ca5066c501651cf7a851686ce7"
   }
 ]
