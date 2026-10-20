@@ -4,6 +4,45 @@
 let wizardSelectedItems = {};
 let currentWizardCat = '';
 let allCategories = [];
+let wizardNewOrderStarted=false;
+
+function refreshWizardDateContext(){
+    const date=document.getElementById('wizardRequestDate');
+    const today=InventoryTools.day();
+    const sameDayOnly=currentUser?.role==='cuisine_head';
+    if(sameDayOnly)date.value=today;
+    date.hidden=sameDayOnly;
+    document.getElementById('wizardRequestDateLabel').hidden=sameDayOnly;
+    const fixedDate=document.getElementById('wizardFixedRequestDate');
+    fixedDate.hidden=!sameDayOnly;fixedDate.textContent='Request date: '+today+' (IST)';
+    document.getElementById('wizardDateHint').hidden=sameDayOnly;
+    date.max=today;date.min=new Date(Date.parse(today+'T00:00:00Z')-3*86400000).toISOString().slice(0,10);
+    const backdated=date.value<today;
+    document.getElementById('wizardJustificationLabel').hidden=!backdated;
+    document.getElementById('wizardBackdateJustification').required=backdated;
+    const outlet=document.getElementById('wizardOutlet')?.value;
+    const rows=requestsData.filter(r=>r.ownerId===currentUser.id && r.outletId===outlet && (r.date || InventoryTools.day(r.timestamp))===date.value);
+    const section=document.getElementById('wizardExistingRequests');section.hidden=rows.length===0;
+    const body=document.getElementById('wizardExistingRows');body.replaceChildren();
+    const table=document.createElement('table');
+    const head=table.createTHead().insertRow();
+    for(const title of ['Item name','Quantity','Action']){const cell=document.createElement('th');cell.textContent=title;head.append(cell);}
+    const tbody=table.createTBody();
+    rows.forEach(r=>{const line=tbody.insertRow();line.insertCell().textContent=r.itemName;line.insertCell().textContent=`${r.qty} ${r.unit || ''}`;const action=line.insertCell();if(currentUser.role==='cuisine_head' && r.status==='Pending' && !r.indentId){const button=document.createElement('button');button.type='button';button.className='btn btn-outline';button.textContent='Edit quantity';button.onclick=async()=>{await window.editChefPlacedRequest(r.id);refreshWizardDateContext();};action.append(button);}else action.textContent=r.status;});
+    body.append(table);
+    const showExisting=rows.length>0 && !wizardNewOrderStarted;
+    section.hidden=!showExisting;
+    if(showExisting){document.getElementById('wizardStep1').classList.add('hidden');document.getElementById('wizardStep2').classList.add('hidden');}
+    else if(document.getElementById('wizardStep2').classList.contains('hidden'))document.getElementById('wizardStep1').classList.remove('hidden');
+}
+function validateWizardRequestDate(){
+    refreshWizardDateContext();
+    const date=document.getElementById('wizardRequestDate');
+    if(!date.reportValidity())return false;
+    const justification=document.getElementById('wizardBackdateJustification');
+    justification.setCustomValidity(date.value<InventoryTools.day() && !justification.value.trim()?'Enter a justification for the backdated request.':'');
+    return justification.reportValidity();
+}
 
 function initRequestWizard() {
     const modal = document.getElementById('requestWizardModal');
@@ -11,6 +50,10 @@ function initRequestWizard() {
     
     function openRequestWizard() {
         wizardSelectedItems = {};
+        wizardNewOrderStarted=false;
+        document.getElementById('wizardRequestDate').value=InventoryTools.day();
+        document.getElementById('wizardBackdateJustification').value='';
+        document.getElementById('wizardBackdateJustification').setCustomValidity('');
         allCategories = [...new Set(masterItemsData.map(i => i.category))];
         if (allCategories.length > 0) {
             currentWizardCat = allCategories[0];
@@ -84,9 +127,14 @@ function initRequestWizard() {
         document.getElementById('wizardStep1').classList.remove('hidden');
         document.getElementById('wizardStep2').classList.add('hidden');
         updateWizardSelectedCount();
+        refreshWizardDateContext();
         modal.classList.remove('hidden');
     }
     window.openRequestWizard = openRequestWizard;
+    document.getElementById('wizardRequestDate').onchange=()=>{wizardNewOrderStarted=false;refreshWizardDateContext();};
+    document.getElementById('wizardOutlet').onchange=()=>{wizardNewOrderStarted=false;refreshWizardDateContext();};
+    document.getElementById('wizardPlaceNewOrder').onclick=()=>{wizardNewOrderStarted=true;document.getElementById('wizardExistingRequests').hidden=true;document.getElementById('wizardStep1').classList.remove('hidden');document.getElementById('wizardStep2').classList.add('hidden');};
+    document.getElementById('wizardBackdateJustification').oninput=e=>e.target.setCustomValidity('');
 
     // Sidebar button setup
     const sidebarBtn = document.getElementById('navSidebarRaiseRequest');
@@ -136,6 +184,7 @@ function initRequestWizard() {
     });
 
     document.getElementById('wizardSubmitBtn')?.addEventListener('click', async () => {
+        if(!validateWizardRequestDate())return;
         const items = [];
         for (const itemId in wizardSelectedItems) {
             const qtyInput = document.getElementById('wizardQty_' + itemId);
@@ -170,7 +219,8 @@ function initRequestWizard() {
         const outletName = targetOutlet.name;
 
         const now = new Date().toISOString();
-        const dateStr = now.split('T')[0];
+        const dateStr = document.getElementById('wizardRequestDate').value;
+        const backdateJustification=dateStr<InventoryTools.day()?document.getElementById('wizardBackdateJustification').value.trim():'';
         const chefName = (currentUser && currentUser.name) ? currentUser.name : 'Chef Prince';
 
         for (const it of items) {
@@ -192,7 +242,8 @@ function initRequestWizard() {
                 requestedBy: chefName,
                 status: 'Pending',
                 timestamp: now,
-                date: dateStr
+                date: dateStr,
+                backdateJustification
             });
         }
 

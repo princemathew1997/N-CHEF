@@ -37,7 +37,9 @@ export function project(state, user) {
   result.requests = result.requests.filter(r => hasOutlet(user, r.outletId) && (user.role !== 'cuisine_head' || ownsRequest(user, r)));
   result.indents = result.indents.filter(r => hasOutlet(user, r.outletId) && user.role !== 'cuisine_head');
   result.purchase_orders = result.purchase_orders.filter(r => hasOutlet(user, r.outletId) && user.role !== 'cuisine_head');
-  result.users = result.users.filter(u => user.role === 'admin' || u.id === user.id || (user.role === 'executive_chef' && u.role === 'cuisine_head' && u.assignedLocations?.every(o => o !== 'all' && hasOutlet(user, o))));
+  const subordinateRoles = {purchaser:['executive_chef','cuisine_head'],executive_chef:['cuisine_head']};
+  result.users = result.users.filter(u => user.role === 'admin' || u.id === user.id || (subordinateRoles[user.role]?.includes(u.role) && u.assignedLocations?.some(o => o !== 'all' && hasOutlet(user,o))));
+  if(user.role!=='admin')result.users=result.users.map(u=>({...without(u,['password','password_hash']),assignedLocations:(u.assignedLocations || []).filter(o=>o!=='all' && hasOutlet(user,o))}));
   for (const item of result.items) {
     if (user.role !== 'admin') {
       const centralAvailable=(item.bought || 0)-Object.values(item.allocations || {}).reduce((sum,q)=>sum+q,0);
@@ -60,6 +62,15 @@ export function project(state, user) {
   });
   if(user.role!=='admin') result.vendors=result.vendors.map(v=>({id:v.id,name:v.name}));
   return result;
+}
+
+export function validateRequestDate(date, justification, now = new Date()) {
+  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
+  const earliest=new Date(Date.parse(today+'T00:00:00Z')-3*86400000).toISOString().slice(0,10);
+  if(typeof date!=='string' || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date+'T00:00:00Z')) || new Date(date+'T00:00:00Z').toISOString().slice(0,10)!==date || date<earliest || date>today)fail('Request date must be today or one of the previous 3 days.');
+  if(date<today && (typeof justification!=='string' || !justification.trim()))fail('A justification is required for a backdated request.');
+  if(justification && (typeof justification!=='string' || justification.length>500))fail('Justification must be at most 500 characters.');
+  return {date,backdated:date<today};
 }
 
 export function validateChanges(state, changes, actor, stockAction = false) {
@@ -104,7 +115,7 @@ export function validateChanges(state, changes, actor, stockAction = false) {
       if (data.active !== undefined && typeof data.active !== 'boolean') fail('Invalid active status.');
       if (old && old.unit !== data.unit && ((state.stockHistory || []).some(m => m.item_id === key) || old.bought || Object.values(old.allocations || {}).some(Boolean) || (state.legacyStock || []).some(s=>s.item_id===key && (s.quantity || s.issue)))) fail('Unit cannot change after stock transactions.');
     }
-    if (!stockAction && data && ['requests','indents','purchase_orders'].includes(entity) && ((!old && ['Approved','Received'].includes(data.status)) || (old && old.status !== data.status && ['Approved','Received'].includes(data.status)))) fail('Use the approval or receiving action.');
+    if (!stockAction && data && ['requests','indents','purchase_orders'].includes(entity) && ((!old && ['Approved','Received','Partially Received'].includes(data.status)) || (old && old.status !== data.status && ['Approved','Received','Partially Received'].includes(data.status)))) fail('Use the approval or receiving action.');
     if (data && !old && ['requests','indents','purchase_orders'].includes(entity)) {
       const ids = entity === 'requests' ? [data.itemId] : (data.items || []).map(i => i.itemId);
       if (ids.some(itemId => next.items.find(i => i.id === itemId)?.active === false)) fail('Choose active catalog items.');
@@ -123,7 +134,7 @@ export function validateChanges(state, changes, actor, stockAction = false) {
         if (!hasOutlet(actor, r.outletId) || (old && data && old.outletId !== data.outletId)) fail('Outlet access denied.', 403);
         if (actor.role === 'cuisine_head') {
           if (old && !ownsRequest(actor, old)) fail('Request access denied.', 403);
-          if (old && !['Pending', 'Accepted'].includes(old.status)) fail('Forwarded requests cannot be edited.', 409);
+          if (old && (old.status!=='Pending' || old.indentId)) fail('Requests accepted by the Executive Chef cannot be changed. Place a fresh request for additional quantities.', 409);
           if (data && old && !same(without(data, ['qty']), without(old, ['qty']))) fail('Chefs can only change the quantity of their request.', 403);
           if (!old && data && data.status !== 'Pending') fail('New requests must be pending.');
           const sections = actor.assignedSections || actor.assignedCuisines || [];
@@ -143,12 +154,17 @@ export function validateChanges(state, changes, actor, stockAction = false) {
         fail('Only admins can manage catalog items.',403);
       } else fail('Administrator permission required.', 403);
     }
+    if(data && old && entity==='requests' && (data.date!==old.date || data.backdateJustification!==old.backdateJustification))fail('Request date and justification cannot change after submission.');
     if (data && entity === 'requests' && !old) {
+      data.date ||= new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+      const requestDateCheck=validateRequestDate(data.date,data.backdateJustification);
+      if(actor.role==='cuisine_head' && requestDateCheck.backdated)fail('Cuisine Head requests must use today’s date (IST).');
       data.ownerId = actor.id;
       data.requestedBy = actor.name;
       data.chefName = actor.name;
       data.timestamp = new Date().toISOString();
     }
+    if(data && entity==='indents' && !old && data.status==='Pending Approval' && next.indents.some(i=>i.outletId===data.outletId && i.status==='Pending Approval'))fail('Recall the pending consolidated request for this outlet and combine it with new requests before submitting.',409);
     if (data && entity === 'indents' && !old) { data.ownerId = actor.id; data.supervisorName = actor.name; }
     if (data && entity === 'purchase_orders' && !old) { data.ownerId = actor.id; data.raisedBy = actor.name; }
     if (data && old && ['requests', 'indents', 'purchase_orders'].includes(entity)) {
@@ -230,6 +246,7 @@ export function validateChanges(state, changes, actor, stockAction = false) {
       const changed = touched.find(t=>t.entity==='indents' && t.key===indent.id);
       if (changed && !stockAction && row.cuisineBreakdown) {
         const linked = next.requests.filter(r=>r.indentId===indent.id && r.itemId===row.itemId);
+        if(!state.indents.some(i=>i.id===indent.id) && linked.some(r=>Math.abs((r.revisedQty ?? r.qty)-r.qty)>1e-8) && !String(row.comment || '').trim())fail('A note is required for each item with edited cuisine quantities.');
         const sum = linked.reduce((total,r)=>total+(r.revisedQty ?? r.qty),0);
         if (Math.abs(sum-row.revisedQty)>1e-8) fail('Consolidated total must equal the cuisine quantities.');
         const breakdownSum = row.cuisineBreakdown.reduce((total,r)=>total+number(r.qty,'Cuisine quantity'),0);
@@ -251,10 +268,12 @@ export function validateChanges(state, changes, actor, stockAction = false) {
     if (!Array.isArray(po.items) || !po.items.length) fail('Purchase order needs items.');
     if (po.indentId && !next.indents.some(i => i.id === po.indentId && i.outletId === po.outletId)) fail('Invalid PO indent.');
     const previous = state.purchase_orders.find(p => p.id === po.id);
+    if(!stockAction && !same(po.receiptEvents || [],previous?.receiptEvents || []))fail('Use purchase-order receiving to record receipt details.');
     for (const row of po.items) {
       if (!items.has(row.itemId)) fail('Unknown PO item.');
       number(row.qty, 'PO quantity', true);
       number(row.receivedQty ?? 0, 'Received quantity');
+      number(row.rejectedQty ?? 0,'Rejected quantity');
       if ((row.receivedQty ?? 0) > row.qty) fail('Received quantity exceeds order quantity.');
       if (!stockAction && (row.receivedQty ?? 0) !== (previous?.items.find(r=>r.itemId===row.itemId)?.receivedQty ?? 0)) fail('Use purchase-order receiving to change received quantities.');
     }
@@ -291,13 +310,13 @@ export function validateChanges(state, changes, actor, stockAction = false) {
   }
   for (const t of touched.filter(t => t.entity === 'purchase_orders')) {
     if (!t.data) continue;
-    if (!['PO Raised', 'Received'].includes(t.data.status)) fail('Invalid purchase order status.');
+    if (!['PO Raised', 'Partially Received', 'Received'].includes(t.data.status)) fail('Invalid purchase order status.');
     if (t.old?.status === 'Received' && !same(t.data, t.old)) fail('Received orders cannot be changed.', 409);
-    if (t.data.status === 'Received' && t.old?.status !== 'Received') {
-      if (!t.old || !same(without(t.data, ['status', 'items', 'receivedBy', 'receivedAt']), without(t.old, ['status', 'items', 'receivedBy', 'receivedAt']))) fail('Order details cannot change during receiving.');
+    if (['Received','Partially Received'].includes(t.data.status) && stockAction) {
+      if (!t.old || !same(without(t.data, ['status', 'items', 'receivedBy', 'receivedAt','receiptEvents']), without(t.old, ['status', 'items', 'receivedBy', 'receivedAt','receiptEvents']))) fail('Order details cannot change during receiving.');
       for (const line of t.data.items) {
         const previous = t.old.items.find(i => i.itemId === line.itemId);
-        if (!previous || line.qty !== previous.qty || line.receivedQty !== line.qty) fail('Received quantities do not match the order.');
+        if (!previous || line.qty !== previous.qty || (t.data.status==='Received' && Math.abs(line.receivedQty-line.qty)>1e-8)) fail('Received quantities do not match the order.');
         const before = state.items.find(i => i.id === line.itemId);
         const after = items.get(line.itemId);
         const quantity = line.qty - (previous.receivedQty || 0);

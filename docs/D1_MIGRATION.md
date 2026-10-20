@@ -45,7 +45,7 @@ sampled traces are enabled. Local development combines assets and the API.
 
 - First-admin setup requires the random `SETUP_TOKEN` Worker secret. A database
   uniqueness guard allows setup only once, even if two requests race.
-- Passwords must be 12–128 characters. They are salted and hashed using
+- Passwords must be 4–128 characters. They are salted and hashed using
   PBKDF2-SHA256 with 100,000 iterations (supported by Workers Web Crypto).
   Plaintext passwords are never stored in D1 or returned in API responses.
 - Sessions expire after 8 hours. HTTPS cookies use `__Host-`, `Secure`,

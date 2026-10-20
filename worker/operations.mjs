@@ -26,6 +26,21 @@ export function notify(state, roles, outletId, message, sourceId) {
     putRecord(state,'notification',{id:crypto.randomUUID(),userId:user.id,outletId,message,sourceId,read:false,createdAt:new Date().toISOString()});
   }
 }
+export function clearHandledNotifications(previous,next,actor){
+  const closed=new Set();
+  for(const entity of ['requests','indents','purchase_orders'])for(const row of next[entity] || []){
+    const old=(previous[entity] || []).find(r=>r.id===row.id);
+    if(old && old.status!==row.status && ['Accepted','Approved','Rejected','PO Raised','Consolidated','Sent to Admin','Received'].includes(row.status))closed.add(row.id);
+  }
+  for(const row of next.operationRecords || []){
+    const old=(previous.operationRecords || []).find(r=>r.id===row.id);
+    if(old && old.status!==row.status && ((row.kind==='account_request' && ['Approved','Rejected'].includes(row.status)) || (row.kind==='delivery' && ['Received','Resolved'].includes(row.status))))closed.add(row.id);
+  }
+  for(const notification of next.operationRecords || [])if(notification.kind==='notification' && !notification.read && closed.has(notification.sourceId) && (previous.operationRecords || []).some(r=>r.id===notification.id)){
+    notification.read=true;notification.handledAt=new Date().toISOString();notification.handledBy=actor.id;
+  }
+}
+
 export function updateThresholds(state, balances) {
   for(const item of state.items) for(const outlet of state.outlets) {
     const key='threshold_'+item.id+'_'+outlet.id;
@@ -37,6 +52,40 @@ export function updateThresholds(state, balances) {
   }
 }
 
+export function recallConsolidatedRequest(state,actor,input){
+  const parent=state.indents.find(i=>i.id===input.id);
+  if(actor.role!=='executive_chef' || !parent || !hasOutlet(actor,parent.outletId) || parent.ownerId!==actor.id)fail('Only the owning Executive Chef can recall this request.',403);
+  if(parent.status!=='Pending Approval')fail('Only an unapproved consolidated request can be recalled.',409);
+  if((state.purchase_orders || []).some(p=>p.indentId===parent.id))fail('An order with purchases cannot be recalled.',409);
+  const next=clone(state);
+  const changes=state.requests.filter(r=>r.indentId===parent.id).map(r=>{const value={...r,status:'Accepted'};delete value.indentId;return {entity:'requests',key:r.id,value};});
+  changes.push({entity:'indents',key:parent.id,value:null});
+  putRecord(next,'notification',{id:crypto.randomUUID(),system:true,eventType:'indent_recall',outletId:parent.outletId,indentId:parent.id,indent:parent,recalledBy:actor.id,recalledAt:new Date().toISOString()});
+  for(const n of next.operationRecords || [])if(n.kind==='notification' && n.sourceId===parent.id)n.read=true;
+  notify(next,['purchaser','admin'],parent.outletId,`${actor.name} recalled ${parent.indentNumber} before approval. It will be combined with new requests and resubmitted.`,parent.id);
+  return {next,changes};
+}
+
+export function editCuisineRequest(state,actor,input){
+  if(actor.role!=='cuisine_head')fail('Cuisine Head permission required.',403);
+  const request=state.requests.find(r=>r.id===input.id);
+  if(!request || request.ownerId!==actor.id || !hasOutlet(actor,request.outletId))fail('Request access denied.',403);
+  if(request.status!=='Pending' || request.indentId)fail('Requests accepted by the Executive Chef cannot be edited. Place a fresh request for additional quantities.',409);
+  number(input.quantity,'Requested quantity',true);
+  const parent=request.indentId?state.indents.find(i=>i.id===request.indentId):null;
+  if(request.indentId && (!parent || parent.status!=='Pending Approval'))fail('This order is already approved or closed.',409);
+  const next=clone(state),value={...request,qty:input.quantity};
+  if(value.revisedQty!==undefined)value.revisedQty=input.quantity;
+  const changes=[{entity:'requests',key:value.id,value}];
+  if(parent){
+    const linked=state.requests.filter(r=>r.indentId===parent.id && r.itemId===request.itemId).map(r=>r.id===value.id?value:r);
+    const items=parent.items.map(row=>row.itemId!==request.itemId?row:{...row,originalQty:linked.reduce((n,r)=>n+r.qty,0),revisedQty:linked.reduce((n,r)=>n+(r.revisedQty ?? r.qty),0),cuisineBreakdown:[...new Set(linked.map(r=>r.cuisine))].map(cuisine=>({cuisine,qty:linked.filter(r=>r.cuisine===cuisine).reduce((n,r)=>n+(r.revisedQty ?? r.qty),0)}))});
+    changes.push({entity:'indents',key:parent.id,value:{...parent,items}});
+  }
+  if(request.qty!==value.qty)notify(next,['executive_chef','purchaser','admin'],request.outletId,`${actor.name} changed ${request.itemName} from ${request.qty} to ${value.qty} ${request.unit || ''}.`,request.id);
+  return {next,changes};
+}
+
 // All operation records are server-owned; /changes cannot write them.
 export function operationCommand(state, actor, input, action, transact) {
   const next=clone(state), changes=[];
@@ -45,11 +94,32 @@ export function operationCommand(state, actor, input, action, transact) {
   const purchase=()=>{if(!canPurchase(actor))fail('Purchaser permission required.',403);};
   const outlet=id=>{if(!state.outlets.some(o=>o.id===id) || !hasOutlet(actor,id))fail('Outlet access denied.',403);};
   const now=new Date().toISOString();
-  if(['category/add','unit/add'].includes(action)) {
+  if(action==='distribution/issue'){
+    purchase();
+    const indent=state.indents.find(i=>i.id===input.indentId);
+    if(!indent || indent.status!=='Approved')fail('Choose an approved consolidated order.',409);
+    outlet(indent.outletId);
+    const requests=state.requests.filter(r=>r.indentId===indent.id && r.status==='Approved');
+    const remaining=r=>Math.max(0,(r.approvedQuantity ?? r.revisedQty ?? r.qty)-(r.legacyIssuedQuantity || 0)-(state.operationRecords || []).filter(d=>d.kind==='delivery' && d.requestId===r.id && !d.replacementFor).reduce((n,d)=>n+d.quantity,0));
+    const open=requests.filter(r=>remaining(r)>1e-8),seen=new Set(),decisions=[];
+    if(!Array.isArray(input.lines) || !input.lines.length || input.lines.length!==open.length)fail('Include each outstanding cuisine request in this order.');
+    for(const line of input.lines){
+      const request=open.find(r=>r.id===line.requestId);if(!request || seen.has(line.requestId))fail('Choose unique outstanding requests from this consolidated order.');seen.add(line.requestId);
+      const expected=remaining(request),quantity=number(line.quantity,'Issue quantity');
+      if(quantity>expected+1e-8)fail('Issue quantity exceeds the remaining approved quantity.',409);
+      const comment=String(line.comment || '').trim();if(Math.abs(quantity-expected)>1e-8 || comment)safeText(comment,'Comment for changed quantity',500);
+      decisions.push({requestId:request.id,itemId:request.itemId,cuisine:request.cuisine,approvedRemaining:expected,quantity,comment});
+    }
+    if(!decisions.some(d=>d.quantity>0))fail('Enter a quantity greater than zero for at least one item.');
+    for(const line of decisions.filter(d=>d.quantity>0))transact('distribute',{outletId:indent.outletId,itemId:line.itemId,cuisine:line.cuisine,requestId:line.requestId,quantity:line.quantity,reason:line.comment});
+    putRecord(next,'notification',{id:crypto.randomUUID(),system:true,eventType:'consolidated_distribution',outletId:indent.outletId,indentId:indent.id,actorId:actor.id,createdAt:now,lines:decisions});
+  } else if(['category/add','unit/add'].includes(action)) {
     if(actor.role!=='admin')fail('Administrator permission required.',403);
     const kind=action.split('/')[0],name=safeText(input.name,'Name').trim();
     if(records().some(r=>r.kind===kind && r.name.toLowerCase()===name.toLowerCase()))fail('Name already exists.',409);
     putRecord(next,kind,{id:crypto.randomUUID(),name});
+  } else if(action==='notifications/read-all') {
+    for(const r of records().filter(r=>r.kind==='notification' && r.userId===actor.id && !r.system && !r.read))putRecord(next,'notification',{...r,read:true});
   } else if(action==='notifications/read') {
     const r=get('notification',input.id);if(r.userId!==actor.id)fail('Notification access denied.',403);
     putRecord(next,'notification',{...r,read:true});

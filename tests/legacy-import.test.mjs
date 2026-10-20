@@ -29,12 +29,12 @@ test('duplicate rows identify both Excel rows; blank rows preserve row numbers',
     const result=validateLegacyCSV(sheet([['Kitchen A','Oil','Grocery','l','1',''],['','','','','',''],['Kitchen A','Oil','Grocery','l','2','']]),state,actor);
     assert.deepEqual(result.errors.filter(e=>e.column==='Duplicate').map(e=>e.row),[2,4]);
 });
-test('bad headers, malformed quoting, inactive items, reconciliation and limits are reported',()=>{
+test('bad headers, malformed quoting, inactive items and limits are reported; obsolete central issues do not block outlet entries',()=>{
     assert.ok(validateLegacyCSV('Item,Item\nOil,Oil',state,actor).errors.some(e=>e.row===1 && e.message.includes('more than once')));
     assert.ok(parseCSV('A,B\n"unclosed,cell').errors.some(e=>e.row===2));
     const one=sheet([['Kitchen A','Rice, fine','Grocery','kg','1','']]);
     assert.ok(validateLegacyCSV(one,{...state,items:state.items.map(i=>({...i,active:false}))},actor).errors.some(e=>e.message.includes('inactive')));
-    assert.ok(validateLegacyCSV(one,{...state,legacyStock:[{item_id:'rice',issue:'Unverified'}]},actor).errors.some(e=>e.message.includes('reconciliation')));
+    assert.ok(!validateLegacyCSV(one,{...state,legacyStock:[{item_id:'rice',issue:'Unverified'}]},actor).errors.some(e=>e.message.includes('reconciliation')));
     assert.ok(validateLegacyCSV(sheet(Array.from({length:maxImportRows+1},()=>['Kitchen A','Oil','Grocery','l','1',''])),state,actor).errors.some(e=>e.row===1 && e.message.includes('Maximum')));
     assert.ok(validateLegacyCSV('a'.repeat(100001),state,actor).errors.some(e=>e.column==='File'));
 });
