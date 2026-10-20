@@ -98,12 +98,13 @@
                 <div class="nav-group no-chef" id="navGroupStock">
                     <a href="#" class="nav-item" id="navStock"><i data-lucide="boxes"></i><span>Stock</span><i data-lucide="chevron-down" id="navStockChevron" style="width:14px;height:14px;margin-left:auto"></i></a>
                     <div class="nav-submenu open" id="navStockSubmenu">
-                        <a href="#" class="nav-subitem admin-only" data-inventory="overview">Stock Overview</a>
+                        <a href="#" class="nav-subitem" data-inventory="overview">Stock Overview</a>
                         <a href="#" class="nav-subitem" data-inventory="receipt">Receive Stock</a>
                         <a href="#" class="nav-subitem" data-inventory="distribute">Distribute to Cuisine</a>
                         <a href="#" class="nav-subitem" data-inventory="adjust">Stock Adjustments</a>
                         <a href="#" class="nav-subitem" data-inventory="history">Stock History</a>
                         <a href="#" class="nav-subitem admin-only" data-inventory="assign">Assign Legacy Stock</a>
+                        <a href="#" class="nav-subitem" data-operations="legacy" data-operations-nav="true">Bulk Legacy Stock</a>
                     </div>
                 </div>
                 <div class="nav-group no-chef" id="navGroupRequests">
@@ -127,10 +128,10 @@
                     <i data-lucide="clipboard-list"></i> My Requests
                 </a>
                 <a href="#" class="nav-item supervisor-only" id="navAddChef">
-                    <i data-lucide="chef-hat"></i> Add Chef
+                    <i data-lucide="chef-hat"></i> Add Cuisine Head
                 </a>
                 <div class="nav-section-label admin-only">Administration</div>
-                <a href="#" class="nav-item admin-only" data-inventory="catalog"><i data-lucide="database"></i>Item Catalog</a>
+                <div class="nav-group admin-only"><a href="#" class="nav-item" data-inventory="catalog"><i data-lucide="database"></i>Item Catalog</a><div class="nav-submenu open"><a href="#" class="nav-subitem" data-operations="category" data-operations-nav="true">Categories</a><a href="#" class="nav-subitem" data-operations="unit" data-operations-nav="true">Units</a></div></div>
                 <a href="#" class="nav-item admin-only" data-inventory="cuisines"><i data-lucide="utensils"></i>Cuisine Sections</a>
                 <a href="#" class="nav-item admin-only" id="navVendors">
                     <i data-lucide="truck"></i> Vendors
@@ -146,10 +147,10 @@
                     </a>
                     <div class="nav-submenu" id="navUsersSubmenu">
                         <a href="#" class="nav-subitem" id="navSubSupervisors">
-                            <i data-lucide="user-check" style="width: 14px; height: 14px;"></i> Supervisors
+                            <i data-lucide="user-check" style="width: 14px; height: 14px;"></i> Executive Cuisine Heads
                         </a>
                         <a href="#" class="nav-subitem" id="navSubChefs">
-                            <i data-lucide="chef-hat" style="width: 14px; height: 14px;"></i> Chefs
+                            <i data-lucide="chef-hat" style="width: 14px; height: 14px;"></i> Cuisine Heads
                         </a>
                         <a href="#" class="nav-subitem" id="navSubAdmins">
                             <i data-lucide="shield" style="width: 14px; height: 14px;"></i> Admins
@@ -256,8 +257,8 @@
                         </select>
                         <select id="filterStatus" style="background: transparent; color: var(--text-main); width: auto; padding: 6px 12px; font-size: 0.8rem; border-radius: 6px; cursor: pointer; border: 1px solid var(--border);">
                             <option value="all" style="background: var(--dark);">All Statuses</option>
-                            <option value="Pending" style="background: var(--dark);">Pending (Chef)</option>
-                            <option value="Accepted" style="background: var(--dark);">Accepted (Supervisor)</option>
+                            <option value="Pending" style="background: var(--dark);">Pending (Cuisine Head)</option>
+                            <option value="Accepted" style="background: var(--dark);">Accepted (Executive Chef)</option>
                             <option value="Sent to Admin" style="background: var(--dark);">Sent to Admin</option>
                             <option value="Consolidated" style="background: var(--dark);">Consolidated</option>
                             <option value="Approved" style="background: var(--dark);">Approved</option>
@@ -293,11 +294,11 @@
                     </div>
                 </header>
 
-                <!-- Requests View Switcher Tabs: Supervisor Requests vs Kitchen Sections Table vs All Requests List -->
+                <!-- Requests View Switcher Tabs: Executive Chef Requests vs Kitchen Sections Table vs All Requests List -->
                 <div style="display: flex; gap: 12px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
                     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                         <button id="btnViewModeSupervisorRequests" class="btn btn-primary admin-only" style="padding: 7px 16px; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                            <i data-lucide="inbox" style="width: 15px; height: 15px;"></i> Supervisor Requests <span id="adminPendingSupervisorBadge" class="hidden" style="background: var(--danger); color: white; padding: 1px 6px; border-radius: 10px; font-size: 0.72rem; font-weight: 700;">0</span>
+                            <i data-lucide="inbox" style="width: 15px; height: 15px;"></i> Executive Chef Requests <span id="adminPendingSupervisorBadge" class="hidden" style="background: var(--danger); color: white; padding: 1px 6px; border-radius: 10px; font-size: 0.72rem; font-weight: 700;">0</span>
                         </button>
                         <button id="btnViewModeSections" class="btn btn-outline" style="padding: 7px 16px; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; cursor: pointer;">
                             <i data-lucide="layout-grid" style="width: 15px; height: 15px;"></i> Kitchen Sections Table
@@ -308,7 +309,7 @@
                     </div>
                 </div>
 
-                <!-- SUPERVISOR CONSOLIDATED REQUESTS CONTAINER (Directly sent by Supervisors to Admin) -->
+                <!-- SUPERVISOR CONSOLIDATED REQUESTS CONTAINER (Directly sent by Executive Cuisine Heads to Admin) -->
                 <div id="containerSupervisorRequestsView" class="panel table-container" style="margin-bottom: 20px; overflow-x: auto;">
                     <table style="width: 100%;">
                         <thead>
@@ -316,7 +317,7 @@
                                 <th>Request ID</th>
                                 <th>Date</th>
                                 <th>Outlet</th>
-                                <th>Supervisor</th>
+                                <th>Executive Chef</th>
                                 <th>Ingredients Included</th>
                                 <th>Total Units</th>
                                 <th>Status</th>
@@ -337,7 +338,7 @@
                     <div class="panel table-container">
                         <table>
                             <thead>
-                                <tr><th>Date</th><th>Chef</th><th>Cuisine</th><th>Outlet</th><th>Item</th><th>Qty</th><th>Status</th><th>Actions</th></tr>
+                                <tr><th>Date</th><th>Cuisine Head</th><th>Cuisine</th><th>Outlet</th><th>Item</th><th>Qty</th><th>Status</th><th>Actions</th></tr>
                             </thead>
                             <tbody id="requestsTableBody"></tbody>
                         </table>
@@ -345,12 +346,12 @@
                 </div>
             </div>
 
-            <!-- CONSOLIDATE REQUEST VIEW (Supervisor Dedicated Workspace) -->
+            <!-- CONSOLIDATE REQUEST VIEW (Executive Chef Dedicated Workspace) -->
             <div id="viewConsolidateRequests" class="hidden">
                 <header class="dash-header">
                     <div class="header-title">
                         <h1>Consolidate <span class="text-primary">Requests</span></h1>
-                        <p>Chef and supervisor requests by cuisine. Edit cuisine quantities; totals update automatically.</p>
+                        <p>Cuisine Head and supervisor requests by cuisine. Edit cuisine quantities; totals update automatically.</p>
                     </div>
                     <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                         <div id="wsConsolidateOutletBadge" style="display: flex; align-items: center; gap: 8px; padding: 7px 14px; background: rgba(255,190,11,0.08); border: 1px solid rgba(255,190,11,0.25); border-radius: 8px; font-size: 0.85rem; color: var(--text-main);">
@@ -391,11 +392,11 @@
 
             </div>
 
-            <!-- CHEF PORTAL VIEW (Chef Only: Single Clean Raise Request Header Button, Metrics, & Full Requests Table) -->
+            <!-- CHEF PORTAL VIEW (Cuisine Head Only: Single Clean Raise Request Header Button, Metrics, & Full Requests Table) -->
             <div id="viewChefPortal" class="hidden chef-only-bg">
                 <header class="dash-header">
                     <div class="header-title">
-                        <h1>Chef <span class="text-primary">Portal</span></h1>
+                        <h1>Cuisine Head <span class="text-primary">Portal</span></h1>
                         <p id="chefPortalSubtitle">Track requested ingredients and submit new kitchen requirements.</p>
                     </div>
                     <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
@@ -413,7 +414,7 @@
                     </div>
                 </header>
 
-                <!-- Chef Summary Metrics -->
+                <!-- Cuisine Head Summary Metrics -->
                 <div class="metrics-row" style="margin-top: 14px; margin-bottom: 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px;">
                     <div class="metric-card panel" style="display: flex; align-items: center; gap: 14px; padding: 16px 20px;">
                         <div style="width: 44px; height: 44px; border-radius: 10px; background: rgba(255,190,11,0.15); color: var(--primary); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
@@ -462,8 +463,8 @@
                         <div style="display: flex; gap: 8px; align-items: center;">
                             <select id="chefFilterStatus" style="background: var(--dark); color: var(--text-main); padding: 6px 12px; font-size: 0.8rem; border-radius: 6px; border: 1px solid var(--border); outline: none; cursor: pointer;">
                                 <option value="all">All Statuses</option>
-                                <option value="Pending">Pending Supervisor</option>
-                                <option value="Accepted">Accepted by Supervisor</option>
+                                <option value="Pending">Pending Executive Chef</option>
+                                <option value="Accepted">Accepted by Executive Chef</option>
                                 <option value="Sent to Admin">Sent to Admin</option>
                                 <option value="Consolidated">Consolidated</option>
                                 <option value="Approved">Approved</option>
@@ -519,7 +520,7 @@
                       <div class="panel table-container" style="grid-column: span 12;">
                           <table>
                               <thead>
-                                  <tr><th>Request #</th><th>Date</th><th>Outlet</th><th>Supervisor</th><th>Ingredients</th><th>Total Qty</th><th>Status</th><th>Actions</th></tr>
+                                  <tr><th>Request #</th><th>Date</th><th>Outlet</th><th>Executive Chef</th><th>Ingredients</th><th>Total Qty</th><th>Status</th><th>Actions</th></tr>
                               </thead>
                               <tbody id="indentsTableBody"></tbody>
                           </table>
@@ -626,11 +627,11 @@
                     <!-- Subdivisions Tab Pills -->
                     <div style="display: flex; gap: 6px; background: rgba(0,0,0,0.45); padding: 5px; border-radius: 12px; border: 1px solid var(--border);">
                         <button type="button" class="user-sub-tab active" id="tabUserSupervisors" data-sub="supervisor">
-                            <i data-lucide="user-check" style="width: 15px; height: 15px;"></i> Supervisors
+                            <i data-lucide="user-check" style="width: 15px; height: 15px;"></i> Executive Cuisine Heads
                             <span id="badgeCountSupervisors">0</span>
                         </button>
                         <button type="button" class="user-sub-tab" id="tabUserChefs" data-sub="chef">
-                            <i data-lucide="chef-hat" style="width: 15px; height: 15px;"></i> Chefs
+                            <i data-lucide="chef-hat" style="width: 15px; height: 15px;"></i> Cuisine Heads
                             <span id="badgeCountChefs">0</span>
                         </button>
                         <button type="button" class="user-sub-tab" id="tabUserAdmins" data-sub="admin">
@@ -647,14 +648,14 @@
                 <!-- 1. SUBDIVISION: SUPERVISORS -->
                 <div id="userSectionSupervisor" class="user-subdivision-content">
                     <div class="dash-grid dash-grid-split">
-                        <!-- Add Supervisor Form -->
+                        <!-- Add Executive Chef Form -->
                         <div class="panel form-section" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border-gold); border-radius: 16px; padding: 24px;">
                             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
                                 <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(255,190,11,0.15); color: var(--primary); display: flex; align-items: center; justify-content: center;">
                                     <i data-lucide="user-check" style="width: 24px; height: 24px;"></i>
                                 </div>
                                 <div>
-                                    <h3 id="supFormTitle" style="margin: 0; font-size: 1.2rem; color: #fff;">Add New Supervisor</h3>
+                                    <h3 id="supFormTitle" style="margin: 0; font-size: 1.2rem; color: #fff;">Add New Executive Chef</h3>
                                     <p style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">Create supervisor account & assign outlets</p>
                                 </div>
                             </div>
@@ -662,7 +663,7 @@
                             <input type="hidden" id="editSupervisorUsername">
 
                             <div class="input-group" style="margin-bottom: 14px;">
-                                <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Supervisor Full Name</label>
+                                <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Executive Chef Full Name</label>
                                 <input type="text" id="supFullName" placeholder="Enter supervisor full name" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
                             </div>
 
@@ -689,22 +690,22 @@
 
                             <div style="display: flex; gap: 10px;">
                                 <button class="btn btn-primary" id="btnSaveSupervisorSubmit" style="flex: 1; padding: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.95rem;">
-                                    <i data-lucide="user-plus" style="width: 16px; height: 16px;"></i> Save & Register Supervisor
+                                    <i data-lucide="user-plus" style="width: 16px; height: 16px;"></i> Save & Register Executive Chef
                                 </button>
                                 <button class="btn btn-outline hidden" id="btnCancelEditSupervisor" style="padding: 12px 20px; font-size: 0.9rem;">Cancel</button>
                             </div>
                         </div>
 
-                        <!-- Supervisors Table -->
+                        <!-- Executive Cuisine Heads Table -->
                         <div class="panel" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border); border-radius: 16px; padding: 22px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                                 <div>
                                     <h3 style="margin: 0; font-size: 1.15rem; color: #fff; display: flex; align-items: center; gap: 8px;">
-                                        <i data-lucide="user-check" style="width: 18px; height: 18px; color: var(--primary);"></i> Supervisors
+                                        <i data-lucide="user-check" style="width: 18px; height: 18px; color: var(--primary);"></i> Executive Cuisine Heads
                                     </h3>
                                     <p style="margin: 2px 0 0 0; font-size: 0.78rem; color: var(--text-muted);">Active outlet supervisors</p>
                                 </div>
-                                <span id="supCountBadge" style="background: rgba(255,190,11,0.15); color: var(--primary); padding: 4px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 700;">0 Supervisors</span>
+                                <span id="supCountBadge" style="background: rgba(255,190,11,0.15); color: var(--primary); padding: 4px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 700;">0 Executive Cuisine Heads</span>
                             </div>
                             <div class="table-scroll" tabindex="0" role="region" aria-label="Scrollable table">
                                 <table style="width: 100%; font-size: 0.85rem;">
@@ -726,14 +727,14 @@
                 <!-- 2. SUBDIVISION: CHEFS -->
                 <div id="userSectionChef" class="user-subdivision-content hidden">
                     <div class="dash-grid dash-grid-split">
-                        <!-- Add Chef Form -->
+                        <!-- Add Cuisine Head Form -->
                         <div class="panel form-section" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border-gold); border-radius: 16px; padding: 24px;">
                             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
                                 <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(255,190,11,0.15); color: var(--primary); display: flex; align-items: center; justify-content: center;">
                                     <i data-lucide="chef-hat" style="width: 24px; height: 24px;"></i>
                                 </div>
                                 <div>
-                                    <h3 id="adminChefFormTitle" style="margin: 0; font-size: 1.2rem; color: #fff;">Add Kitchen Chef</h3>
+                                    <h3 id="adminChefFormTitle" style="margin: 0; font-size: 1.2rem; color: #fff;">Add Kitchen Cuisine Head</h3>
                                     <p style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">Assign outlet and kitchen cuisine sections</p>
                                 </div>
                             </div>
@@ -741,7 +742,7 @@
                             <input type="hidden" id="editAdminChefUsername">
 
                             <div class="input-group" style="margin-bottom: 14px;">
-                                <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Chef Full Name</label>
+                                <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Cuisine Head Full Name</label>
                                 <input type="text" id="adminChefFullName" placeholder="Enter chef full name" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
                             </div>
 
@@ -777,28 +778,28 @@
 
                             <div style="display: flex; gap: 10px;">
                                 <button class="btn btn-primary" id="btnSaveAdminChefSubmit" style="flex: 1; padding: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.95rem;">
-                                    <i data-lucide="user-plus" style="width: 16px; height: 16px;"></i> Save & Register Chef
+                                    <i data-lucide="user-plus" style="width: 16px; height: 16px;"></i> Save & Register Cuisine Head
                                 </button>
                                 <button class="btn btn-outline hidden" id="btnCancelEditAdminChef" style="padding: 12px 20px; font-size: 0.9rem;">Cancel</button>
                             </div>
                         </div>
 
-                        <!-- Chefs Table -->
+                        <!-- Cuisine Heads Table -->
                         <div class="panel" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border); border-radius: 16px; padding: 22px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                                 <div>
                                     <h3 style="margin: 0; font-size: 1.15rem; color: #fff; display: flex; align-items: center; gap: 8px;">
-                                        <i data-lucide="chef-hat" style="width: 18px; height: 18px; color: var(--primary);"></i> Kitchen Chefs
+                                        <i data-lucide="chef-hat" style="width: 18px; height: 18px; color: var(--primary);"></i> Kitchen Cuisine Heads
                                     </h3>
                                     <p style="margin: 2px 0 0 0; font-size: 0.78rem; color: var(--text-muted);">All registered chefs across outlets</p>
                                 </div>
-                                <span id="adminChefCountBadge" style="background: rgba(255,190,11,0.15); color: var(--primary); padding: 4px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 700;">0 Chefs</span>
+                                <span id="adminChefCountBadge" style="background: rgba(255,190,11,0.15); color: var(--primary); padding: 4px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 700;">0 Cuisine Heads</span>
                             </div>
                             <div class="table-scroll" tabindex="0" role="region" aria-label="Scrollable table">
                                 <table style="width: 100%; font-size: 0.85rem;">
                                     <thead>
                                         <tr>
-                                            <th>Chef Name</th>
+                                            <th>Cuisine Head Name</th>
                                             <th>Username</th>
                                             <th>Outlet</th>
                                             <th>Cuisines</th>
@@ -987,23 +988,23 @@
                 </div>
             </div>
 
-            <!-- ADD CHEF VIEW (Supervisor & Admin) -->
+            <!-- ADD CHEF VIEW (Executive Chef & Admin) -->
             <div id="viewAddChef" class="hidden">
                 <header class="dash-header">
                     <div class="header-title">
-                        <h1>Kitchen <span class="text-primary">Chefs</span></h1>
+                        <h1>Kitchen <span class="text-primary">Cuisine Heads</span></h1>
                         <p>Register new chefs, assign login credentials, and configure cuisine sections for your outlet.</p>
                     </div>
                 </header>
                 <div class="dash-grid dash-grid-split">
-                    <!-- Add Chef Form -->
+                    <!-- Add Cuisine Head Form -->
                     <div class="panel form-section" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border-gold); border-radius: 16px; padding: 24px;">
                         <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
                             <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(255,190,11,0.15); color: var(--primary); display: flex; align-items: center; justify-content: center;">
                                 <i data-lucide="chef-hat" style="width: 24px; height: 24px;"></i>
                             </div>
                             <div>
-                                <h3 id="chefFormTitle" style="margin: 0; font-size: 1.2rem; color: #fff;">Add New Chef</h3>
+                                <h3 id="chefFormTitle" style="margin: 0; font-size: 1.2rem; color: #fff;">Add New Cuisine Head</h3>
                                 <p style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">Create chef account with cuisine section access</p>
                             </div>
                         </div>
@@ -1011,7 +1012,7 @@
                         <input type="hidden" id="editChefUsername">
 
                         <div class="input-group" style="margin-bottom: 14px;">
-                            <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Chef Full Name</label>
+                            <label style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500;">Cuisine Head Full Name</label>
                             <input type="text" id="chefFullName" placeholder="Enter chef full name" style="background: var(--dark); color: #fff; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
                         </div>
 
@@ -1045,7 +1046,7 @@
 
                         <div style="display: flex; gap: 10px;">
                             <button class="btn btn-primary" id="btnSaveChefSubmit" style="flex: 1; padding: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.95rem;">
-                                <i data-lucide="user-plus" style="width: 16px; height: 16px;"></i> Save & Register Chef
+                                <i data-lucide="user-plus" style="width: 16px; height: 16px;"></i> Save & Register Cuisine Head
                             </button>
                             <button class="btn btn-outline hidden" id="btnCancelEditChef" style="padding: 12px 20px; font-size: 0.9rem;">Cancel</button>
                         </div>
@@ -1056,17 +1057,17 @@
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                             <div>
                                 <h3 style="margin: 0; font-size: 1.15rem; color: #fff; display: flex; align-items: center; gap: 8px;">
-                                    <i data-lucide="users" style="width: 18px; height: 18px; color: var(--primary);"></i> Kitchen Chefs
+                                    <i data-lucide="users" style="width: 18px; height: 18px; color: var(--primary);"></i> Kitchen Cuisine Heads
                                 </h3>
                                 <p style="margin: 2px 0 0 0; font-size: 0.78rem; color: var(--text-muted);">Active chefs assigned to this outlet</p>
                             </div>
-                            <span id="chefCountBadge" style="background: rgba(255,190,11,0.15); color: var(--primary); padding: 4px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 700;">0 Chefs</span>
+                            <span id="chefCountBadge" style="background: rgba(255,190,11,0.15); color: var(--primary); padding: 4px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 700;">0 Cuisine Heads</span>
                         </div>
                         <div class="table-scroll" tabindex="0" role="region" aria-label="Kitchen chefs table">
                             <table style="width: 100%; font-size: 0.85rem;">
                                 <thead>
                                     <tr>
-                                        <th>Chef Name</th>
+                                        <th>Cuisine Head Name</th>
                                         <th>Username</th>
                                         <th>Assigned Cuisines</th>
                                         <th style="text-align: left; padding-left: 12px;">Action</th>
@@ -1092,6 +1093,8 @@
     <script src="js/vendor-order-ui.js"></script>
     <script src="js/wizard.js?v=d1"></script>
     <script src="js/stock-actions.js?v=d1"></script>
+    <script src="js/operations-ui.js"></script>
+    <script src="js/legacy-import-ui.js"></script>
     <script>
         lucide.createIcons();
     </script>
@@ -1166,7 +1169,7 @@
         </div>
     </div>
 
-    <!-- CONSOLIDATE INDENT MODAL (Supervisor) -->
+    <!-- CONSOLIDATE INDENT MODAL (Executive Chef) -->
     <div id="modalConsolidateIndent" class="modal hidden" style="position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 9999; display: flex; align-items: center; justify-content: center;">
         <div class="panel" style="width: 92%; max-width: 950px; max-height: 90vh; overflow-y: auto; position: relative;">
             <button class="icon-btn" id="closeConsolidateModalBtn" style="position: absolute; top: 16px; right: 16px;"><i data-lucide="x"></i></button>
@@ -1195,7 +1198,7 @@
                 <!-- Section to add new stock item directly by supervisor -->
                 <div id="sectionAddNewStockItem" class="hidden panel" style="margin-bottom: 16px; padding: 14px; background: rgba(255,190,11,0.04); border: 1px dashed rgba(255,190,11,0.3);">
                     <h4 style="margin: 0 0 10px 0; font-size: 0.9rem; color: var(--primary); display: flex; align-items: center; gap: 6px;">
-                        <i data-lucide="plus-circle" style="width: 15px; height: 15px;"></i> Add New Stock Requirement (Supervisor Stock Request)
+                        <i data-lucide="plus-circle" style="width: 15px; height: 15px;"></i> Add New Stock Requirement (Executive Chef Stock Request)
                     </h4>
                     <div class="responsive-form-grid" style="display: grid; grid-template-columns: 2fr 1fr 2fr auto; gap: 10px; align-items: center;">
                         <select id="supervisorNewStockItem" style="padding: 8px; border-radius: 6px; background: var(--dark); color: var(--text-main); border: 1px solid var(--border);">
@@ -1213,10 +1216,10 @@
                         <thead>
                             <tr>
                                 <th style="width: 25%;">Ingredient</th>
-                                <th style="width: 30%;">Chef & Cuisine Breakdown</th>
+                                <th style="width: 30%;">Cuisine Head & Cuisine Breakdown</th>
                                 <th style="width: 12%;">Original Qty</th>
                                 <th style="width: 13%;">Revised Qty</th>
-                                <th style="width: 20%;">Supervisor Comment</th>
+                                <th style="width: 20%;">Executive Chef Comment</th>
                             </tr>
                         </thead>
                         <tbody id="consolidateItemsTableBody">
@@ -1270,7 +1273,7 @@
                                 <th>Original Total</th>
                                 <th>Final Requested Qty</th>
                                 <th>Change</th>
-                                <th>Supervisor Alteration Comment</th>
+                                <th>Executive Chef Alteration Comment</th>
                             </tr>
                         </thead>
                         <tbody id="consolidateSummaryTableBody"></tbody>
@@ -1306,7 +1309,7 @@
                     <div id="apprModalOutlet" style="font-size: 0.95rem; font-weight: 600;">-</div>
                 </div>
                 <div>
-                    <span style="font-size: 0.75rem; color: var(--text-muted);">Supervisor:</span>
+                    <span style="font-size: 0.75rem; color: var(--text-muted);">Executive Chef:</span>
                     <div id="apprModalSupervisor" style="font-size: 0.95rem; font-weight: 600;">-</div>
                 </div>
                 <div>

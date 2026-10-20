@@ -1,11 +1,12 @@
-import { fail, number, safeText } from './model.mjs';
+import { fail, number, safeText, hasOutlet } from './model.mjs';
 
 // Derive all supplier orders and their workflow links on the server, then persist as one batch.
 export function raiseVendorOrders(state, actor, input) {
-  if (actor.role !== 'admin') fail('Only admins can raise purchase orders.', 403);
+  if (!['admin','purchaser'].includes(actor.role)) fail('Only admins can raise purchase orders.', 403);
   const indent = state.indents.find(i => i.id === input.indentId);
+  if (indent && !hasOutlet(actor,indent.outletId)) fail('Outlet access denied.',403);
   if (!indent) fail('Consolidated request not found.', 404);
-  if (indent.status !== 'Pending Approval' || state.purchase_orders.some(p => p.indentId === indent.id)) fail('Orders have already been raised or this request is completed.', 409);
+  if (!['Pending Approval','Approved'].includes(indent.status) || state.purchase_orders.some(p => p.indentId === indent.id)) fail('Orders have already been raised or this request is completed.', 409);
   if (!Array.isArray(input.items) || !input.items.length || input.items.length > indent.items.length) fail('Choose at least one consolidated ingredient.');
   const delivery = input.expectedDelivery || '';
   if (delivery && (!/^\d{4}-\d{2}-\d{2}$/.test(delivery) || !Number.isFinite(Date.parse(delivery)) || new Date(delivery).toISOString().slice(0, 10) !== delivery)) fail('Choose a valid delivery date.');
@@ -35,10 +36,10 @@ export function raiseVendorOrders(state, actor, input) {
   });
   const valueChange = (entity, value) => ({entity, key:value.id, value});
   // Do not add a vendor or a single PO number to a multi-vendor parent record.
-  const changes = [valueChange('indents', {...indent, status:`PO Raised (${orders.length} vendor${orders.length===1?'':'s'})`, purchaseOrderIds:orders.map(p=>p.id)})];
+  const changes = [valueChange('indents', {...indent, status:indent.status==='Approved'?'Approved':`PO Raised (${orders.length} vendor${orders.length===1?'':'s'})`, purchaseOrderIds:orders.map(p=>p.id)})];
   for (const request of state.requests.filter(r=>r.indentId===indent.id)) {
     const matching = orders.filter(p=>p.items.some(i=>i.itemId===request.itemId));
-    changes.push(valueChange('requests', {...request, status:'PO Raised', purchaseOrderIds:matching.map(p=>p.id)}));
+    changes.push(valueChange('requests', {...request, status:request.status==='Approved'?'Approved':'PO Raised', purchaseOrderIds:matching.map(p=>p.id)}));
   }
   return [...changes, ...orders.map(p=>valueChange('purchase_orders',p))];
 }

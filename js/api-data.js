@@ -24,6 +24,7 @@ async function apiRequest(path, method = 'GET', value) {
     if (!res.ok) {
         const error = new Error(data.error || 'Database request failed.');
         error.status = res.status;
+        error.details = data.errors;
         throw error;
     }
     return data;
@@ -34,6 +35,7 @@ function applyServerState(state) {
         target.push(...copyData(state[entity] || []));
     }
     committedState = copyData(state);
+    window.liveCatalogReference = null;
 }
 function reloadDataFromStorage() { /* Kept for legacy view callbacks; never read business localStorage. */ }
 function getItemTotalQty(item) { return Object.values(item.allocations || {}).reduce((sum, q) => sum + q, 0); }
@@ -91,22 +93,29 @@ async function saveData() {
         document.body.classList.remove('database-saving');
     }
 }
+let refreshPending = false;
 async function refreshDatabase() {
-    if (!currentUser || !committedState || databaseWritePending || pendingChanges().length || document.hidden) return;
-    const active = document.activeElement;
-    if (active && ['INPUT', 'SELECT', 'TEXTAREA'].includes(active.tagName)) return;
+    if (!currentUser || !committedState || databaseWritePending || document.hidden || refreshPending) return;
+    refreshPending = true;
     try {
+        const revision = await apiRequest('revision');
+        if(revision.revision === committedState.revision) return;
         const state = await apiRequest('state');
-        if (state.revision !== committedState.revision) {
-            applyServerState(state);
-            const refreshed = usersData.find(u => u.id === currentUser.id);
-            if (refreshed) currentUser = refreshed;
-            window.onLiveSyncReceived?.();
+        if(databaseWritePending || state.revision<=committedState.revision) return;
+        if(pendingChanges().length) {
+            window.liveCatalogReference = copyData(state.items);
+            window.dispatchEvent(new CustomEvent('catalog-refreshed'));
+            return;
         }
-    } catch (error) {
-        if (error.status === 401) window.location.reload();
-    }
+        applyServerState(state);
+        const refreshed = usersData.find(u => u.id === currentUser.id);
+        if(refreshed) { const changed=refreshed.role!==currentUser.role;currentUser=refreshed;if(changed)window.applyLoggedInUser(currentUser); }
+        window.onLiveSyncReceived?.();
+        window.dispatchEvent(new CustomEvent('catalog-refreshed'));
+    } catch(error) { if(error.status===401)window.location.reload(); }
+    finally { refreshPending=false; }
 }
+
 async function runDatabaseAction(path, input) {
     if (!committedState || databaseWritePending) throw new Error('Wait for the current save to finish.');
     if (pendingChanges().length) throw new Error('Finish or refresh the current edit before this action.');
@@ -138,7 +147,10 @@ window.saveUser = async function() {
 document.addEventListener('keydown', event => {
     if (databaseWritePending) { event.preventDefault(); event.stopImmediatePropagation(); }
 }, true);
-setInterval(refreshDatabase, 10000);
+setInterval(refreshDatabase, 3000);
+window.addEventListener('focus',refreshDatabase);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshDatabase();});
+document.addEventListener('focusin',e=>{if(e.target.matches('select,[role=combobox]'))refreshDatabase();});
 window.addEventListener('unhandledrejection', event => {
     event.preventDefault();
     window.showUiModal?.({ title: 'Change was not saved', message: event.reason?.message || 'Please refresh and try again.', type: 'warning' });

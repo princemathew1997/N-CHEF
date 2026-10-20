@@ -1,11 +1,12 @@
 import { entities, clone, project, fail } from './model.mjs';
+import { updateThresholds, putRecord } from './operations.mjs';
 import { hashPassword } from './auth.mjs';
 
 export async function readState(db) {
   const queries = entities.map(entity => entity === 'users'
-    ? 'SELECT id, username, name, role, title, profile_json FROM users WHERE active = 1 ORDER BY created_at DESC'
+    ? 'SELECT id, username, name, effective_role AS role, title, profile_json FROM users WHERE active = 1 ORDER BY created_at DESC'
     : `SELECT payload_json FROM ${entity} WHERE ${['requests', 'indents', 'purchase_orders'].includes(entity) ? 'deleted = 0' : 'active = 1'} ORDER BY rowid DESC`);
-  const result = await db.batch([...queries.map(q => db.prepare(q)), db.prepare('SELECT id, name FROM cuisines'), db.prepare('SELECT revision FROM app_revision WHERE id = 1'), db.prepare('SELECT * FROM outlet_stock'), db.prepare('SELECT * FROM legacy_stock'), db.prepare('SELECT * FROM outlet_stock_history ORDER BY created_at DESC, rowid DESC')]);
+  const result = await db.batch([...queries.map(q => db.prepare(q)), db.prepare('SELECT id, name FROM cuisines'), db.prepare('SELECT revision FROM app_revision WHERE id = 1'), db.prepare('SELECT * FROM outlet_stock'), db.prepare('SELECT * FROM legacy_stock'), db.prepare('SELECT * FROM outlet_stock_history ORDER BY created_at DESC, rowid DESC'), db.prepare('SELECT kind,payload_json FROM operation_records')]);
   const state = {};
   entities.forEach((entity, i) => {
     state[entity] = result[i].results.map(row => entity === 'users'
@@ -18,12 +19,14 @@ export async function readState(db) {
   state.outletStock = stock[0].results;
   state.legacyStock = stock[1].results;
   state.stockHistory = stock[2].results;
+  state.operationRecords = stock[3].results.map(r=>({...JSON.parse(r.payload_json),kind:r.kind}));
   return state;
 }
 
 const query = (db, sql, ...values) => db.prepare(sql).bind(...values);
 
 export async function persistChanges(db, state, next, touched, actor, operationId, stock = null) {
+  next=clone(next);
   const writes = [
     query(db, 'INSERT INTO revision_guards VALUES (?, ?)', operationId, state.revision),
     query(db, 'INSERT INTO command_receipts (id, actor_id, expected_revision, created_at) VALUES (?, ?, ?, ?)', operationId, actor.id, state.revision, Math.floor(Date.now() / 1000)),
@@ -48,7 +51,7 @@ export async function persistChanges(db, state, next, touched, actor, operationI
         const existing = old ? await db.prepare('SELECT password_hash FROM users WHERE id = ?').bind(key).first() : null;
         if (!existing && !password) fail('A new user requires a password.');
         const passwordHash = password ? await hashPassword(password) : existing.password_hash;
-        writes.push(query(db, 'INSERT INTO users (id, username, name, role, title, password_hash, profile_json) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET username = excluded.username, name = excluded.name, role = excluded.role, title = excluded.title, password_hash = excluded.password_hash, profile_json = excluded.profile_json', key, data.username, data.name, data.role, data.title || '', passwordHash, JSON.stringify(profile)));
+        writes.push(query(db, 'INSERT INTO users (id, username, name, role, title, password_hash, profile_json, effective_role) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET username = excluded.username, name = excluded.name, role = excluded.role, effective_role = excluded.effective_role, title = excluded.title, password_hash = excluded.password_hash, profile_json = excluded.profile_json', key, data.username, data.name, data.role === 'admin' ? 'admin' : data.role === 'cuisine_head' ? 'chef' : 'supervisor', data.title || '', passwordHash, JSON.stringify(profile), data.role));
         writes.push(query(db, 'DELETE FROM user_outlets WHERE user_id = ?', key), query(db, 'DELETE FROM user_cuisines WHERE user_id = ?', key));
         for (const outlet of next.outlets.filter(o => data.assignedLocations.includes('all') || data.assignedLocations.includes(o.id))) writes.push(query(db, 'INSERT INTO user_outlets VALUES (?, ?)', key, outlet.id));
         for (const cuisine of next.cuisines.filter(c => (data.assignedSections || data.assignedCuisines || []).includes(c.name))) writes.push(query(db, 'INSERT INTO user_cuisines VALUES (?, ?)', key, cuisine.id));
@@ -72,15 +75,25 @@ export async function persistChanges(db, state, next, touched, actor, operationI
     }
   }
   if (stock) {
+    if(stock.importSummary)writes.push(query(db,'INSERT INTO audit_events(id,actor_id,action,entity_type,entity_id,details_json) VALUES (?,?,?,?,?,?)',crypto.randomUUID(),actor.id,'legacy_import','stock',stock.importSummary.fingerprint,JSON.stringify({operationId,rows:stock.importSummary.rows})));
     for (const balance of stock.outletStock) {
       const previous = state.outletStock.find(s => s.item_id === balance.item_id && s.outlet_id === balance.outlet_id);
-      if (previous?.quantity === balance.quantity) continue;
-      writes.push(query(db, 'INSERT INTO outlet_stock VALUES (?, ?, ?) ON CONFLICT(item_id,outlet_id) DO UPDATE SET quantity=excluded.quantity', balance.item_id, balance.outlet_id, balance.quantity));
+      if (previous?.quantity === balance.quantity && previous?.unit_cost_minor === balance.unit_cost_minor) continue;
+      writes.push(query(db, 'INSERT INTO outlet_stock (item_id,outlet_id,quantity,unit_cost_minor) VALUES (?, ?, ?, ?) ON CONFLICT(item_id,outlet_id) DO UPDATE SET quantity=excluded.quantity,unit_cost_minor=excluded.unit_cost_minor', balance.item_id, balance.outlet_id, balance.quantity, balance.unit_cost_minor ?? null));
     }
     for (const legacy of stock.legacyStock) {
       if (state.legacyStock.find(s => s.item_id === legacy.item_id)?.quantity !== legacy.quantity || state.legacyStock.find(s => s.item_id === legacy.item_id)?.issue !== legacy.issue) writes.push(query(db, 'UPDATE legacy_stock SET quantity=?, issue=? WHERE item_id=?', legacy.quantity, legacy.issue, legacy.item_id));
     }
-    for (const m of stock.movements) writes.push(query(db, 'INSERT INTO outlet_stock_history (id,operation_id,item_id,outlet_id,delta,quantity,kind,reason,cuisine,vendor,item_name,unit,actor_id,actor_name) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)', crypto.randomUUID(), operationId, m.item_id, m.outlet_id, m.delta, m.quantity, m.kind, m.reason, m.cuisine, m.vendor, m.item_name, m.unit, actor.id, actor.name));
+    for (const m of stock.movements) writes.push(query(db, 'INSERT INTO outlet_stock_history (id,operation_id,item_id,outlet_id,delta,quantity,kind,reason,cuisine,vendor,item_name,unit,actor_id,actor_name,unit_cost_minor,total_cost_minor,delivery_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', crypto.randomUUID(), operationId, m.item_id, m.outlet_id, m.delta, m.quantity, m.kind, m.reason, m.cuisine, m.vendor, m.item_name, m.unit, actor.id, actor.name, m.unit_cost_minor ?? null, m.total_cost_minor ?? null, m.delivery_id ?? null));
+  }
+  for(const delivery of stock?.deliveries || []) putRecord(next,'delivery',delivery);
+  updateThresholds(next, stock?.outletStock || next.outletStock);
+  for(const record of next.operationRecords || []) {
+    const old=(state.operationRecords || []).find(r=>r.id===record.id);
+    if(JSON.stringify(old)!==JSON.stringify(record)) {
+      writes.push(query(db,'INSERT INTO operation_records(id,kind,payload_json) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET payload_json=excluded.payload_json',record.id,record.kind,JSON.stringify(record)));
+      writes.push(query(db,'INSERT INTO audit_events(id,actor_id,action,entity_type,entity_id,details_json) VALUES (?,?,?,?,?,?)',crypto.randomUUID(),actor.id,old?'update':'create',record.kind,record.id,JSON.stringify({operationId})));
+    }
   }
   for (const t of touched.filter(t => !t.data)) writes.push(query(db, 'INSERT INTO audit_events (id, actor_id, action, entity_type, entity_id) VALUES (?, ?, ?, ?, ?)', crypto.randomUUID(), actor.id, 'deactivate', t.entity, t.key));
   writes.push(query(db, 'DELETE FROM revision_guards WHERE command_id = ?', operationId), query(db, 'UPDATE app_revision SET revision = revision + 1 WHERE id = 1'));

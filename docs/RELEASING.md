@@ -5,6 +5,71 @@ Production releases are manual. The first managed version is **v1.0.0**;
 a PR runs validation but does not publish production. A version badge in the
 sidebar, `/release.json`, and `/api/health` identify the deployed application.
 
+## Version 2.0.0 operations upgrade
+
+Merging this change does not change D1 or production. Merge only after CI passes;
+apply the database changes during the deployment window, before publishing v2.0.0.
+The read-only production check on 20 October 2026 found migrations 0006, 0007 and
+0008 pending on `nchef-db`. Recheck at deployment time; this is not a claim that
+they have been applied.
+
+No reset or deletion is required. The migrations preserve existing account IDs,
+passwords, assignments, sessions, stock balances and history. Supervisor accounts
+become Executive Chef, Chef accounts become Cuisine Head, and Admin creates the
+new Purchaser accounts. Previously approved requests are already issued and
+cannot deduct stock a second time.
+
+1. Merge the version, lockfile, immutable migrations and application changes.
+2. Arrange maintenance and stop inventory writes from every account and browser.
+   Enforce the pause with the temporary, tested database write fence:
+
+   ```powershell
+   npx --no-install wrangler d1 execute nchef-db --remote --file scripts/sql/release-maintenance-on.sql
+   ```
+
+   This blocks revision-guarded business commands, while allowing login, reads,
+   health checks and direct maintenance migrations. Keep it in place through
+   migration and paired deployment. The old API does
+   not support the new stock columns or role semantics.
+3. Record a private D1 recovery bookmark/backup and the current deployment pair.
+   Do not include exports, credentials or customer records in PR/release assets.
+4. From the reviewed, committed source, verify the database/account in
+   `wrangler.jsonc`, then run the project-pinned Wrangler:
+
+   ```powershell
+   npx --no-install wrangler d1 migrations list nchef-db --remote
+   npx --no-install wrangler d1 migrations apply nchef-db --remote
+   npx --no-install wrangler d1 migrations list nchef-db --remote
+   npx --no-install wrangler d1 execute nchef-db --remote --command "PRAGMA foreign_key_check"
+   ```
+
+5. Confirm no migrations remain and no foreign-key errors are returned. Applied
+   migrations must exactly match the release source. Do not edit SQL files or
+   manually insert rows into `d1_migrations` to bypass preflight.
+6. Run Publish release for **v2.0.0**, deploying API and Pages from the same merged
+   commit. The workflow checks that the release checkout is clean, runs tests and
+   package validation, and verifies the matching public versions and health.
+7. Check each role's sign-in/dashboard, one review/approval flow, priced receiving,
+   distribution/receipt confirmation, notifications, and a CSV validation preview.
+   Use controlled opening stock only when genuinely needed; do not perform test
+   stock writes in production. Create/assign Purchaser accounts before reopening.
+8. After verification, remove the fence, refresh all clients and resume inventory
+   entry. If migration or deployment fails, keep writes paused while fixing it.
+
+   ```powershell
+   npx --no-install wrangler d1 execute nchef-db --remote --file scripts/sql/release-maintenance-off.sql
+   ```
+
+The `operations-v2` epoch is a deliberate compatibility boundary. Version 1.x
+cannot be restored by code-only rollback after these migrations, including via
+the previous application's recovery snapshot. Prefer a forward fix within v2.
+Restoring an old private D1 recovery point is a separate coordinated incident
+procedure that also needs the corresponding old code and reconciliation of any
+new transactions. Never reset data merely to make release preflight pass.
+
+Existing illustrated PDFs describe v1; the Markdown role guides are the current
+v2 instructions. Do not distribute the old PDFs as v2 guides.
+
 ## One-time activation
 
 1. Merge this release-tooling change into `main` after CI passes.

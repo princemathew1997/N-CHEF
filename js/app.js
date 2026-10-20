@@ -411,7 +411,7 @@ function applyLoggedInUser(user, targetView = null) {
     if (user.role === 'admin') {
         adminEls.forEach(el => el.classList.remove('hidden'));
         superEls.forEach(el => el.classList.add('hidden'));
-    } else if (user.role === 'supervisor') {
+    } else if (user.role === 'executive_chef') {
         adminEls.forEach(el => el.classList.add('hidden'));
         superEls.forEach(el => el.classList.remove('hidden'));
     } else {
@@ -419,7 +419,7 @@ function applyLoggedInUser(user, targetView = null) {
         superEls.forEach(el => el.classList.add('hidden'));
     }
     
-    if (user.role === 'chef') {
+    if (user.role === 'cuisine_head') {
         noChefEls.forEach(el => el.classList.add('hidden'));
         document.querySelectorAll('.chef-only-bg').forEach(el => el.classList.remove('hidden'));
     } else {
@@ -441,26 +441,8 @@ function applyLoggedInUser(user, targetView = null) {
     if (pageDashboard) pageDashboard.classList.add('active');
     
     
-    // Restore preserved or requested view
-    const savedView = targetView || localStorage.getItem('nchef_active_view');
-    const savedSub = localStorage.getItem('nchef_active_subdivision');
-    
-    if (user.role === 'chef') {
-        window.switchToView('viewChefPortal');
-    } else if (user.role === 'admin') {
-        if (savedView && savedView !== 'viewRequests' && savedView !== 'viewChefPortal') {
-            window.switchToView(savedView, savedSub);
-        } else {
-            window.switchToView('viewMasterOrders');
-        }
-    } else {
-        // Supervisor or default
-        if (savedView && savedView !== 'viewChefPortal' && savedView !== 'viewVendors' && savedView !== 'viewLocations' && savedView !== 'viewUsers') {
-            window.switchToView(savedView, savedSub);
-        } else {
-            window.switchToView('viewMasterOrders');
-        }
-    }
+    window.configureOperationsRole?.();
+    window.switchToView('operations:dashboard');
 }
 window.applyLoggedInUser = applyLoggedInUser;
 
@@ -569,6 +551,7 @@ window.switchToView = function(viewName, subDivision = null) {
     const viewUsers = document.getElementById('viewUsers');
     const viewAddChef = document.getElementById('viewAddChef');
 
+    document.getElementById("viewOperations")?.classList.add("hidden");
     document.getElementById("viewInventory")?.classList.add("hidden");
     document.querySelectorAll('[data-inventory]').forEach(a => a.classList.remove('active'));
     // Hide all views & deactivate nav items
@@ -605,7 +588,7 @@ window.switchToView = function(viewName, subDivision = null) {
         viewVendors: 'Vendors',
         viewLocations: 'Locations',
         viewUsers: 'Users',
-        viewAddChef: 'Add Chef'
+        viewAddChef: 'Add Cuisine Head'
     };
     const mobileActiveTitleEl = document.getElementById('mobileActivePage');
     if (mobileActiveTitleEl) {
@@ -616,6 +599,7 @@ window.switchToView = function(viewName, subDivision = null) {
     if (mobileDrawer) mobileDrawer.classList.remove('mobile-open');
     if (mobileBackdrop) mobileBackdrop.classList.add('hidden');
 
+    if (window.showOperationsView?.(viewName, subDivision)) return;
     if (window.showInventoryView?.(viewName)) return;
     switch(viewName) {
         case 'viewMasterOrders':
@@ -672,7 +656,7 @@ window.switchToView = function(viewName, subDivision = null) {
             if (navUsers) navUsers.classList.add('active');
             if (navUsersSubmenu) navUsersSubmenu.classList.add('open');
             if (navUsersChevron) navUsersChevron.style.transform = 'rotate(180deg)';
-            const sub = subDivision || currentUserSubdivision || 'supervisor';
+            const sub = subDivision || currentUserSubdivision || 'executive_chef';
             if (typeof switchUserSubdivision === 'function') {
                 switchUserSubdivision(sub);
             } else {
@@ -805,7 +789,7 @@ function initNavigation() {
                 navUsersSubmenu.classList.remove('open');
                 if (navUsersChevron) navUsersChevron.style.transform = 'rotate(0deg)';
             } else {
-                window.switchToView('viewUsers', 'supervisor');
+                window.switchToView('viewUsers', 'executive_chef');
             }
         });
     }
@@ -814,7 +798,7 @@ function initNavigation() {
         navSubSupervisors.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            window.switchToView('viewUsers', 'supervisor');
+            window.switchToView('viewUsers', 'executive_chef');
         });
     }
 
@@ -822,7 +806,7 @@ function initNavigation() {
         navSubChefs.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            window.switchToView('viewUsers', 'chef');
+            window.switchToView('viewUsers', 'cuisine_head');
         });
     }
 
@@ -1460,7 +1444,7 @@ function initForms() {
             document.getElementById('modalIndentApproval')?.classList.add('hidden');
             window.showUiModal({
                 title: "Request Approved",
-                message: `Consolidated Request ${indent.indentNumber || indent.id} approved successfully! Stock has been allocated to ${indent.outletName}.`,
+                message: `Consolidated Request ${indent.indentNumber || indent.id} approved successfully! Ready for distribution to ${indent.outletName}.`,
                 type: "success"
             });
             loadRequestsData();
@@ -1512,7 +1496,7 @@ function initForms() {
         if (typeof submitVendorPurchaseOrder === 'function') submitVendorPurchaseOrder();
     });
 
-    // Add Chef Handlers
+    // Add Cuisine Head Handlers
     document.getElementById('btnSaveChefSubmit')?.addEventListener('click', () => {
         if (typeof saveChefUser === 'function') saveChefUser();
     });
@@ -1667,7 +1651,7 @@ function updateFormSelects(visibleOutlets) {
     const outletsOptions = visibleOutlets.map(o => `<option value="${o.id}">${o.name}</option>`).join('');
     const filterOutletSel = document.getElementById('filterOutlet');
     if (filterOutletSel) {
-        if (currentUser && currentUser.role === 'supervisor' && isSingleOutlet) {
+        if (currentUser && currentUser.role === 'executive_chef' && isSingleOutlet) {
             filterOutletSel.innerHTML = `<option value="${singleOutlet.id}" selected>${singleOutlet.name}</option>`;
             filterOutletSel.value = singleOutlet.id;
             filterOutletSel.style.display = 'none';
@@ -1707,7 +1691,7 @@ function updateFormSelects(visibleOutlets) {
 // CHEF PORTAL LOGIC
 // ============================================================
 function loadChefPortalData() {
-    if (!currentUser || currentUser.role !== 'chef') return;
+    if (!currentUser || currentUser.role !== 'cuisine_head') return;
     
     // Determine chef's allocated outlet
     let allocatedOutlet = null;
@@ -1722,7 +1706,7 @@ function loadChefPortalData() {
     const outletNameEl = document.getElementById('chefPortalOutletName');
     if (outletNameEl) outletNameEl.textContent = allocatedOutlet.name;
     
-    // Display Chef's assigned cuisine
+    // Display Cuisine Head's assigned cuisine
     let chefCuisines = currentUser.assignedSections || currentUser.assignedCuisines || [];
     if (typeof chefCuisines === 'string' && chefCuisines) chefCuisines = chefCuisines.split(',').map(s => s.trim());
     const cuisineStr = (chefCuisines && chefCuisines.length > 0) ? chefCuisines.join(', ') : 'All Cuisines';
@@ -1751,7 +1735,7 @@ function loadChefPortalData() {
     
     // Update summary metric cards
     const pendingCount = allChefReqs.filter(r => r.status === 'Pending' || r.status === 'Accepted' || r.status === 'Sent to Admin').length;
-    const approvedCount = allChefReqs.filter(r => r.status === 'Approved' || r.status === 'Consolidated').length;
+    const approvedCount = allChefReqs.filter(r => r.status === 'Approved').length;
     const totalCount = allChefReqs.length;
     
     const mPending = document.getElementById('metricChefPending');
@@ -1796,11 +1780,13 @@ function loadChefPortalData() {
             const dateStr = (r.timestamp || r.date) ? InventoryTools.timestamp(r.timestamp || r.date) : '-';
             let statusHtml = '';
             if (r.status === 'Pending') {
-                statusHtml = `<span class="status pending" style="background: rgba(255,190,11,0.15); color: var(--primary); border: 1px solid rgba(255,190,11,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Pending Supervisor</span>`;
+                statusHtml = `<span class="status pending" style="background: rgba(255,190,11,0.15); color: var(--primary); border: 1px solid rgba(255,190,11,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Pending Executive Chef</span>`;
             } else if (r.status === 'Accepted') {
-                statusHtml = `<span class="status ok" style="background: rgba(46,196,182,0.15); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Accepted by Supervisor</span>`;
+                statusHtml = `<span class="status ok" style="background: rgba(46,196,182,0.15); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Accepted by Executive Chef</span>`;
             } else if (r.status === 'Sent to Admin') {
                 statusHtml = `<span class="status" style="background: rgba(67,97,238,0.15); color: #4895ef; border: 1px solid rgba(67,97,238,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Sent to Admin</span>`;
+            } else if (r.status === 'PO Raised') {
+                statusHtml = '<span class="status pending">Vendor order raised</span>';
             } else if (r.status === 'Consolidated') {
                 statusHtml = `<span class="status" style="background: rgba(142,68,173,0.15); color: #af7ac5; border: 1px solid rgba(142,68,173,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Consolidated</span>`;
             } else if (r.status === 'Approved') {
@@ -1823,7 +1809,7 @@ function loadChefPortalData() {
                     <td><strong>${r.itemName || 'Item'}</strong> <span style="font-size: 0.75rem; color: var(--text-muted);">(${r.unit || 'kg'})</span></td>
                     <td><span style="background: rgba(255,190,11,0.12); color: var(--primary); padding: 2px 7px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">${r.cuisine || '-'}</span></td>
                     <td style="font-size: 0.85rem; color: var(--text-muted);">${outletName}</td>
-                    <td><strong style="color: var(--text-main); font-size: 0.95rem;">${r.qty}</strong> <span style="font-size: 0.75rem; color: var(--text-muted);">${r.unit || 'kg'}</span></td>
+                    <td><strong style="color: var(--text-main); font-size: 0.95rem;">${r.qty}</strong> <span style="font-size: 0.75rem; color: var(--text-muted);">${r.unit || 'kg'}</span>${r.status==='Approved'?`<small style="display:block">Approved: ${r.approvedQuantity ?? r.revisedQty ?? r.qty}</small>`:r.revisedQty!==undefined?`<small style="display:block">Revised: ${r.revisedQty}</small>`:''}</td>
                     <td>${statusHtml}</td>
                     <td>${actionHtml}</td>
                 </tr>
@@ -1912,7 +1898,7 @@ function updateRequestsBadge() {
         // Admin manages stock through Indents
         badge.classList.add('hidden');
         return;
-    } else if (currentUser.role === 'supervisor') {
+    } else if (currentUser.role === 'executive_chef') {
         const vis = getVisibleOutlets();
         const visIds = vis.map(o => (o.id || '').toLowerCase());
         const visNames = vis.map(o => (o.name || '').toLowerCase());
@@ -1940,7 +1926,7 @@ function updateIndentsBadge() {
     if (!badge) return;
     
     let pendingIndents = indentsData.filter(ind => ind.status === 'Pending Approval');
-    if (currentUser.role === 'supervisor') {
+    if (currentUser.role === 'executive_chef') {
         const vis = getVisibleOutlets().map(o => o.id);
         pendingIndents = pendingIndents.filter(ind => vis.includes(ind.outletId));
     }
@@ -1964,7 +1950,7 @@ function loadRequestsData() {
     if (currentUser.role === 'admin') {
         headerTitle.innerHTML = `Manage <span class="text-primary">Requests</span>`;
         headerSub.textContent = `Review and approve stock requests forwarded by supervisors or submitted by kitchen staff.`;
-    } else if (currentUser.role === 'supervisor') {
+    } else if (currentUser.role === 'executive_chef') {
         headerTitle.innerHTML = `Outlet <span class="text-primary">Requests</span>`;
         headerSub.textContent = `Review requests for your allocated outlet and accept items to consolidate.`;
     } else {
@@ -1981,19 +1967,19 @@ function loadRequestsData() {
     const containerList = document.getElementById('containerListView');
     
     window.switchRequestsTab = function(mode) {
-        if (currentUser.role !== 'admin' && mode === 'supervisor') {
+        if (currentUser.role !== 'admin' && mode === 'executive_chef') {
             mode = 'sections';
         }
         window._activeRequestsTab = mode;
         if (btnSupMode) {
-            btnSupMode.className = (mode === 'supervisor') ? 'btn btn-primary admin-only' : 'btn btn-outline admin-only';
+            btnSupMode.className = (mode === 'executive_chef') ? 'btn btn-primary admin-only' : 'btn btn-outline admin-only';
             if (currentUser.role !== 'admin') btnSupMode.classList.add('hidden');
         }
         if (btnSecMode) btnSecMode.className = (mode === 'sections') ? 'btn btn-primary' : 'btn btn-outline';
         if (btnListMode) btnListMode.className = (mode === 'list') ? 'btn btn-primary' : 'btn btn-outline';
 
         if (containerSup) {
-            if (mode === 'supervisor' && currentUser.role === 'admin') containerSup.classList.remove('hidden');
+            if (mode === 'executive_chef' && currentUser.role === 'admin') containerSup.classList.remove('hidden');
             else containerSup.classList.add('hidden');
         }
         if (containerSec) {
@@ -2007,7 +1993,7 @@ function loadRequestsData() {
     };
 
     if (btnSupMode && !btnSupMode.dataset.bound) {
-        btnSupMode.addEventListener('click', () => window.switchRequestsTab('supervisor'));
+        btnSupMode.addEventListener('click', () => window.switchRequestsTab('executive_chef'));
         btnSupMode.dataset.bound = 'true';
     }
     if (btnSecMode && !btnSecMode.dataset.bound) {
@@ -2019,12 +2005,12 @@ function loadRequestsData() {
         btnListMode.dataset.bound = 'true';
     }
 
-    if (currentUser.role === 'supervisor') {
+    if (currentUser.role === 'executive_chef') {
         window._activeRequestsTab = 'sections';
         if (btnSupMode) btnSupMode.classList.add('hidden');
     } else if (currentUser.role === 'admin') {
         if (!window._activeRequestsTab) {
-            window._activeRequestsTab = 'supervisor';
+            window._activeRequestsTab = 'executive_chef';
         }
         if (btnSupMode) btnSupMode.classList.remove('hidden');
     }
@@ -2053,7 +2039,7 @@ function loadRequestsData() {
     let viewableRequests = [];
     if (currentUser.role === 'admin') {
         viewableRequests = requestsData;
-    } else if (currentUser.role === 'supervisor') {
+    } else if (currentUser.role === 'executive_chef') {
         const vis = getVisibleOutlets();
         const visIds = vis.map(o => (o.id || '').toLowerCase());
         const visNames = vis.map(o => (o.name || '').toLowerCase());
@@ -2091,7 +2077,7 @@ function loadRequestsData() {
     }
 
     // -------------------------------------------------------------
-    // 0. RENDER SUPERVISOR CONSOLIDATED REQUESTS TABLE (Admin / Supervisor)
+    // 0. RENDER SUPERVISOR CONSOLIDATED REQUESTS TABLE (Admin / Executive Chef)
     // -------------------------------------------------------------
     const pendingSupervisorReqs = indentsData.filter(ind => ind.status === 'Pending Approval');
     const pendingBadge = document.getElementById('adminPendingSupervisorBadge');
@@ -2107,7 +2093,7 @@ function loadRequestsData() {
     const supTbody = document.getElementById('supervisorRequestsTableBody');
     if (supTbody) {
         let viewableIndents = [...indentsData];
-        if (currentUser.role === 'supervisor') {
+        if (currentUser.role === 'executive_chef') {
             const vis = getVisibleOutlets().map(o => o.id);
             if (vis.length > 0) {
                 viewableIndents = viewableIndents.filter(ind => vis.includes(ind.outletId));
@@ -2135,7 +2121,7 @@ function loadRequestsData() {
                 <tr>
                     <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 36px 20px;">
                         <div style="font-size: 2.2rem; margin-bottom: 8px;">📬</div>
-                        <div style="font-size: 1.05rem; font-weight: 600; color: var(--text-main);">No Supervisor Requests Found</div>
+                        <div style="font-size: 1.05rem; font-weight: 600; color: var(--text-main);">No Executive Chef Requests Found</div>
                         <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">Consolidated requests submitted by supervisors will appear here for Admin review, stock allocation, or vendor purchase order placement.</p>
                     </td>
                 </tr>
@@ -2195,7 +2181,7 @@ function loadRequestsData() {
                         <td><strong style="color: var(--primary); font-family: monospace; font-size: 0.95rem;">${indent.indentNumber || indent.id}</strong></td>
                         <td>${displayDate}</td>
                         <td><span style="background: rgba(255,190,11,0.1); color: var(--primary); padding: 3px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">${indent.outletName || 'Outlet'}</span></td>
-                        <td><strong>${indent.supervisorName || 'Supervisor'}</strong></td>
+                        <td><strong>${indent.supervisorName || 'Executive Chef'}</strong></td>
                         <td>
                             <div><strong style="color: var(--text-main);">${itemsCount} ingredients</strong></div>
                             <div style="font-size: 0.74rem; color: var(--text-muted); max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${(indent.items || []).map(i => i.itemName).join(', ')}">
@@ -2257,7 +2243,7 @@ function loadRequestsData() {
             for (const secName in sectionsMap) {
                 const reqs = sectionsMap[secName];
                 const icon = sectionIcons[secName] || '🥘';
-                const chefsSet = [...new Set(reqs.map(r => r.chefName || r.requestedBy || 'Store Chef'))];
+                const chefsSet = [...new Set(reqs.map(r => r.chefName || r.requestedBy || 'Store Cuisine Head'))];
                 const outletsSet = [...new Set(reqs.map(r => r.outletName || (outletsData.find(o => o.id === r.outletId)?.name) || 'Branch'))];
                 const totalItemsQty = reqs.reduce((sum, r) => sum + (parseFloat(r.qty) || 0), 0);
                 const pendingInSec = reqs.filter(r => r.status === 'Pending').length;
@@ -2272,7 +2258,7 @@ function loadRequestsData() {
 
                     let statusBadge = '';
                     if (r.status === 'Pending') {
-                        statusBadge = `<span class="status pending" style="background: rgba(255,190,11,0.15); color: var(--primary); border: 1px solid rgba(255,190,11,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Pending Supervisor</span>`;
+                        statusBadge = `<span class="status pending" style="background: rgba(255,190,11,0.15); color: var(--primary); border: 1px solid rgba(255,190,11,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Pending Executive Chef</span>`;
                     } else if (r.status === 'Accepted') {
                         statusBadge = `<span class="status ok" style="background: rgba(46,196,182,0.15); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.35); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">✓ Accepted</span>`;
                     } else if (r.status === 'Sent to Admin' || r.status === 'Consolidated') {
@@ -2296,16 +2282,16 @@ function loadRequestsData() {
                                 actionHtml = `<span style="font-size: 0.75rem; color: #4895ef; font-weight: 500;">Awaiting Admin Approval</span>`;
                             }
                         } else if (r.status === 'Pending' || r.status === 'Accepted') {
-                            actionHtml = `<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">Awaiting Supervisor</span>`;
+                            actionHtml = `<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">Awaiting Executive Chef</span>`;
                         } else if (r.status === 'Approved') {
                             actionHtml = `<span style="font-size: 0.75rem; color: var(--success); font-weight: 600;">✓ Approved</span>`;
                         } else {
                             actionHtml = `<span style="font-size: 0.75rem; color: var(--text-muted);">-</span>`;
                         }
-                    } else if (currentUser.role === 'supervisor') {
+                    } else if (currentUser.role === 'executive_chef') {
                         if (r.status === 'Pending') {
                             actionHtml = `
-                                <button class="btn btn-primary" style="padding: 4px 10px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #2ec4b6, #208b82); border: none; color: white; font-weight: 600; border-radius: 6px; box-shadow: 0 2px 8px rgba(46,196,182,0.3); cursor: pointer;" onclick="acceptChefRequest('${r.id}')" title="Accept this request from Chef">
+                                <button class="btn btn-primary" style="padding: 4px 10px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #2ec4b6, #208b82); border: none; color: white; font-weight: 600; border-radius: 6px; box-shadow: 0 2px 8px rgba(46,196,182,0.3); cursor: pointer;" onclick="acceptChefRequest('${r.id}')" title="Accept this request from Cuisine Head">
                                     <i data-lucide="check" style="width:12px; height:12px;"></i> Accept
                                 </button>
                                 <button class="btn btn-outline" style="padding: 3px 7px; font-size: 0.72rem; border-color: var(--danger); color: var(--danger); border-radius: 6px;" onclick="deleteRequest('${r.id}')" title="Delete item">
@@ -2331,7 +2317,7 @@ function loadRequestsData() {
                     }
 
                     // Editable quantity input for supervisor
-                    const qtyDisplay = (currentUser.role === 'supervisor' && (r.status === 'Pending' || r.status === 'Accepted'))
+                    const qtyDisplay = (currentUser.role === 'executive_chef' && (r.status === 'Pending' || r.status === 'Accepted'))
                         ? `<div style="display: flex; align-items: center; gap: 6px;">
                             <input type="number" step="0.5" min="0" value="${r.qty}" onchange="updateSectionItemQty('${r.id}', this.value)" style="width: 70px; padding: 3px 6px; font-size: 0.85rem; font-weight: 600; background: var(--dark); color: var(--text-main); border: 1px solid var(--border); border-radius: 4px; text-align: center;">
                             <span style="font-size: 0.75rem; color: var(--text-muted);">${item.unit}</span>
@@ -2345,7 +2331,7 @@ function loadRequestsData() {
                                 <div style="font-size: 0.72rem; color: var(--text-muted);">${dateStr}</div>
                             </td>
                             <td style="font-size: 0.82rem; color: var(--text-muted);">${outletName}</td>
-                            <td><strong style="color: var(--text-main); font-size: 0.85rem;">${r.chefName || r.requestedBy || 'Chef'}</strong></td>
+                            <td><strong style="color: var(--text-main); font-size: 0.85rem;">${r.chefName || r.requestedBy || 'Cuisine Head'}</strong></td>
                             <td>${qtyDisplay}</td>
                             <td>${statusBadge}</td>
                             <td style="display: flex; gap: 4px; align-items: center;">${actionHtml}</td>
@@ -2353,7 +2339,7 @@ function loadRequestsData() {
                     `;
                 }).join('');
 
-                const acceptSectionBtnHtml = (currentUser.role === 'supervisor' && pendingInSec > 0)
+                const acceptSectionBtnHtml = (currentUser.role === 'executive_chef' && pendingInSec > 0)
                     ? `<button class="btn btn-outline" style="font-size: 0.74rem; padding: 4px 10px; border-color: rgba(46,196,182,0.4); color: #2ec4b6; display: inline-flex; align-items: center; gap: 4px; border-radius: 6px; cursor: pointer;" onclick="acceptAllSection('${secName}')">
                         <i data-lucide="check-check" style="width: 13px; height: 13px;"></i> Accept Section (${pendingInSec})
                        </button>`
@@ -2385,7 +2371,7 @@ function loadRequestsData() {
                                     <tr>
                                         <th>Ingredient</th>
                                         <th>Branch</th>
-                                        <th>Requesting Chef</th>
+                                        <th>Requesting Cuisine Head</th>
                                         <th>Quantity</th>
                                         <th>Status</th>
                                         <th>Action</th>
@@ -2422,7 +2408,7 @@ function loadRequestsData() {
 
         let statusHtml = '';
         if (req.status === 'Pending') {
-            statusHtml = `<span class="status pending" style="background: rgba(255,190,11,0.15); color: var(--primary); border: 1px solid rgba(255,190,11,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Pending Supervisor</span>`;
+            statusHtml = `<span class="status pending" style="background: rgba(255,190,11,0.15); color: var(--primary); border: 1px solid rgba(255,190,11,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Pending Executive Chef</span>`;
         } else if (req.status === 'Accepted') {
             statusHtml = `<span class="status" style="background: rgba(46,196,182,0.15); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">✓ Accepted (Ready to Consolidate)</span>`;
         } else if (req.status === 'Sent to Admin' || req.status === 'Consolidated') {
@@ -2446,18 +2432,18 @@ function loadRequestsData() {
                     actionsHtml = `<span style="font-size: 0.75rem; color: #4895ef;">Awaiting Admin Approval</span>`;
                 }
             } else if (req.status === 'Pending') {
-                actionsHtml = `<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">Awaiting Supervisor</span>`;
+                actionsHtml = `<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">Awaiting Executive Chef</span>`;
             } else if (req.status === 'Accepted') {
-                actionsHtml = `<span style="font-size: 0.75rem; color: #2ec4b6; font-style: italic;">Accepted by Supervisor</span>`;
+                actionsHtml = `<span style="font-size: 0.75rem; color: #2ec4b6; font-style: italic;">Accepted by Executive Chef</span>`;
             } else if (req.status === 'Approved') {
                 actionsHtml = `<span style="font-size: 0.75rem; color: var(--success); font-weight: 600;">✓ Approved</span>`;
             } else {
                 actionsHtml = `<span style="font-size: 0.75rem; color: var(--danger); font-weight: 600;">✗ Rejected</span>`;
             }
-        } else if (currentUser.role === 'supervisor') {
+        } else if (currentUser.role === 'executive_chef') {
             if (req.status === 'Pending') {
                 actionsHtml = `
-                    <button class="btn btn-primary" style="padding: 4px 10px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 4px; background: rgba(46,196,182,0.18); border-color: rgba(46,196,182,0.4); color: #2ec4b6;" onclick="acceptChefRequest('${req.id}')" title="Accept this request from Chef">
+                    <button class="btn btn-primary" style="padding: 4px 10px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 4px; background: rgba(46,196,182,0.18); border-color: rgba(46,196,182,0.4); color: #2ec4b6;" onclick="acceptChefRequest('${req.id}')" title="Accept this request from Cuisine Head">
                         <i data-lucide="check" style="width: 12px; height: 12px;"></i> Accept
                     </button>
                     <button class="btn btn-outline" style="padding: 4px 8px; font-size: 0.72rem; border-color: var(--danger); color: var(--danger);" onclick="deleteRequest('${req.id}')" title="Delete request">Delete</button>
@@ -2481,11 +2467,11 @@ function loadRequestsData() {
                     <button class="btn btn-outline" style="padding: 4px 8px; font-size: 0.7rem; border-color: var(--danger); color: var(--danger);" onclick="deleteRequest('${req.id}')">Delete</button>
                 `;
             } else if (req.status === 'Accepted') {
-                actionsHtml = `<span style="font-size: 0.75rem; color: #2ec4b6; font-weight: 600;">Accepted by Supervisor</span>`;
+                actionsHtml = `<span style="font-size: 0.75rem; color: #2ec4b6; font-weight: 600;">Accepted by Executive Chef</span>`;
             }
         }
         
-        const chefName = req.chefName || req.requestedBy || 'Store Chef';
+        const chefName = req.chefName || req.requestedBy || 'Store Cuisine Head';
         const cuisine = req.cuisine || '-';
         
         return `
@@ -2550,7 +2536,7 @@ function openConsolidationModal() {
         grouped[r.itemId].originalQty += (parseFloat(r.qty) || 0);
         grouped[r.itemId].chefRequests.push({
             id: r.id,
-            chef: r.chefName || r.requestedBy || 'Store Chef',
+            chef: r.chefName || r.requestedBy || 'Store Cuisine Head',
             cuisine: r.cuisine || 'General',
             qty: parseFloat(r.qty) || 0
         });
@@ -2603,7 +2589,7 @@ function renderConsolidationItemsTable() {
                     <strong style="color: var(--primary);">${cr.cuisine}</strong> (${cr.chef}): <span>${cr.qty} ${entry.unit}</span>
                 </span>
             `).join('')
-            : `<span style="font-size: 0.75rem; color: var(--primary);">Supervisor Stock Requirement</span>`;
+            : `<span style="font-size: 0.75rem; color: var(--primary);">Executive Chef Stock Requirement</span>`;
             
         return `
             <tr data-item-id="${entry.itemId}">
@@ -2712,7 +2698,7 @@ async function submitConsolidatedIndent() {
             qty: cr.qty
         }));
         
-        // If supervisor added directly or if no chef requests, attribute to Supervisor
+        // If supervisor added directly or if no chef requests, attribute to Executive Chef
         if (breakdown.length === 0) {
             breakdown.push({
                 chef: currentUser.name,
@@ -2777,7 +2763,7 @@ function addSupervisorNewStockItem() {
     
     const itemId = itemSel?.value;
     const qty = parseFloat(qtyInp?.value) || 0;
-    const reason = reasonInp?.value.trim() || 'Supervisor Requirement';
+    const reason = reasonInp?.value.trim() || 'Executive Chef Requirement';
     
     if (!itemId) {
         alert("Please select an item.");
@@ -2864,7 +2850,7 @@ function loadIndentsData() {
     }
     
     let viewableIndents = indentsData;
-    if (currentUser && currentUser.role === 'supervisor') {
+    if (currentUser && currentUser.role === 'executive_chef') {
         const vis = (typeof getVisibleOutlets === 'function') ? getVisibleOutlets().map(o => o.id) : [];
         if (vis.length > 0) {
             viewableIndents = indentsData.filter(ind => vis.includes(ind.outletId));
@@ -2923,7 +2909,7 @@ function loadIndentsData() {
                 <td><strong style="color: var(--primary);">${indent.indentNumber || indent.id}</strong></td>
                 <td>${displayDate}</td>
                 <td><strong>${indent.outletName || 'Outlet'}</strong></td>
-                <td>${indent.supervisorName || 'Supervisor'}</td>
+                <td>${indent.supervisorName || 'Executive Chef'}</td>
                 <td>${(indent.items || []).length} items</td>
                 <td><strong>${totalQty}</strong></td>
                 <td>${statusHtml}</td>
@@ -3002,7 +2988,7 @@ function openIndentApprovalModal(indentId) {
             alterationHtml = `
                 <div style="background: rgba(255,190,11,0.08); border: 1px solid rgba(255,190,11,0.3); border-radius: 6px; padding: 7px 12px; margin-top: 10px; font-size: 0.82rem; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
                     <div>
-                        <span style="color: var(--primary); font-weight: 700;">⚠️ Supervisor Adjusted:</span>
+                        <span style="color: var(--primary); font-weight: 700;">⚠️ Executive Chef Adjusted:</span>
                         <span style="color: var(--text-muted); text-decoration: line-through; margin-left: 6px;">${item.originalQty} ${item.unit}</span>
                         <strong style="color: var(--text-main); margin-left: 6px;">&rarr; ${item.revisedQty} ${item.unit}</strong>
                         ${diff < 0 ? `<span style="color: var(--danger); font-weight: 700; margin-left: 6px;">(${diff.toFixed(1)} ${item.unit})</span>` : `<span style="color: var(--success); font-weight: 700; margin-left: 6px;">(+${diff.toFixed(1)} ${item.unit})</span>`}
@@ -3013,7 +2999,7 @@ function openIndentApprovalModal(indentId) {
         } else {
             alterationHtml = `
                 <div style="margin-top: 6px; display: flex; align-items: center; gap: 8px;">
-                    <span style="background: rgba(46,196,182,0.12); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.25); padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600;">✓ Exact Chef Indent (No supervisor alteration)</span>
+                    <span style="background: rgba(46,196,182,0.12); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.25); padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600;">✓ Exact Cuisine Head Indent (No supervisor alteration)</span>
                     ${hasCustomComment ? `<span style="font-size: 0.76rem; color: var(--text-muted);">Note: "${item.comment}"</span>` : ''}
                 </div>
             `;
@@ -3026,7 +3012,7 @@ function openIndentApprovalModal(indentId) {
             return `
                 <tr>
                     <td><strong style="color: var(--primary);">${b.cuisine} Section</strong></td>
-                    <td><strong style="color: var(--text-main);">${b.chef || 'Chef'}</strong></td>
+                    <td><strong style="color: var(--text-main);">${b.chef || 'Cuisine Head'}</strong></td>
                     <td style="text-align: right;"><strong>${qty}</strong> ${item.unit}</td>
                     <td style="text-align: right;"><span style="font-weight: 700; color: var(--primary); font-size: 0.92rem;">${sharePct}%</span></td>
                 </tr>
@@ -3056,6 +3042,7 @@ function openIndentApprovalModal(indentId) {
                 </div>
                 
                 ${alterationHtml}
+                <p>Requested: ${origQ} · Revised: ${revQ} · Available: ${committedState.outletStock.find(b=>b.item_id===item.itemId && b.outlet_id===indent.outletId)?.quantity || 0} · Shortage: ${Math.max(0,revQ-(committedState.outletStock.find(b=>b.item_id===item.itemId && b.outlet_id===indent.outletId)?.quantity || 0))}</p>
                 
                 <div style="margin-top: 14px;">
                     <div style="font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 6px;">
@@ -3066,7 +3053,7 @@ function openIndentApprovalModal(indentId) {
                             <thead>
                                 <tr>
                                     <th style="width: 30%;">Cuisine Section</th>
-                                    <th style="width: 30%;">Requesting Chef</th>
+                                    <th style="width: 30%;">Requesting Cuisine Head</th>
                                     <th style="width: 20%; text-align: right;">Quantity</th>
                                     <th style="width: 20%; text-align: right;">% Share</th>
                                 </tr>
@@ -3198,7 +3185,7 @@ function onLiveSyncReceived() {
         loadLocationsData();
     } else if (currentView === 'viewUsers' && typeof loadUsersData === 'function') {
         if (typeof switchUserSubdivision === 'function') {
-            switchUserSubdivision(currentUserSubdivision || 'supervisor');
+            switchUserSubdivision(currentUserSubdivision || 'executive_chef');
         } else {
             loadUsersData();
         }
@@ -3285,7 +3272,7 @@ window.acceptChefRequest = async function(reqId) {
     const req = requestsData.find(r => r.id === reqId);
     if (!req) return;
     req.status = 'Accepted';
-    req.acceptedBy = (currentUser && currentUser.name) ? currentUser.name : 'Supervisor';
+    req.acceptedBy = (currentUser && currentUser.name) ? currentUser.name : 'Executive Chef';
     req.acceptedAt = new Date().toISOString();
     
     await saveData();
@@ -3327,7 +3314,7 @@ window.acceptAllSection = async function(secName) {
     }
     
     const nowIso = new Date().toISOString();
-    const supName = (currentUser && currentUser.name) ? currentUser.name : 'Supervisor';
+    const supName = (currentUser && currentUser.name) ? currentUser.name : 'Executive Chef';
     pendingInSec.forEach(r => {
         r.status = 'Accepted';
         r.acceptedBy = supName;
@@ -3346,7 +3333,7 @@ window.sendRequestToAdmin = async function(reqId) {
     const req = requestsData.find(r => r.id === reqId);
     if (!req) return;
     
-    const chefDisplay = req.chefName || req.requestedBy || 'Chef';
+    const chefDisplay = req.chefName || req.requestedBy || 'Cuisine Head';
     const promptMsg = `Send "${req.itemName}" (${req.qty} ${req.unit || 'kg'}) from ${chefDisplay} to Admin for approval?\nConfirm or modify the requested quantity:`;
     const newQtyStr = await window.showPromptModal(promptMsg, req.qty, "Forward to Admin");
     if (newQtyStr === null || newQtyStr === false) return;
@@ -3357,7 +3344,7 @@ window.sendRequestToAdmin = async function(reqId) {
     }
     
     req.status = 'Sent to Admin';
-    req.forwardedBy = (currentUser && currentUser.name) ? currentUser.name : 'Supervisor';
+    req.forwardedBy = (currentUser && currentUser.name) ? currentUser.name : 'Executive Chef';
     req.forwardedAt = new Date().toISOString();
     
     await saveData();
@@ -3383,7 +3370,7 @@ window.updateSectionItemQty = async function(reqId, val) {
 };
 
 // ============================================================
-// CONSOLIDATE REQUESTS WORKSPACE (Dedicated Supervisor View)
+// CONSOLIDATE REQUESTS WORKSPACE (Dedicated Executive Chef View)
 // ============================================================
 let activeWorkspaceConsolidation = {
     outletId: '',
@@ -3471,7 +3458,7 @@ window.renderConsolidateWorkspaceTable = function() {
             <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
                 <i data-lucide="check-circle" style="width: 32px; height: 32px; color: var(--primary);"></i>
                 <div style="font-size: 0.95rem; font-weight: 600; color: var(--text-main);">No Requests Pending Consolidation</div>
-                <div style="font-size: 0.8rem; color: var(--text-muted);">Chef and supervisor requests raised under Requests → Raise Request appear here.</div>
+                <div style="font-size: 0.8rem; color: var(--text-muted);">Cuisine Head and supervisor requests raised under Requests → Raise Request appear here.</div>
             </div>
         </td></tr>`;
         if (summaryTextEl) summaryTextEl.textContent = 'No ingredients currently pending consolidation.';
@@ -3500,7 +3487,7 @@ window.renderConsolidateWorkspaceTable = function() {
     });
     if (sections.length === 0) sections.push('Indian', 'Tandoor');
 
-    // 1. Render Table Head (Matching user's matrix: Ingredient | Indian | Tandoor | ... | Total | Supervisor Note)
+    // 1. Render Table Head (Matching user's matrix: Ingredient | Indian | Tandoor | ... | Total | Executive Chef Note)
     thead.innerHTML = `
         <tr style="border-bottom: 2px solid rgba(255,190,11,0.25);">
             <th style="text-align: left; padding: 12px 16px; background: rgba(0,0,0,0.5); color: #fff; font-weight: 700; width: 24%;">Ingredient</th>
@@ -3510,7 +3497,7 @@ window.renderConsolidateWorkspaceTable = function() {
                 </th>
             `).join('')}
             <th style="text-align: center; padding: 12px 16px; background: rgba(255,190,11,0.18); color: #fff; font-weight: 800; border-left: 1px solid rgba(255,190,11,0.3); width: 16%;">Total</th>
-            <th style="text-align: left; padding: 12px 14px; background: rgba(0,0,0,0.4); color: var(--text-muted); font-weight: 600; width: 22%; border-left: 1px solid rgba(255,255,255,0.06);">Supervisor Note</th>
+            <th style="text-align: left; padding: 12px 14px; background: rgba(0,0,0,0.4); color: var(--text-muted); font-weight: 600; width: 22%; border-left: 1px solid rgba(255,255,255,0.06);">Executive Chef Note</th>
         </tr>
     `;
 
@@ -3591,7 +3578,7 @@ window.exportConsolidationToPdf = function() {
     const outletName = activeWorkspaceConsolidation.outletName || 'BRIGADE';
     const dateStr = InventoryTools.day();
     const timeStr = InventoryTools.timestamp(new Date());
-    const supervisor = (currentUser && currentUser.name) ? currentUser.name : 'Supervisor';
+    const supervisor = (currentUser && currentUser.name) ? currentUser.name : 'Executive Chef';
     const indentRef = 'IND-PREVIEW-' + new Date().toISOString().slice(0,10).replace(/-/g,'');
 
     // Discover sections
@@ -3666,7 +3653,7 @@ window.exportConsolidationToPdf = function() {
 
         <div style="display: flex; justify-content: space-between; background: #f4f4f4; border: 1px solid #e0e0e0; border-radius: 6px; padding: 12px 18px; margin-bottom: 20px; font-size: 13px;">
             <div><strong>Outlet:</strong> <span style="color: #d49500; font-weight: 700;">${outletName}</span></div>
-            <div><strong>Prepared By (Supervisor):</strong> ${supervisor}</div>
+            <div><strong>Prepared By (Executive Chef):</strong> ${supervisor}</div>
             <div><strong>Total Line Items:</strong> ${items.length} ingredients (${totalPrintQty.toFixed(1)} units)</div>
         </div>
 
@@ -3686,7 +3673,7 @@ window.exportConsolidationToPdf = function() {
 
         <div style="margin-top: 40px; display: flex; justify-content: space-between; padding: 0 20px; font-size: 13px;">
             <div style="border-top: 1px solid #888; width: 220px; text-align: center; padding-top: 6px;">
-                <strong>Supervisor Signature</strong>
+                <strong>Executive Chef Signature</strong>
                 <div style="font-size: 11px; color: #777;">${supervisor}</div>
             </div>
             <div style="border-top: 1px solid #888; width: 220px; text-align: center; padding-top: 6px;">
@@ -3814,7 +3801,7 @@ window.submitWorkspaceConsolidatedIndent = async function() {
     const formattedItems = items.map(entry => {
         const breakdown = (entry.chefRequests || []).map(cr => ({
             cuisine: cr.cuisine || 'Cuisine Section',
-            chef: cr.chefName || cr.requestedBy || 'Chef',
+            chef: cr.chefName || cr.requestedBy || 'Cuisine Head',
             qty: cr.revisedQty ?? (parseFloat(cr.qty) || 0)
         }));
         return {
@@ -3835,7 +3822,7 @@ window.submitWorkspaceConsolidatedIndent = async function() {
         date: today,
         outletId: activeWorkspaceConsolidation.outletId,
         outletName: activeWorkspaceConsolidation.outletName,
-        supervisorName: currentUser.name || 'Supervisor',
+        supervisorName: currentUser.name || 'Executive Chef',
         status: 'Pending Approval',
         items: formattedItems,
         createdAt: new Date().toISOString()
@@ -3845,7 +3832,7 @@ window.submitWorkspaceConsolidatedIndent = async function() {
     
     // Update underlying chef requests with revised quantities & supervisor notes
     const nowIso = new Date().toISOString();
-    const supName = currentUser.name || 'Supervisor';
+    const supName = currentUser.name || 'Executive Chef';
     
     items.forEach(entry => {
         if (entry.chefRequests && entry.chefRequests.length > 0) {
@@ -3881,7 +3868,7 @@ window.submitWorkspaceConsolidatedIndent = async function() {
                 indentId: indentId,
                 date: today,
                 timestamp: nowIso,
-                supervisorNote: entry.comment || 'Supervisor Addition'
+                supervisorNote: entry.comment || 'Executive Chef Addition'
             });
         }
     });
@@ -3944,7 +3931,7 @@ window.adminApproveAllSections = async function() {
     
     window.showUiModal({
         title: "Requests Approved",
-        message: `Successfully approved all ${targetReqs.length} section requests! Stock allocated to outlets.`,
+        message: `Successfully approved all ${targetReqs.length} section requests! Ready for distribution.`,
         type: "success"
     });
 };
@@ -4063,9 +4050,9 @@ window.removeVendor = async function(id) {
 };
 
 // ============================================================
-// USER MANAGEMENT & SUBDIVISIONS (Supervisors, Chefs, Admins)
+// USER MANAGEMENT & SUBDIVISIONS (Executive Cuisine Heads, Cuisine Heads, Admins)
 // ============================================================
-let currentUserSubdivision = 'supervisor';
+let currentUserSubdivision = 'executive_chef';
 let userEventsInitialized = false;
 
 function initUserManagementEvents() {
@@ -4080,13 +4067,13 @@ function initUserManagementEvents() {
         });
     });
 
-    // 1. Supervisor Form Listeners
+    // 1. Executive Chef Form Listeners
     const btnSaveSup = document.getElementById('btnSaveSupervisorSubmit');
     if (btnSaveSup) btnSaveSup.addEventListener('click', saveSupervisorUser);
     const btnCancelSup = document.getElementById('btnCancelEditSupervisor');
     if (btnCancelSup) btnCancelSup.addEventListener('click', resetSupervisorForm);
 
-    // 2. Admin Chef Form Listeners
+    // 2. Admin Cuisine Head Form Listeners
     const btnSaveAdminChef = document.getElementById('btnSaveAdminChefSubmit');
     if (btnSaveAdminChef) btnSaveAdminChef.addEventListener('click', saveAdminChefUser);
     const btnCancelAdminChef = document.getElementById('btnCancelEditAdminChef');
@@ -4117,8 +4104,8 @@ function switchUserSubdivision(subKey) {
     const navSubSupervisors = document.getElementById('navSubSupervisors');
     const navSubChefs = document.getElementById('navSubChefs');
     const navSubAdmins = document.getElementById('navSubAdmins');
-    if (navSubSupervisors) navSubSupervisors.classList.toggle('active', subKey === 'supervisor');
-    if (navSubChefs) navSubChefs.classList.toggle('active', subKey === 'chef');
+    if (navSubSupervisors) navSubSupervisors.classList.toggle('active', subKey === 'executive_chef');
+    if (navSubChefs) navSubChefs.classList.toggle('active', subKey === 'cuisine_head');
     if (navSubAdmins) navSubAdmins.classList.toggle('active', subKey === 'admin');
 
     // Toggle Content Sections
@@ -4127,8 +4114,8 @@ function switchUserSubdivision(subKey) {
     const secAdmin = document.getElementById('userSectionAdmin');
     const secAll = document.getElementById('userSectionAll');
 
-    if (secSup) secSup.classList.toggle('hidden', subKey !== 'supervisor');
-    if (secChef) secChef.classList.toggle('hidden', subKey !== 'chef');
+    if (secSup) secSup.classList.toggle('hidden', subKey !== 'executive_chef');
+    if (secChef) secChef.classList.toggle('hidden', subKey !== 'cuisine_head');
     if (secAdmin) secAdmin.classList.toggle('hidden', subKey !== 'admin');
     if (secAll) secAll.classList.toggle('hidden', subKey !== 'all');
 
@@ -4139,8 +4126,8 @@ function loadUsersData() {
     initUserManagementEvents();
 
     // 1. Calculate & Render Counts
-    const supervisors = usersData.filter(u => u.role === 'supervisor');
-    const chefs = usersData.filter(u => u.role === 'chef');
+    const supervisors = usersData.filter(u => u.role === 'executive_chef');
+    const chefs = usersData.filter(u => u.role === 'cuisine_head');
     const admins = usersData.filter(u => u.role === 'admin');
     const totalUsers = usersData.length;
 
@@ -4154,10 +4141,10 @@ function loadUsersData() {
     if (bAll) bAll.textContent = totalUsers;
 
     const supCountBadge = document.getElementById('supCountBadge');
-    if (supCountBadge) supCountBadge.textContent = `${supervisors.length} Supervisor${supervisors.length === 1 ? '' : 's'}`;
+    if (supCountBadge) supCountBadge.textContent = `${supervisors.length} Executive Chef${supervisors.length === 1 ? '' : 's'}`;
 
     const adminChefCountBadge = document.getElementById('adminChefCountBadge');
-    if (adminChefCountBadge) adminChefCountBadge.textContent = `${chefs.length} Chef${chefs.length === 1 ? '' : 's'}`;
+    if (adminChefCountBadge) adminChefCountBadge.textContent = `${chefs.length} Cuisine Head${chefs.length === 1 ? '' : 's'}`;
 
     const adminUserCountBadge = document.getElementById('adminUserCountBadge');
     if (adminUserCountBadge) adminUserCountBadge.textContent = `${admins.length} Admin${admins.length === 1 ? '' : 's'}`;
@@ -4219,10 +4206,10 @@ function renderSupervisorsSection(supervisors) {
                 <td><div>${locBadges || '<span style="color: var(--text-muted);">None</span>'}</div></td>
                 <td style="text-align: left; padding-left: 12px; white-space: nowrap;">
                     <div style="display: inline-flex; align-items: center; gap: 8px;">
-                        <button type="button" class="btn btn-outline" onclick="editSupervisorUser('${s.username}')" title="Edit Supervisor" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(255,190,11,0.5); color: var(--primary); background: rgba(255,190,11,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
+                        <button type="button" class="btn btn-outline" onclick="editSupervisorUser('${s.username}')" title="Edit Executive Chef" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(255,190,11,0.5); color: var(--primary); background: rgba(255,190,11,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
                             <i data-lucide="edit" style="width: 13px; height: 13px;"></i> Edit
                         </button>
-                        <button type="button" class="btn btn-outline" onclick="removeSupervisorUser('${s.username}')" title="Remove Supervisor" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(239,71,111,0.5); color: #ef476f; background: rgba(239,71,111,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
+                        <button type="button" class="btn btn-outline" onclick="removeSupervisorUser('${s.username}')" title="Remove Executive Chef" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(239,71,111,0.5); color: #ef476f; background: rgba(239,71,111,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
                             <i data-lucide="trash-2" style="width: 13px; height: 13px;"></i> Delete
                         </button>
                     </div>
@@ -4265,7 +4252,7 @@ async function saveSupervisorUser() {
             sup.username = username;
             if (password) sup.password = password;
             sup.assignedLocations = assignedLocations;
-            window.showToast(`Supervisor ${name} updated successfully!`, "success");
+            window.showToast(`Executive Chef ${name} updated successfully!`, "success");
         }
     } else {
         if (usersData.some(u => u.username.toLowerCase() === username.toLowerCase())) {
@@ -4275,14 +4262,14 @@ async function saveSupervisorUser() {
         const newSup = {
             username,
             password,
-            role: 'supervisor',
+            role: 'executive_chef',
             name,
-            title: 'Supervisor',
+            title: 'Executive Chef',
             salary: '-',
             assignedLocations
         };
         usersData.push(newSup);
-        window.showToast(`Supervisor ${name} registered successfully!`, "success");
+        window.showToast(`Executive Chef ${name} registered successfully!`, "success");
     }
 
     await saveData();
@@ -4295,7 +4282,7 @@ function resetSupervisorForm() {
     document.getElementById('supFullName').value = '';
     document.getElementById('supUsername').value = '';
     document.getElementById('supPassword').value = '';
-    document.getElementById('supFormTitle').textContent = 'Add New Supervisor';
+    document.getElementById('supFormTitle').textContent = 'Add New Executive Chef';
     document.getElementById('btnCancelEditSupervisor')?.classList.add('hidden');
     document.querySelectorAll('.sup-loc-cb').forEach(cb => cb.checked = false);
 }
@@ -4308,7 +4295,7 @@ window.editSupervisorUser = function(username) {
     document.getElementById('supFullName').value = sup.name || '';
     document.getElementById('supUsername').value = sup.username || '';
     document.getElementById('supPassword').value = '';
-    document.getElementById('supFormTitle').textContent = `Edit Supervisor: ${sup.name}`;
+    document.getElementById('supFormTitle').textContent = `Edit Executive Chef: ${sup.name}`;
     document.getElementById('btnCancelEditSupervisor')?.classList.remove('hidden');
 
     const locs = sup.assignedLocations || [];
@@ -4325,7 +4312,7 @@ window.removeSupervisorUser = async function(username) {
     const sup = usersData.find(u => u.username === username);
     if (!sup) return;
 
-    const confirmed = await window.showConfirmModal(`Are you sure you want to remove supervisor "${sup.name}" (${sup.username})?`, "Remove Supervisor", {
+    const confirmed = await window.showConfirmModal(`Are you sure you want to remove supervisor "${sup.name}" (${sup.username})?`, "Remove Executive Chef", {
         danger: true,
         confirmText: "Remove"
     });
@@ -4336,12 +4323,12 @@ window.removeSupervisorUser = async function(username) {
         usersData.splice(idx, 1);
         await saveData();
         loadUsersData();
-        window.showToast(`Supervisor ${sup.name} removed.`, "info");
+        window.showToast(`Executive Chef ${sup.name} removed.`, "info");
     }
 };
 
 // ------------------------------------------------------------
-// 2. CHEFS SUBDIVISION (Admin Manage Chefs)
+// 2. CHEFS SUBDIVISION (Admin Manage Cuisine Heads)
 // ------------------------------------------------------------
 function renderAdminChefsSection(chefs) {
     // Populate Outlet Select
@@ -4386,10 +4373,10 @@ function renderAdminChefsSection(chefs) {
                 <td><div>${cuisinesBadges}</div></td>
                 <td style="text-align: left; padding-left: 12px; white-space: nowrap;">
                     <div style="display: inline-flex; align-items: center; gap: 8px;">
-                        <button type="button" class="btn btn-outline" onclick="editAdminChefUser('${c.username}')" title="Edit Chef" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(255,190,11,0.5); color: var(--primary); background: rgba(255,190,11,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
+                        <button type="button" class="btn btn-outline" onclick="editAdminChefUser('${c.username}')" title="Edit Cuisine Head" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(255,190,11,0.5); color: var(--primary); background: rgba(255,190,11,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
                             <i data-lucide="edit" style="width: 13px; height: 13px;"></i> Edit
                         </button>
-                        <button type="button" class="btn btn-outline" onclick="removeAdminChefUser('${c.username}')" title="Remove Chef" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(239,71,111,0.5); color: #ef476f; background: rgba(239,71,111,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
+                        <button type="button" class="btn btn-outline" onclick="removeAdminChefUser('${c.username}')" title="Remove Cuisine Head" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(239,71,111,0.5); color: #ef476f; background: rgba(239,71,111,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
                             <i data-lucide="trash-2" style="width: 13px; height: 13px;"></i> Delete
                         </button>
                     </div>
@@ -4435,7 +4422,7 @@ async function saveAdminChefUser() {
             chef.assignedLocations = [outletId];
             chef.assignedSections = selectedCuisines;
             chef.assignedCuisines = selectedCuisines;
-            window.showToast(`Chef ${name} updated successfully!`, "success");
+            window.showToast(`Cuisine Head ${name} updated successfully!`, "success");
         }
     } else {
         if (usersData.some(u => u.username.toLowerCase() === username.toLowerCase())) {
@@ -4445,9 +4432,9 @@ async function saveAdminChefUser() {
         const newChef = {
             username,
             password,
-            role: 'chef',
+            role: 'cuisine_head',
             name,
-            title: 'Store Chef',
+            title: 'Store Cuisine Head',
             salary: '-',
             assignedLocations: [outletId],
             addedBySupervisor: 'Administrator',
@@ -4455,7 +4442,7 @@ async function saveAdminChefUser() {
             assignedCuisines: selectedCuisines
         };
         usersData.push(newChef);
-        window.showToast(`Chef ${name} registered successfully!`, "success");
+        window.showToast(`Cuisine Head ${name} registered successfully!`, "success");
     }
 
     await saveData();
@@ -4469,7 +4456,7 @@ function resetAdminChefForm() {
     document.getElementById('adminChefFullName').value = '';
     document.getElementById('adminChefUsername').value = '';
     document.getElementById('adminChefPassword').value = '';
-    document.getElementById('adminChefFormTitle').textContent = 'Add Kitchen Chef';
+    document.getElementById('adminChefFormTitle').textContent = 'Add Kitchen Cuisine Head';
     document.getElementById('btnCancelEditAdminChef')?.classList.add('hidden');
     document.querySelectorAll('.admin-chef-cuisine-cb').forEach(cb => cb.checked = false);
 }
@@ -4482,7 +4469,7 @@ window.editAdminChefUser = function(username) {
     document.getElementById('adminChefFullName').value = chef.name || '';
     document.getElementById('adminChefUsername').value = chef.username || '';
     document.getElementById('adminChefPassword').value = '';
-    document.getElementById('adminChefFormTitle').textContent = `Edit Chef: ${chef.name}`;
+    document.getElementById('adminChefFormTitle').textContent = `Edit Cuisine Head: ${chef.name}`;
     document.getElementById('btnCancelEditAdminChef')?.classList.remove('hidden');
 
     const outletSel = document.getElementById('adminChefOutletSelect');
@@ -4499,7 +4486,7 @@ window.removeAdminChefUser = async function(username) {
     const chef = usersData.find(u => u.username === username);
     if (!chef) return;
 
-    const confirmed = await window.showConfirmModal(`Are you sure you want to remove chef "${chef.name}" (${chef.username})?`, "Remove Chef", {
+    const confirmed = await window.showConfirmModal(`Are you sure you want to remove chef "${chef.name}" (${chef.username})?`, "Remove Cuisine Head", {
         danger: true,
         confirmText: "Remove"
     });
@@ -4511,7 +4498,7 @@ window.removeAdminChefUser = async function(username) {
         await saveData();
         loadUsersData();
         if (typeof renderChefsTable === 'function') renderChefsTable();
-        window.showToast(`Chef ${chef.name} removed.`, "info");
+        window.showToast(`Cuisine Head ${chef.name} removed.`, "info");
     }
 };
 
@@ -4650,19 +4637,19 @@ function renderAllUsersSection(allUsers) {
     tbody.innerHTML = allUsers.map(u => {
         let roleBadge = `<span class="status ok" style="text-transform: capitalize;">${u.role}</span>`;
         if (u.role === 'admin') roleBadge = `<span style="background: rgba(46,196,182,0.15); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600;">Admin</span>`;
-        if (u.role === 'supervisor') roleBadge = `<span style="background: rgba(255,190,11,0.15); color: var(--primary); border: 1px solid rgba(255,190,11,0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600;">Supervisor</span>`;
-        if (u.role === 'chef') roleBadge = `<span style="background: rgba(255,100,50,0.15); color: #ff6432; border: 1px solid rgba(255,100,50,0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600;">Chef</span>`;
+        if (u.role === 'executive_chef') roleBadge = `<span style="background: rgba(255,190,11,0.15); color: var(--primary); border: 1px solid rgba(255,190,11,0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600;">Executive Chef</span>`;
+        if (u.role === 'cuisine_head') roleBadge = `<span style="background: rgba(255,100,50,0.15); color: #ff6432; border: 1px solid rgba(255,100,50,0.3); padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600;">Cuisine Head</span>`;
 
         let details = '';
         if (u.role === 'admin') {
             details = `<span class="text-muted" style="font-size: 0.8rem;">All Outlets (Full Privileges)</span>`;
-        } else if (u.role === 'supervisor') {
+        } else if (u.role === 'executive_chef') {
             const locs = (u.assignedLocations || []).map(l => {
                 const outletObj = outletsData.find(o => o.id === l);
                 return l === 'all' ? 'All Outlets' : (outletObj ? outletObj.name : l.toUpperCase());
             }).join(', ');
             details = `<span style="color: var(--text-muted); font-size: 0.8rem;">Outlets: ${locs || 'None'}</span>`;
-        } else if (u.role === 'chef') {
+        } else if (u.role === 'cuisine_head') {
             const outletId = (u.assignedLocations && u.assignedLocations[0]) || 'brigade';
             const outletObj = outletsData.find(o => o.id === outletId);
             const outletName = outletObj ? outletObj.name : outletId.toUpperCase();
@@ -4675,8 +4662,8 @@ function renderAllUsersSection(allUsers) {
             `;
         }
 
-        const editFn = u.role === 'supervisor' ? `editSupervisorUser('${u.username}')` : (u.role === 'chef' ? `editAdminChefUser('${u.username}')` : `editAdminUser('${u.username}')`);
-        const removeFn = u.role === 'supervisor' ? `removeSupervisorUser('${u.username}')` : (u.role === 'chef' ? `removeAdminChefUser('${u.username}')` : `removeAdminUser('${u.username}')`);
+        const editFn = u.role === 'executive_chef' ? `editSupervisorUser('${u.username}')` : (u.role === 'cuisine_head' ? `editAdminChefUser('${u.username}')` : `editAdminUser('${u.username}')`);
+        const removeFn = u.role === 'executive_chef' ? `removeSupervisorUser('${u.username}')` : (u.role === 'cuisine_head' ? `removeAdminChefUser('${u.username}')` : `removeAdminUser('${u.username}')`);
 
         return `
             <tr>
@@ -4700,7 +4687,7 @@ function renderAllUsersSection(allUsers) {
 }
 
 // ============================================================
-// SUPERVISOR CHEF MANAGEMENT (Add Chef)
+// SUPERVISOR CHEF MANAGEMENT (Add Cuisine Head)
 // ============================================================
 function loadAddChefView() {
     const supervisorInput = document.getElementById('chefSupervisorDisplay');
@@ -4716,7 +4703,7 @@ function loadAddChefView() {
 
     // Check supervisors for this outlet
     const outletSupervisors = usersData.filter(u => 
-        u.role === 'supervisor' && 
+        u.role === 'executive_chef' &&
         (u.assignedLocations && (u.assignedLocations.includes(currentOutlet.id) || u.assignedLocations.includes('all')))
     );
 
@@ -4734,7 +4721,7 @@ function loadAddChefView() {
         if (supervisorSelect) supervisorSelect.classList.add('hidden');
         if (supervisorInput) {
             supervisorInput.classList.remove('hidden');
-            const defaultName = (outletSupervisors.length === 1) ? outletSupervisors[0].name : (currentUser ? currentUser.name : 'Supervisor');
+            const defaultName = (outletSupervisors.length === 1) ? outletSupervisors[0].name : (currentUser ? currentUser.name : 'Executive Chef');
             supervisorInput.value = defaultName;
         }
     }
@@ -4760,10 +4747,10 @@ function renderChefsTable() {
     if (!tbody) return;
 
     const visibleOutlets = (typeof getVisibleOutlets === 'function') ? getVisibleOutlets().map(o => o.id) : [];
-    const allChefs = usersData.filter(u => u.role === 'chef');
+    const allChefs = usersData.filter(u => u.role === 'cuisine_head');
     
     let outletChefs = allChefs;
-    if (currentUser && currentUser.role === 'supervisor') {
+    if (currentUser && currentUser.role === 'executive_chef') {
         outletChefs = allChefs.filter(c => {
             if (c.addedBySupervisor === currentUser.name) return true;
             if (c.assignedLocations && c.assignedLocations.some(loc => visibleOutlets.includes(loc) || loc === 'all')) return true;
@@ -4772,7 +4759,7 @@ function renderChefsTable() {
     }
 
     const badge = document.getElementById('chefCountBadge');
-    if (badge) badge.textContent = `${outletChefs.length} Chef${outletChefs.length === 1 ? '' : 's'}`;
+    if (badge) badge.textContent = `${outletChefs.length} Cuisine Head${outletChefs.length === 1 ? '' : 's'}`;
 
     if (outletChefs.length === 0) {
         tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 28px;">No chefs registered yet. Use the form to add your kitchen chefs.</td></tr>`;
@@ -4790,10 +4777,10 @@ function renderChefsTable() {
                 <td><div>${cuisinesBadges}</div></td>
                 <td style="text-align: left; padding-left: 12px; white-space: nowrap;">
                     <div style="display: inline-flex; align-items: center; gap: 8px;">
-                        <button type="button" class="btn btn-outline" onclick="editChefUser('${chef.username}')" title="Edit Chef" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(255,190,11,0.5); color: var(--primary); background: rgba(255,190,11,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
+                        <button type="button" class="btn btn-outline" onclick="editChefUser('${chef.username}')" title="Edit Cuisine Head" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(255,190,11,0.5); color: var(--primary); background: rgba(255,190,11,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
                             <i data-lucide="edit" style="width: 13px; height: 13px;"></i> Edit
                         </button>
-                        <button type="button" class="btn btn-outline" onclick="removeChefUser('${chef.username}')" title="Remove Chef" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(239,71,111,0.5); color: #ef476f; background: rgba(239,71,111,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
+                        <button type="button" class="btn btn-outline" onclick="removeChefUser('${chef.username}')" title="Remove Cuisine Head" style="padding: 5px 12px; font-size: 0.78rem; border-color: rgba(239,71,111,0.5); color: #ef476f; background: rgba(239,71,111,0.08); border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer;">
                             <i data-lucide="trash-2" style="width: 13px; height: 13px;"></i> Delete
                         </button>
                     </div>
@@ -4813,7 +4800,7 @@ async function saveChefUser() {
     
     const supervisorSelect = document.getElementById('chefSupervisorSelect');
     const supervisorDisplay = document.getElementById('chefSupervisorDisplay');
-    let supervisorName = currentUser ? currentUser.name : 'Supervisor';
+    let supervisorName = currentUser ? currentUser.name : 'Executive Chef';
     if (supervisorSelect && !supervisorSelect.classList.contains('hidden') && supervisorSelect.value) {
         supervisorName = supervisorSelect.value;
     } else if (supervisorDisplay && supervisorDisplay.value) {
@@ -4852,7 +4839,7 @@ async function saveChefUser() {
             existingChef.assignedSections = selectedCuisines;
             existingChef.assignedCuisines = selectedCuisines;
             existingChef.addedBySupervisor = supervisorName;
-            window.showToast(`Chef ${name} updated successfully!`, "success");
+            window.showToast(`Cuisine Head ${name} updated successfully!`, "success");
         }
     } else {
         if (usersData.some(u => u.username.toLowerCase() === username.toLowerCase())) {
@@ -4863,9 +4850,9 @@ async function saveChefUser() {
         const newChef = {
             username: username,
             password,
-            role: 'chef',
+            role: 'cuisine_head',
             name: name,
-            title: 'Store Chef',
+            title: 'Store Cuisine Head',
             salary: '-',
             assignedLocations: [outletId],
             assignedSections: selectedCuisines,
@@ -4873,7 +4860,7 @@ async function saveChefUser() {
             addedBySupervisor: supervisorName
         };
         usersData.push(newChef);
-        window.showToast(`Chef ${name} registered successfully!`, "success");
+        window.showToast(`Cuisine Head ${name} registered successfully!`, "success");
     }
 
     await saveData();
@@ -4887,7 +4874,7 @@ function resetChefForm() {
     document.getElementById('chefFullName').value = '';
     document.getElementById('chefUsername').value = '';
     document.getElementById('chefPassword').value = '';
-    document.getElementById('chefFormTitle').textContent = 'Add New Chef';
+    document.getElementById('chefFormTitle').textContent = 'Add New Cuisine Head';
     document.getElementById('btnCancelEditChef')?.classList.add('hidden');
     document.querySelectorAll('.chef-cuisine-cb').forEach(cb => cb.checked = false);
     loadAddChefView();
@@ -4901,7 +4888,7 @@ window.editChefUser = function(username) {
     document.getElementById('chefFullName').value = chef.name || '';
     document.getElementById('chefUsername').value = chef.username || '';
     document.getElementById('chefPassword').value = '';
-    document.getElementById('chefFormTitle').textContent = `Edit Chef: ${chef.name}`;
+    document.getElementById('chefFormTitle').textContent = `Edit Cuisine Head: ${chef.name}`;
     document.getElementById('btnCancelEditChef')?.classList.remove('hidden');
 
     const supSel = document.getElementById('chefSupervisorSelect');
@@ -4922,7 +4909,7 @@ window.removeChefUser = async function(username) {
     const chef = usersData.find(u => u.username === username);
     if (!chef) return;
 
-    const confirmed = await window.showConfirmModal(`Are you sure you want to remove chef "${chef.name}" (${chef.username})?`, "Remove Chef", {
+    const confirmed = await window.showConfirmModal(`Are you sure you want to remove chef "${chef.name}" (${chef.username})?`, "Remove Cuisine Head", {
         type: 'danger',
         confirmText: 'Remove'
     });
@@ -4933,7 +4920,7 @@ window.removeChefUser = async function(username) {
             await saveData();
             renderChefsTable();
             if (typeof loadUsersData === 'function') loadUsersData();
-            window.showToast(`Chef ${chef.name} removed`, 'info');
+            window.showToast(`Cuisine Head ${chef.name} removed`, 'info');
         }
     }
 };
