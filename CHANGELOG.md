@@ -4,6 +4,26 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 2.1.0 - 2026-10-20
+
+- Integrate role-aware navigation, nested Stock menus and action badges; open each
+  role's working page on login and logo clicks. Improve user assignment forms and
+  directory filters, with a four-character minimum in user creation forms.
+- Lock Cuisine Head edits after Executive Chef acceptance. Add saved consolidation
+  edits, mandatory revision notes, immediate recall before purchase approval and
+  one pending consolidated order per outlet.
+- Separate approval, vendor-order generation, outstanding purchase orders and
+  received history. Receive quantities, prices and quality rejections together,
+  with correct partial-receipt totals and mobile dialogs.
+- Distribute against approved consolidated orders, defaulting editable quantities
+  to remaining demand or available stock, and require comments for changes.
+- Treat new legacy entries as normal outlet stock labelled Legacy Stock. Add
+  item threshold toggles, clear handled action alerts and mark-all-read controls.
+- Preserve existing stock, receipt history and credentials. No new D1 migrations
+  or database reset are required beyond the v2.0.0 schema (0001–0008).
+- Validate 81 JavaScript/API tests, six database/migration tests, browser workflow
+  regressions, build and deployment packaging.
+
 ## 2.0.0 - 2026-10-20
 
 - Introduce Executive Chef review, Purchaser (Supervisor) approval and purchasing,

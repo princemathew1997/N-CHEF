@@ -1,0 +1,24 @@
+const assert=require('node:assert/strict');
+const {createRequire}=require('node:module');const {resolve}=require('node:path');
+const {chromium}=createRequire(resolve(process.env.NCHEF_PLAYWRIGHT_ROOT,'package.json'))('playwright');
+const base=process.env.NCHEF_QA_URL || 'http://127.0.0.1:8889';
+(async()=>{const browser=await chromium.launch({headless:true,channel:'msedge'});try{
+ const admin=await browser.newPage(),exec=await browser.newPage();
+ const login=async(page,user)=>{await page.goto(base);await page.locator('#username').fill(user);await page.locator('#password').fill('qa-only-password-2026');await page.locator('#loginBtn').click();await page.waitForFunction(()=>currentUser!==null);await page.locator('#page-loader').waitFor({state:'hidden'});};
+ await login(admin,'qa_admin');
+ const before=await admin.evaluate(()=>getVisibleNotifications().filter(n=>!n.read).length);
+ assert.equal(await admin.locator('#requestNoticeOverlay').isVisible(),false,'Old unread notifications must not pop up on login');
+ assert.equal(await admin.locator('[data-operations=notifications]').innerText(),before?'Notifications ('+before+')':'Notifications');
+ await admin.locator('[data-operations=notifications]').click();
+ assert.equal(await admin.locator('#operationsContent tbody tr').count(),await admin.evaluate(()=>Math.max(1,getVisibleNotifications().length)));
+ await login(exec,'qa_exec');
+ const state=await (await exec.request.get(base+'/api/state')).json();const item=state.items.find(i=>i.active!==false);const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+ const id=crypto.randomUUID(),value={id,itemId:item.id,itemName:item.name,outletId:'brigade',cuisine:'Indian',qty:1,status:'Pending',date:new Date(Date.parse(today+'T00:00:00Z')-86400000).toISOString().slice(0,10),backdateJustification:'Notification regression check'};
+ const result=await exec.request.post(base+'/api/changes',{headers:{Origin:base},data:{operationId:crypto.randomUUID(),revision:state.revision,changes:[{entity:'requests',key:id,value}]}});assert.equal(result.status(),200,await result.text());
+ await admin.bringToFront();await admin.evaluate(()=>refreshDatabase());await admin.locator('#requestNoticeOverlay').waitFor({state:'visible'});assert.match(await admin.locator('#requestNoticeOverlay').innerText(),/1 new notification/);
+ const notification=await admin.evaluate(source=>getVisibleNotifications().find(n=>n.sourceId===source),id);
+ await admin.locator('[data-action=read][data-id="'+notification.id+'"]').click();await admin.locator('#requestNoticeOverlay').waitFor({state:'hidden'});
+ await admin.reload();await admin.waitForFunction(()=>currentUser!==null);assert.equal(await admin.locator('#requestNoticeOverlay').isVisible(),false);
+ await admin.locator('[data-operations=notifications]').click();await admin.locator('[data-action=read-all]').click();await admin.waitForFunction(()=>getVisibleNotifications().every(n=>n.read));assert.equal(await admin.locator('[data-operations=notifications]').innerText(),'Notifications');assert.equal(await admin.title(),'N-CHEF');assert.equal(await admin.locator('[data-action=read-all]').isDisabled(),true);
+ console.log('Notification browser QA passed: login baseline, matching list/count, new alert only, mark-read dismissal, reload.');
+}finally{await browser.close();}})().catch(error=>{console.error(error);process.exitCode=1;});

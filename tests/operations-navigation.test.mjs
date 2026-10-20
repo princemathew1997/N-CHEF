@@ -15,10 +15,14 @@ test('stock navigation restores permissions when roles change in the same browse
     for(const id of ['userTitle','navAddChef','navGroupRequests'])element(id);
     const context={window:{},InventoryTools:{day:()=>''},currentUser:{role:'executive_chef'},document:{addEventListener(){},getElementById:id=>elements.get(id),querySelectorAll:selector=>selector==='[data-inventory]'?links:[]}};
     runInNewContext(readFileSync('js/operations-ui.js','utf8'),context);
+    for(const [role,view] of Object.entries({admin:'viewMasterOrders',executive_chef:'viewRequests',purchaser:'operations:approvals',cuisine_head:'viewChefPortal'}))assert.equal(context.window.homeViewForRole(role),view);
     context.window.configureOperationsRole();assert.equal(elements.get('receipt').classList.contains('hidden'),true);
     context.currentUser={role:'purchaser'};context.window.configureOperationsRole();
     assert.equal(elements.get('receipt').classList.contains('hidden'),false);
     assert.equal(elements.get('catalog').classList.contains('hidden'),true);
     context.currentUser={role:'admin'};context.window.configureOperationsRole();assert.equal(elements.get('catalog').classList.contains('hidden'),false);
     context.currentUser={role:'cuisine_head'};context.window.configureOperationsRole();assert.ok(links.every(a=>a.classList.contains('hidden')));
+    let redirected;context.window.switchToView=view=>redirected=view;
+    assert.equal(context.window.showOperationsView('operations:users'),true);assert.equal(redirected,'viewChefPortal');
+    context.currentUser={role:'executive_chef'};assert.equal(context.window.showOperationsView('operations:vendor-orders'),true);assert.equal(redirected,'viewRequests');
 });

@@ -84,7 +84,7 @@ npm start
 
 Open `http://localhost:8000/setup.html` for first-admin setup, then sign in at
 `http://localhost:8000`. Use the setup key from ignored `.dev.vars`. Choose a
-password with at least 12 characters. A generic Python/static server cannot
+password with at least 4 characters. A generic Python/static server cannot
 run the database API and must not serve the repository containing local secrets.
 
 Production uses Cloudflare Pages plus the private `nchef-api` Worker and

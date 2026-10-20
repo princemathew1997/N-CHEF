@@ -1,10 +1,10 @@
 // Workflow screens use explicit server actions; business records never live in localStorage.
 (() => {
     const names={admin:'Administrator',executive_chef:'Executive Chef',purchaser:'Purchaser (Supervisor)',cuisine_head:'Cuisine Head'};
-    const titles={legacy:'Bulk Legacy Stock',dashboard:'Dashboard',approvals:'Approval Queue',purchases:'Vendor Purchase Orders',deliveries:'Cuisine Deliveries',wastage:'Wastage',receipts:'Receipt Totals',accounts:'Account Requests',users:'Users',vendors:'Vendors',category:'Categories',unit:'Units',notifications:'Notifications'};
+    const titles={legacy:'Bulk Legacy Stock',approvals:'Approval Queue','vendor-orders':'Generate Vendor Orders',purchases:'Vendor Purchase Orders',deliveries:'Cuisine Deliveries',wastage:'Wastage',receipts:'Receipt Totals',accounts:'Account Requests',users:'Users',vendors:'Vendors',category:'Categories',unit:'Units',notifications:'Notifications'};
     const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const price=v=>v==null?'Cost unavailable':(v/100).toLocaleString('en-IN',{style:'currency',currency:'INR'});
-    const records=kind=>(committedState?.operationRecords || []).filter(r=>r.kind===kind);
+    const records=kind=>kind==='notification'?getVisibleNotifications():(committedState?.operationRecords || []).filter(r=>r.kind===kind);
     const purchaser=()=>['admin','purchaser'].includes(currentUser?.role);
     const opt=(rows,value=r=>r.id,label=r=>r.name)=>rows.map(r=>`<option value="${esc(value(r))}">${esc(label(r))}</option>`).join('');
     const input=(name,label,type='text',value='',extra='')=>`<label>${esc(label)}<input name="${name}" type="${type}" value="${esc(value)}" ${extra}></label>`;
@@ -14,38 +14,43 @@
     const stock=(id,outlet)=>committedState.outletStock.find(b=>b.item_id===id && b.outlet_id===outlet)?.quantity || 0;
     const outletName=id=>outletsData.find(o=>o.id===id)?.name || id;
     const link=(page,text)=>`<a class="btn btn-outline" href="#" data-operations="${page}">${esc(text || titles[page])}</a>`;
-    let panel,page='dashboard',editor=null,filterDate=InventoryTools.day(),filterVendor='',filterOutlet='',wasteFrom=InventoryTools.day(),wasteTo=InventoryTools.day();
+    let panel,page='approvals',editor=null,filterDate=InventoryTools.day(),filterVendor='',filterOutlet='',wasteFrom=InventoryTools.day(),wasteTo=InventoryTools.day();
+    let purchaseSection='open',purchaseFrom='',purchaseTo='';
     async function act(path,data){await runDatabaseAction(path,data);render();window.showToast?.('Saved successfully','success');}
-    function bindForm(form,handler){form.onsubmit=async e=>{e.preventDefault();const buttons=form.querySelectorAll('button');buttons.forEach(b=>b.disabled=true);try{await handler(Object.fromEntries(new FormData(form)),form);}catch(error){window.showUiModal({title:'Change was not saved',message:error.message,type:'warning'});}finally{buttons.forEach(b=>b.disabled=false);}};}
+    function bindForm(form,handler){configureUserAssignments(form);form.onsubmit=async e=>{e.preventDefault();const buttons=form.querySelectorAll('button');buttons.forEach(b=>b.disabled=true);try{await handler(Object.fromEntries(new FormData(form)),form);}catch(error){window.showUiModal({title:'Change was not saved',message:error.message,type:'warning'});}finally{buttons.forEach(b=>b.disabled=false);}};}
     const formHTML=body=>`<form class="inventory-form">${body}<button class="btn btn-primary">Save</button></form>`;
     function render(){
         if(!panel || !currentUser || !committedState)return;
         panel.innerHTML=`<header class="dash-header"><div><h1>${titles[page]}</h1><p>${esc(names[currentUser.role])}</p></div></header><div class="panel inventory-workspace" id="operationsContent"></div>`;
         const content=panel.querySelector('#operationsContent');
         if(page==='legacy')window.renderLegacyImport(content);
-        if(page==='dashboard'){
-            const pending=indentsData.filter(i=>i.status==='Pending Approval').length;
-            content.innerHTML=`<h2>Welcome, ${esc(currentUser.name)}</h2><p>${pending} consolidated requests awaiting approval · ${records('delivery').filter(d=>d.status==='Issue reported').length} delivery issues · ${records('notification').filter(n=>!n.read).length} unread notifications</p><div class="operations-links">${link('notifications')}${link('deliveries')}${purchaser()?link('approvals')+link('purchases')+link('receipts')+link('accounts'):''}${currentUser.role==='admin'?link('wastage'):''}${currentUser.role==='cuisine_head'?'<a class="btn btn-primary" href="#" data-view="viewChefPortal">My Requests</a>':''}${currentUser.role==='executive_chef'?'<a class="btn btn-primary" href="#" data-view="viewRequests">Review Cuisine Requests</a><a class="btn btn-outline" href="#" data-view="viewConsolidateRequests">Consolidate Requests</a>':''}</div>`;
-            if(currentUser.role!=='cuisine_head')content.innerHTML+=`<h3>Available stock</h3><a href="#" data-view="inventory:overview">View stock by outlet and item</a>`;
-        }
-        if(page==='notifications')content.innerHTML=table(['When','Message','Action'],records('notification').slice().reverse().map(n=>[esc(InventoryTools.timestamp(n.createdAt)),esc(n.message),n.read?'Read':button('read',n.id,'Mark read')]));
+        if(page==='notifications')content.innerHTML=`<div class="notification-actions"><button type="button" class="btn btn-outline" data-action="read-all" ${records('notification').some(n=>!n.read)?'':'disabled'}>Mark all as read</button></div>`+table(['When','Message','Action'],records('notification').slice().reverse().map(n=>[esc(InventoryTools.timestamp(n.createdAt)),esc(n.message),n.read?'Read':button('read',n.id,'Mark read')]));
         if(page==='category' || page==='unit'){
             content.innerHTML=formHTML(input('name','New '+page,'text','','required maxlength="200"'))+table(['Name'],records(page).map(r=>[esc(r.name)]));
             bindForm(content.querySelector('form'),data=>act('operations/'+page+'/add',data));
         }
-        if(page==='approvals'){
-            const indents=indentsData.filter(i=>i.status==='Pending Approval' || i.status.startsWith('PO Raised') || (i.status==='Approved' && !i.purchaseOrderIds?.length));
-            content.innerHTML=indents.map(i=>`<section class="operations-card"><h3>${esc(i.indentNumber)} · ${esc(outletName(i.outletId))}</h3>${table(['Item','Requested','Revised','Available','Shortage','Unassigned central stock'],i.items.map(row=>[esc(masterItemsData.find(x=>x.id===row.itemId)?.name),esc(row.originalQty),esc(row.revisedQty),esc(stock(row.itemId,i.outletId)),esc(Math.max(0,row.revisedQty-stock(row.itemId,i.outletId))),esc(committedState.legacyStock.find(b=>b.item_id===row.itemId)?.quantity || 0)]))}<p>${i.status==='Pending Approval'?button('edit-indent',i.id,'Edit quantities'):''}${i.status!=='Approved'?button('approve-indent',i.id,'Approve for distribution'):''}${['Pending Approval','Approved'].includes(i.status)?button('raise-po',i.id,'Generate vendor orders'):''}</p></section>`).join('') || '<p>No consolidated requests awaiting approval.</p>';
-            const direct=requestsData.filter(r=>!r.indentId && r.status==='Sent to Admin');
-            content.innerHTML+=table(['Cuisine request','Requested','Revised','Available','Shortage','Action'],direct.map(r=>[esc(r.itemName),esc(r.qty),esc(r.revisedQty ?? r.qty),esc(stock(r.itemId,r.outletId)),esc(Math.max(0,(r.revisedQty ?? r.qty)-stock(r.itemId,r.outletId))),button('approve-request',r.id,'Edit / approve')]));
+        if(page==='legacy'){window.expandSidebarGroup('Legacy');document.getElementById('navLegacy')?.classList.add('active');}
+        if(page==='deliveries'){window.expandSidebarGroup('Distribution');document.getElementById('navDistribution')?.classList.add('active');}
+        if(['category','unit'].includes(page)){window.expandSidebarGroup('Catalog');document.getElementById('navCatalog')?.classList.add('active');}
+        if(['approvals','vendor-orders'].includes(page)){window.expandSidebarGroup('Requests');
+            const ordering=page==='vendor-orders';
+            const indents=indentsData.filter(i=>ordering?i.status==='Approved' && !i.purchaseOrderIds?.length:i.status==='Pending Approval');
+            content.innerHTML=`<div class="approval-request-list">${indents.map(i=>`<section class="operations-card approval-request-card" data-approval-request="${esc(i.id)}" aria-label="${esc(i.indentNumber)}"><header class="approval-request-header"><div><small>Consolidated request</small><h3>${esc(i.indentNumber)}</h3><p>Outlet: <strong>${esc(outletName(i.outletId))}</strong> · ${i.items.length} item(s)${i.supervisorName?' · Executive Chef: '+esc(i.supervisorName):''}</p></div><span class="approval-request-status ${i.status==='Pending Approval'?'awaiting':'approved'}">${i.status==='Pending Approval'?'Awaiting approval':esc(i.status)}</span></header>${table(['Item','Requested','Revised','Available','Shortage'],i.items.map(row=>[esc(masterItemsData.find(x=>x.id===row.itemId)?.name),esc(row.originalQty),esc(row.revisedQty),esc(stock(row.itemId,i.outletId)),esc(Math.max(0,row.revisedQty-stock(row.itemId,i.outletId)))]))}<footer class="approval-request-actions">${i.status==='Pending Approval'?button('edit-indent',i.id,'Edit quantities')+button('approve-indent',i.id,'Approve for order'):''}${ordering?button('raise-po',i.id,'Generate vendor orders'):''}</footer></section>`).join('')}</div>`;
+            const direct=ordering?[]:requestsData.filter(r=>!r.indentId && r.status==='Sent to Admin');
+            if(direct.length)content.innerHTML+=`<section class="operations-card approval-request-card direct-request-card"><header class="approval-request-header"><div><small>Individual requests</small><h3>Cuisine requests awaiting approval</h3></div></header>${table(['Cuisine request','Requested','Revised','Available','Shortage','Action'],direct.map(r=>[esc(r.itemName),esc(r.qty),esc(r.revisedQty ?? r.qty),esc(stock(r.itemId,r.outletId)),esc(Math.max(0,(r.revisedQty ?? r.qty)-stock(r.itemId,r.outletId))),button('approve-request',r.id,'Edit / approve')]))}</section>`;
+            if(!indents.length && !direct.length)content.innerHTML=ordering?'<p>No approved requests awaiting vendor orders.</p>':'<p>No requests awaiting approval.</p>';
         }
         if(page==='purchases'){
-            content.innerHTML=purchaseOrdersData.map(po=>`<section class="operations-card"><h3>${esc(po.poNumber)} · ${esc(po.vendorName)} · ${esc(outletName(po.outletId))}</h3><p>${esc(po.status)}</p>${table(['Item','Quantity','Received'],po.items.map(i=>[esc(i.itemName),esc(i.qty),esc(i.receivedQty || 0)]))}${purchaser() && po.status!=='Received'?`<form class="inventory-form" data-po="${esc(po.id)}">${po.items.filter(i=>i.qty>(i.receivedQty || 0)).map(i=>input(i.itemId,`${i.itemName} — unit price (INR)`,'number','','required min="0" step="0.01"')).join('')}<p class="po-total">Total: ₹0.00</p><button class="btn btn-primary">Receive order</button></form>`:''}${button('pdf',po.id,'Download vendor PDF')}</section>`).join('') || '<p>No purchase orders.</p>';
-            content.querySelectorAll('[data-po]').forEach(form=>{
-                const po=purchaseOrdersData.find(p=>p.id===form.dataset.po);
-                form.oninput=()=>{form.querySelector('.po-total').textContent='Total: '+price(po.items.reduce((sum,i)=>sum+Math.round((i.qty-(i.receivedQty || 0))*Math.round(Number(form.elements.namedItem(i.itemId)?.value || 0)*100)),0));};
-                bindForm(form,data=>act('purchase-orders/receive',{poId:po.id,prices:Object.fromEntries(Object.entries(data).map(([key,value])=>[key,Number(value)]))}));
-            });
+            const filteredOrders=InventoryTools.purchaseOrderList(purchaseOrdersData,purchaseSection,purchaseFrom,purchaseTo);
+            content.innerHTML=`<div class="vendor-order-list">${filteredOrders.map(po=>`<section class="operations-card approval-request-card vendor-order-card" data-vendor-order="${esc(po.id)}" aria-label="${esc(po.poNumber)}"><header class="approval-request-header"><div><small>Vendor purchase order</small><h3>${esc(po.vendorName)}</h3><p class="vendor-order-number">PO: <strong>${esc(po.poNumber)}</strong></p><p>Outlet: <strong>${esc(outletName(po.outletId))}</strong> · ${po.items.length} item(s)</p></div><span class="approval-request-status ${po.status==='Received'?'approved':'awaiting'}">${esc(po.status)}</span></header>${table(['Item','Ordered','Accepted','Rejected','Remaining'],po.items.map(i=>{const unit=i.unit || masterItemsData.find(x=>x.id===i.itemId)?.unit || '';return [esc(i.itemName),esc(i.qty)+' '+esc(unit),esc(i.receivedQty || 0)+' '+esc(unit),esc(i.rejectedQty || 0)+' '+esc(unit),esc(Math.max(0,i.qty-(i.receivedQty || 0)))+' '+esc(unit)];}))}${purchaser() && po.status!=='Received'?`<div class="vendor-order-receiving">${button('receive-po',po.id,'Receive order')}</div>`:''}<footer class="approval-request-actions">${button('pdf',po.id,'Download vendor PDF')}</footer></section>`).join('')}</div>`;
+            if(purchaseSection==='received')content.innerHTML='<div class="received-order-list">'+table(['Received on (IST)','PO number','Vendor','Outlet','Items','Action'],filteredOrders.map(po=>[esc(InventoryTools.timestamp(po.receivedAt)),esc(po.poNumber),esc(po.vendorName),esc(outletName(po.outletId)),esc(po.items.length),button('view-received-po',po.id,'View details')+button('pdf',po.id,'Download PDF')]))+'</div>';
+            if(!filteredOrders.length)content.innerHTML='<p>No '+(purchaseSection==='received'?'received orders':'outstanding purchase orders')+' match the selected dates.</p>';
+            const controls=`<div class="purchase-order-tabs"><button type="button" class="btn ${purchaseSection==='open'?'btn-primary':'btn-outline'}" data-purchase-section="open">PO Raised (${purchaseOrdersData.filter(p=>p.status!=='Received').length})</button><button type="button" class="btn ${purchaseSection==='received'?'btn-primary':'btn-outline'}" data-purchase-section="received">Received (${purchaseOrdersData.filter(p=>p.status==='Received').length})</button></div><div class="user-table-filters"><label>From date (IST)<input id="purchaseFrom" type="date" value="${esc(purchaseFrom)}"></label><label>To date (IST)<input id="purchaseTo" type="date" value="${esc(purchaseTo)}"></label><button type="button" class="btn btn-outline" id="purchaseClearDates">Clear dates</button><span>${purchaseSection==='received'?'Filter by received date':'Filter by order date'} · ${filteredOrders.length} order(s)</span></div>`;
+            content.insertAdjacentHTML('afterbegin',controls);
+            content.querySelectorAll('[data-purchase-section]').forEach(b=>b.onclick=()=>{purchaseSection=b.dataset.purchaseSection;render();});
+            const changeDates=()=>{const from=content.querySelector('#purchaseFrom'),to=content.querySelector('#purchaseTo');to.setCustomValidity(from.value && to.value && from.value>to.value?'To date must be on or after From date.':'');if(!to.reportValidity())return;purchaseFrom=from.value;purchaseTo=to.value;render();};
+            content.querySelector('#purchaseFrom').onchange=changeDates;content.querySelector('#purchaseTo').onchange=changeDates;
+            content.querySelector('#purchaseClearDates').onclick=()=>{purchaseFrom='';purchaseTo='';render();};
         }
         if(page==='receipts'){
             if(!filterOutlet || !outletsData.some(o=>o.id===filterOutlet))filterOutlet=outletsData[0]?.id || '';
@@ -59,7 +64,7 @@
             const form=content.querySelector('form');const difference=()=>{content.querySelector('#invoiceDifference').textContent=form.elements.vendorTotal.value===''?'Enter vendor total to compare.':'Vendor total − stock total: '+price(Math.round(Number(form.elements.vendorTotal.value)*100)-total);};form.oninput=difference;difference();
             bindForm(form,data=>act('operations/receipts/reconcile',{outletId:filterOutlet,vendor:filterVendor,date:filterDate,vendorTotal:Number(data.vendorTotal)}));
         }
-        if(page==='deliveries')content.innerHTML=table(['When','Outlet / cuisine','Item','Issued / received','Status / reason','Action'],records('delivery').slice().reverse().map(d=>[esc(InventoryTools.timestamp(d.createdAt)),esc(outletName(d.outletId)+' / '+d.cuisine),esc(d.itemName),esc(d.quantity+' / '+(d.receivedQuantity ?? 'Awaiting')),esc(d.status+(d.reason?' — '+d.reason:'')+(d.resolution?' — '+d.resolution:'')+(d.message?' — '+d.message:'')),currentUser.role==='cuisine_head' && d.status==='Issued'?button('confirm-delivery',d.id,'Confirm / report issue'):purchaser() && d.status==='Issue reported'?button('resolve-delivery',d.id,'Resolve issue'):'']));
+        if(page==='deliveries')content.innerHTML=table(['When','Outlet / cuisine','Item','Issued / received','Issue comment','Status / reason','Action'],records('delivery').slice().reverse().map(d=>[esc(InventoryTools.timestamp(d.createdAt)),esc(outletName(d.outletId)+' / '+d.cuisine),esc(d.itemName),esc(d.quantity+' / '+(d.receivedQuantity ?? 'Awaiting')),esc(d.issueComment || ''),esc(d.status+(d.reason?' — '+d.reason:'')+(d.resolution?' — '+d.resolution:'')+(d.message?' — '+d.message:'')),currentUser.role==='cuisine_head' && d.status==='Issued'?button('confirm-delivery',d.id,'Confirm / report issue'):purchaser() && d.status==='Issue reported'?button('resolve-delivery',d.id,'Resolve issue'):'']));
         if(page==='wastage'){
             content.innerHTML=`<div class="inventory-form" id="wasteFilters">${select('period','Period','<option value="daily">Daily</option><option value="weekly">Last 7 days</option><option value="custom">Custom</option>')}${input('from','From (IST)','date',wasteFrom)}${input('to','To (IST)','date',wasteTo)}<button class="btn btn-outline" id="applyWaste">Apply</button></div><div id="wasteRows"></div>`;
             const filters=content.querySelector('#wasteFilters');filters.querySelector('[name=period]').onchange=e=>{if(e.target.value!=='custom'){wasteTo=InventoryTools.day();wasteFrom=e.target.value==='daily'?wasteTo:InventoryTools.day(Date.now()-6*86400000);filters.querySelector('[name=from]').value=wasteFrom;filters.querySelector('[name=to]').value=wasteTo;}};
@@ -77,20 +82,68 @@
         }
         if(page==='users'){
             const user=usersData.find(u=>u.id===editor);
-            content.innerHTML=userForm(user)+table(['Name','Username','Role','Outlets','Action'],usersData.map(u=>[esc(u.name),esc(u.username),esc(names[u.role]),esc(u.assignedLocations.map(outletName).join(', ')),button('edit-user',u.id,'Edit')+(u.id!==currentUser.id?button('deactivate-user',u.id,'Deactivate'):'')]));
-            bindForm(content.querySelector('form'),async(data,form)=>{if(user && JSON.stringify(user)!==JSON.stringify(usersData.find(u=>u.id===user.id)))throw new Error('User changed. Reopen the account before saving.');const value=readUser(data,form,user);await act('changes',{changes:[{entity:'users',key:value.id,value}]});editor=null;render();});
+            const admin=currentUser.role==='admin';
+            content.innerHTML=(admin?userForm(user):'<p>Users available within your role and assigned outlets.</p>')+
+                `<div class="user-table-filters"><label>Outlet<select id="userOutletFilter"><option value="">All outlets</option>${opt(outletsData)}</select></label><label>Role<select id="userRoleFilter"><option value="">All roles</option>${opt(Object.keys(names).filter(role=>admin || usersData.some(u=>u.role===role)),r=>r,r=>names[r])}</select></label><button type="button" class="btn btn-outline" id="userFilterReset">Clear filters</button><span id="userFilterCount" aria-live="polite"></span></div><div id="userTableRows"></div>`;
+            const renderUsers=()=>{
+                const outlet=content.querySelector('#userOutletFilter').value,role=content.querySelector('#userRoleFilter').value;
+                const users=usersData.filter(u=>(!role || u.role===role) && (!outlet || u.role==='admin' || (u.assignedLocations || []).some(id=>id==='all' || id===outlet)));
+                content.querySelector('#userTableRows').innerHTML=table(['Name','Username','Role','Outlets','Action'],users.map(u=>[esc(u.name),esc(u.username),esc(names[u.role]),u.role==='admin'?'All outlets':esc((u.assignedLocations || []).map(outletName).join(', ')),admin?button('edit-user',u.id,'Edit')+(u.id!==currentUser.id?button('deactivate-user',u.id,'Deactivate'):''):'—']));
+                content.querySelector('#userFilterCount').textContent=users.length+' of '+usersData.length+' users';
+            };
+            content.querySelector('#userOutletFilter').onchange=renderUsers;
+            content.querySelector('#userRoleFilter').onchange=renderUsers;
+            content.querySelector('#userFilterReset').onclick=()=>{content.querySelector('#userOutletFilter').value='';content.querySelector('#userRoleFilter').value='';renderUsers();};
+            renderUsers();
+            if(admin)bindForm(content.querySelector('form'),async(data,form)=>{if(user && JSON.stringify(user)!==JSON.stringify(usersData.find(u=>u.id===user.id)))throw new Error('User changed. Reopen the account before saving.');const value=readUser(data,form,user);await act('changes',{changes:[{entity:'users',key:value.id,value}]});editor=null;render();});
         }
     }
-    function userForm(user={},requestedRole){
-        return formHTML(input('name','Full name','text',user.name || '','required maxlength="200"')+input('username','Username','text',user.username || '','required minlength="3" maxlength="64"')+input('password',user.id?'New password (optional)':'Password','password','',`${user.id?'':'required'} minlength="12" maxlength="128" autocomplete="new-password"`)+select('role','Role',opt(requestedRole?[requestedRole]:Object.keys(names),r=>r,r=>names[r]))+`<fieldset><legend>Assigned outlets (Admin has all outlets)</legend>${outletsData.map(o=>`<label><input type="checkbox" name="outlet_${esc(o.id)}" value="${esc(o.id)}" ${(user.assignedLocations || []).includes(o.id)?'checked':''}>${esc(o.name)}</label>`).join('')}</fieldset><fieldset><legend>Assigned cuisines (required for Cuisine Head)</legend>${cuisinesData.map(c=>`<label><input type="checkbox" name="cuisine_${esc(c.id)}" value="${esc(c.name)}" ${(user.assignedSections || user.assignedCuisines || []).includes(c.name)?'checked':''}>${esc(c.name)}</label>`).join('')}</fieldset>`);
+    function configureUserAssignments(form){
+        const role=form.querySelector('select[name=role]');
+        if(!role || !form.querySelector('[data-user-assignment]'))return;
+        const update=()=>form.querySelectorAll('[data-user-assignment]').forEach(section=>{
+            const visible=section.dataset.userAssignment==='outlets'?role.value!=='admin':role.value==='cuisine_head';
+            section.hidden=!visible;
+            section.style.display=visible?'':'none';
+            section.disabled=!visible;
+        });
+        role.addEventListener('change',update);update();
     }
-    function readUser(data,form,user){const value={...user,id:user?.id || crypto.randomUUID(),name:data.name,username:data.username,role:data.role,title:names[data.role],assignedLocations:data.role==='admin'?['all']:Array.from(form.querySelectorAll('[name^=outlet_]:checked'),e=>e.value),assignedSections:Array.from(form.querySelectorAll('[name^=cuisine_]:checked'),e=>e.value)};value.assignedCuisines=value.assignedSections;if(data.password)value.password=data.password;return value;}
+    function userForm(user={},requestedRole){
+        return formHTML(input('name','Full name','text',user.name || '','required maxlength="200"')+input('username','Username','text',user.username || '','required minlength="3" maxlength="64"')+input('password',user.id?'New password (optional)':'Password','password','',`${user.id?'':'required'} minlength="4" maxlength="128" autocomplete="new-password"`)+select('role','Role',opt(requestedRole?[requestedRole]:Object.keys(names),r=>r,r=>names[r]).replace('value="'+esc(requestedRole || user.role || 'admin')+'"','value="'+esc(requestedRole || user.role || 'admin')+'" selected'))+`<fieldset class="assignment-options" data-user-assignment="outlets"><legend>Assigned outlets</legend>${outletsData.map(o=>`<label class="assignment-option"><input type="checkbox" name="outlet_${esc(o.id)}" value="${esc(o.id)}" ${(user.assignedLocations || []).includes(o.id)?'checked':''}><span>${esc(o.name)}</span></label>`).join('')}</fieldset><fieldset class="assignment-options" data-user-assignment="cuisines"><legend>Assigned cuisines</legend>${cuisinesData.map(c=>`<label class="assignment-option"><input type="checkbox" name="cuisine_${esc(c.id)}" value="${esc(c.name)}" ${(user.assignedSections || user.assignedCuisines || []).includes(c.name)?'checked':''}><span>${esc(c.name)}</span></label>`).join('')}</fieldset>`);
+    }
+    function readUser(data,form,user){const value={...user,id:user?.id || crypto.randomUUID(),name:data.name,username:data.username,role:data.role,title:names[data.role],assignedLocations:data.role==='admin'?['all']:Array.from(form.querySelectorAll('[name^=outlet_]:checked'),e=>e.value),assignedSections:data.role==='cuisine_head'?Array.from(form.querySelectorAll('[name^=cuisine_]:checked'),e=>e.value):[]};value.assignedCuisines=value.assignedSections;if(data.password)value.password=data.password;return value;}
     function editorForm(title,html,handler){
         const dialog=document.createElement('dialog');dialog.className='operations-dialog';dialog.innerHTML=`<h2>${esc(title)}</h2>${html}<button class="btn btn-outline" type="button" data-close>Cancel</button>`;document.body.append(dialog);dialog.querySelector('[data-close]').onclick=()=>dialog.close();dialog.onclose=()=>dialog.remove();dialog.showModal();bindForm(dialog.querySelector('form'),async(data,form)=>{await handler(data,form);dialog.close();});return dialog;
     }
     async function handle(action,id){
+        if(action==='read-all'){
+            const unread=records('notification').filter(n=>!n.read).map(n=>n.id);
+            for(const id of unread)await runDatabaseAction('operations/notifications/read',{id});
+            render();window.showToast?.('All notifications marked as read','success');return;
+        }
         if(action==='read')return act('operations/notifications/read',{id});
         if(action==='approve-indent')return act('indents/approve',{indentId:id});
+        if(action==='view-received-po'){
+            const po=purchaseOrdersData.find(p=>p.id===id);if(!po)return;
+            const dialog=document.createElement('dialog');dialog.className='operations-dialog';dialog.innerHTML=`<h2>${esc(po.poNumber)} · ${esc(po.vendorName)}</h2><p>Outlet: ${esc(outletName(po.outletId))} · Received: ${esc(InventoryTools.timestamp(po.receivedAt))}</p>${table(['Item','Unit','Ordered','Received','Rejected'],po.items.map(i=>[esc(i.itemName),esc(i.unit || masterItemsData.find(x=>x.id===i.itemId)?.unit),esc(i.qty),esc(i.receivedQty || 0),esc(i.rejectedQty || 0)]))}<button type="button" class="btn btn-outline" data-close>Close</button>`;document.body.append(dialog);dialog.querySelector('[data-close]').onclick=()=>dialog.close();dialog.onclose=()=>dialog.remove();dialog.showModal();return;
+        }
+        if(action==='receive-po'){
+            const po=purchaseOrdersData.find(p=>p.id===id);
+            const rows=po.items.filter(i=>i.qty>(i.receivedQty || 0));
+            const html=formHTML(`<p>Received means accepted into stock. Enter rejected goods separately; they are not charged and remain outstanding for replacement.</p><div class="vendor-receipt-table">${table(['Item / unit','Outstanding','Received','Rejected','Unit cost (INR)','Received total','Rejection reason / note'],rows.map((line,index)=>{
+                const remaining=line.qty-(line.receivedQty || 0),unit=line.unit || masterItemsData.find(i=>i.id===line.itemId)?.unit || '';
+                return [esc(line.itemName)+' ('+esc(unit)+')',esc(remaining),`<input aria-label="Received ${esc(line.itemName)}" name="received_${index}" type="number" min="0" max="${remaining}" step="any" value="${remaining}" required>`,`<input aria-label="Rejected ${esc(line.itemName)}" name="rejected_${index}" type="number" min="0" max="${remaining}" step="any" value="0" required>`,`<input aria-label="Unit cost ${esc(line.itemName)}" name="cost_${index}" type="number" min="0" step=".01">`,`<output data-line-total="${index}"></output>`,`<select aria-label="Rejection reason ${esc(line.itemName)}" name="reason_${index}"><option value="">Choose reason</option>${opt(['Quality issues','Damaged goods','Wrong item','Other'],r=>r,r=>r)}</select><input aria-label="Rejection note ${esc(line.itemName)}" name="message_${index}" maxlength="500" placeholder="Note (required for Other)">`];
+            }))}</div><p id="vendorReceiveTotal">Received stock total: ₹0.00</p>`);
+            const dialog=editorForm('Receive '+po.poNumber+' · '+po.vendorName,html,(data,form)=>act('purchase-orders/receive',{poId:id,lines:rows.map((line,index)=>({itemId:line.itemId,receivedQuantity:Number(data['received_'+index]),rejectedQuantity:Number(data['rejected_'+index]),unitPrice:data['cost_'+index]===''?undefined:Number(data['cost_'+index]),reason:data['reason_'+index],message:data['message_'+index]}))}));
+            dialog.classList.add('vendor-receipt-dialog');
+            const form=dialog.querySelector('form');form.querySelector('button[type=submit],button.btn-primary').textContent='Save received stock';
+            const update=()=>{let total=0;rows.forEach((line,index)=>{
+                const received=form.elements['received_'+index],rejected=form.elements['rejected_'+index],cost=form.elements['cost_'+index],reason=form.elements['reason_'+index],message=form.elements['message_'+index];
+                const remaining=line.qty-(line.receivedQty || 0);received.max=Math.max(0,remaining-Number(rejected.value || 0));rejected.max=Math.max(0,remaining-Number(received.value || 0));cost.required=Number(received.value)>0;reason.required=Number(rejected.value)>0;message.required=Number(rejected.value)>0 && reason.value==='Other';
+                const amount=Math.round(Math.max(0,Number(received.value))*Math.round(Number(cost.value || 0)*100));total+=amount;form.querySelector('[data-line-total="'+index+'"]').textContent=price(amount);
+            });form.querySelector('#vendorReceiveTotal').textContent='Received stock total: '+price(total);};form.oninput=update;form.onchange=update;update();return dialog;
+        }
         if(action==='raise-po'){activeReviewingIndentId=id;return window.VendorOrderUI.open();}
         if(action==='pdf')return window.VendorOrderUI.download(id);
         if(action==='edit-vendor' || action==='edit-user'){editor=id;render();if(action==='edit-user')panel.querySelector('[name=role]').value=usersData.find(u=>u.id===id).role;return;}
@@ -127,36 +180,62 @@
         document.getElementById('userTitle').textContent=names[currentUser.role];
         document.querySelectorAll('[data-operations-nav]').forEach(a=>{const p=a.dataset.operations;a.classList.toggle('hidden',!allowed(p));});
         document.getElementById('navAddChef')?.classList.add('hidden');
-        if(currentUser.role==='purchaser'){document.getElementById('navGroupRequests')?.classList.add('hidden');}
+        document.getElementById('navUsers')?.classList.toggle('hidden',currentUser.role==='cuisine_head');
+        document.getElementById('navGroupLegacy')?.classList.toggle('hidden',!purchaser());
+        document.getElementById('navManageRequests')?.classList.toggle('hidden',currentUser.role==='purchaser');
         document.querySelectorAll('[data-inventory]').forEach(a=>{
             const p=a.dataset.inventory;
-            const visible=currentUser.role==='admin' || (currentUser.role==='purchaser' && !['catalog','assign','cuisines'].includes(p)) || (currentUser.role==='executive_chef' && ['overview','history'].includes(p));
+            const visible=currentUser.role==='admin' || (currentUser.role==='purchaser' && !['catalog','cuisines'].includes(p)) || (currentUser.role==='executive_chef' && ['overview','history'].includes(p));
             a.classList.toggle('hidden',!visible);
         });
     };
-    function allowed(p){if(['users','vendors','category','unit','wastage'].includes(p))return currentUser?.role==='admin';if(['legacy','approvals','purchases','receipts','accounts'].includes(p))return purchaser();return true;}
+    function allowed(p){if(p==='users')return ['admin','purchaser','executive_chef'].includes(currentUser?.role);if(['vendors','category','unit','wastage'].includes(p))return currentUser?.role==='admin';if(['legacy','approvals','vendor-orders','purchases','receipts','accounts'].includes(p))return purchaser();return true;}
+    window.homeViewForRole=role=>({admin:'viewMasterOrders',executive_chef:'viewRequests',purchaser:'operations:approvals',cuisine_head:'viewChefPortal'}[role] || 'viewMasterOrders');
+    window.goHome=()=>window.switchToView(window.homeViewForRole(currentUser?.role));
     window.showOperationsView=view=>{
+        if(view==='operations:dashboard'){window.goHome();return true;}
+        if(view==='viewRequests' && currentUser?.role==='purchaser')view='operations:approvals';
+
         const aliases={viewUsers:'users',viewVendors:'vendors',viewIndents:'purchases',viewAddChef:'accounts'};
         if(aliases[view])view='operations:'+aliases[view];
         if(!view.startsWith('operations:'))return false;
-        page=view.slice(11);if(!titles[page] || !allowed(page))page='dashboard';editor=null;panel?.classList.remove('hidden');
+        page=view.slice(11);if(!titles[page] || !allowed(page)){window.goHome();return true;}editor=null;currentView='operations:'+page;localStorage.setItem('nchef_active_view',currentView);panel?.classList.remove('hidden');
         document.getElementById('mobileActivePage').textContent=titles[page];
-        if(page==='legacy'){
+        document.querySelectorAll('[data-operations-nav]').forEach(a=>a.classList.toggle('active',a.dataset.operations===page));
+        if(page==='wastage'){
+            window.expandSidebarGroup('Stock');
             document.getElementById('navStockSubmenu')?.classList.add('open');
             document.getElementById('navStock')?.classList.add('active');
             const chevron=document.getElementById('navStockChevron');if(chevron)chevron.style.transform='rotate(180deg)';
         }
+        if(page==='legacy'){window.expandSidebarGroup('Legacy');document.getElementById('navLegacy')?.classList.add('active');}
+        if(page==='deliveries'){window.expandSidebarGroup('Distribution');document.getElementById('navDistribution')?.classList.add('active');}
+        if(['category','unit'].includes(page)){window.expandSidebarGroup('Catalog');document.getElementById('navCatalog')?.classList.add('active');}
+        if(['approvals','vendor-orders'].includes(page)){window.expandSidebarGroup('Requests');document.getElementById('navRequestsSubmenu')?.classList.add('open');document.getElementById('navRequests')?.classList.add('active');}
+        if(page==='users')document.getElementById('navUsers')?.classList.add('active');
+        if(page==='purchases')document.getElementById('navIndents')?.classList.add('active');
         render();return true;
     };
     document.addEventListener('DOMContentLoaded',()=>{
+        document.getElementById('navLegacy')?.addEventListener('click',e=>{
+            e.preventDefault();
+            if(document.getElementById('navLegacySubmenu').classList.contains('open')){
+                document.getElementById('navLegacySubmenu').classList.remove('open');
+                document.getElementById('navLegacy').setAttribute('aria-expanded','false');
+                document.getElementById('navLegacyChevron').style.transform='rotate(0deg)';
+            }else window.expandSidebarGroup('Legacy');
+        });
+        document.getElementById('navDistribution')?.addEventListener('click',e=>{
+            e.preventDefault();
+            if(document.getElementById('navDistributionSubmenu').classList.contains('open')){document.getElementById('navDistributionSubmenu').classList.remove('open');document.getElementById('navDistribution').setAttribute('aria-expanded','false');document.getElementById('navDistributionChevron').style.transform='rotate(0deg)';}
+            else window.expandSidebarGroup('Distribution');
+        });
         panel=document.createElement('div');panel.id='viewOperations';panel.className='hidden';document.getElementById('viewMasterOrders').parentElement.append(panel);
-        const nav=document.querySelector('.nav-menu');
-        for(const p of ['dashboard','approvals','purchases','deliveries','receipts','accounts','wastage','notifications']){const a=document.createElement('a');a.href='#';a.className='nav-item';a.dataset.operations=p;a.dataset.operationsNav='true';a.textContent=titles[p];nav.append(a);}
-        document.querySelectorAll('.sidebar-logo .logo-mark,.mobile-logo').forEach(logo=>{logo.setAttribute('role','button');logo.tabIndex=0;logo.onclick=e=>{if(!e.target.closest('button'))window.switchToView('operations:dashboard');};logo.onkeydown=e=>{if(e.target===logo && ['Enter',' '].includes(e.key)){e.preventDefault();logo.click();}};});
+        document.querySelectorAll('.sidebar-logo .logo-mark,.mobile-logo').forEach(logo=>{logo.setAttribute('role','button');logo.tabIndex=0;logo.onclick=e=>{if(!e.target.closest('button'))window.goHome();};logo.onkeydown=e=>{if(e.target===logo && ['Enter',' '].includes(e.key)){e.preventDefault();logo.click();}};});
         document.addEventListener('click',async e=>{
             const link=e.target.closest('[data-operations],[data-view]');if(link){e.preventDefault();window.switchToView(link.dataset.operations?'operations:'+link.dataset.operations:link.dataset.view);return;}
             const b=e.target.closest('#viewOperations [data-action]');if(!b)return;e.preventDefault();b.disabled=true;try{await handle(b.dataset.action,b.dataset.id);}catch(error){window.showUiModal({title:'Action unavailable',message:error.message,type:'warning'});}finally{b.disabled=false;}
         });
-        const old=window.onLiveSyncReceived;window.onLiveSyncReceived=()=>{old?.();const alerts=document.querySelector('[data-operations-nav][data-operations=notifications]');if(alerts)alerts.textContent='Notifications ('+records('notification').filter(n=>!n.read).length+')';if(currentView.startsWith('operations:') && !panel.querySelector('form') && !document.querySelector('.operations-dialog'))render();};
+        const old=window.onLiveSyncReceived;window.onLiveSyncReceived=()=>{old?.();if(typeof updateRequestsBadge==='function')updateRequestsBadge();if(currentView.startsWith('operations:') && !panel.querySelector('form') && !document.querySelector('.operations-dialog'))render();};
     });
 })();

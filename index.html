@@ -95,16 +95,32 @@
                     <i data-lucide="layout-dashboard"></i> Master Orders
                 </a>
                 <a href="#" class="nav-item no-chef" id="navIndents"><i data-lucide="truck"></i>Purchase Orders</a>
-                <div class="nav-group no-chef" id="navGroupStock">
+                <div class="nav-group" id="navGroupStock">
                     <a href="#" class="nav-item" id="navStock"><i data-lucide="boxes"></i><span>Stock</span><i data-lucide="chevron-down" id="navStockChevron" style="width:14px;height:14px;margin-left:auto"></i></a>
-                    <div class="nav-submenu open" id="navStockSubmenu">
-                        <a href="#" class="nav-subitem" data-inventory="overview">Stock Overview</a>
-                        <a href="#" class="nav-subitem" data-inventory="receipt">Receive Stock</a>
+                    <div class="nav-submenu" id="navStockSubmenu">
+                        <div class="nav-group" id="navGroupOverview">
+                            <a href="#" class="nav-subitem" id="navOverview" data-inventory="overview" aria-expanded="false" aria-controls="navOverviewSubmenu">Stock Overview<i data-lucide="chevron-down" id="navOverviewChevron" style="width:14px;height:14px;margin-left:auto"></i></a>
+                            <div class="nav-submenu" id="navOverviewSubmenu">
+                                <a href="#" class="nav-subitem" data-inventory="receipt">Receive Stock</a>
+                                <a href="#" class="nav-subitem" data-inventory="adjust">Stock Adjustments</a>
+                                <a href="#" class="nav-subitem" data-inventory="history">Stock History</a>
+                            </div>
+                        </div>
+                <div class="nav-group" id="navGroupDistribution">
+                    <a href="#" class="nav-subitem" id="navDistribution" aria-expanded="false" aria-controls="navDistributionSubmenu"><i data-lucide="package-check"></i><span>Cuisine Distribution</span><i data-lucide="chevron-down" id="navDistributionChevron" style="width:14px;height:14px;margin-left:auto"></i></a>
+                    <div class="nav-submenu" id="navDistributionSubmenu">
                         <a href="#" class="nav-subitem" data-inventory="distribute">Distribute to Cuisine</a>
-                        <a href="#" class="nav-subitem" data-inventory="adjust">Stock Adjustments</a>
-                        <a href="#" class="nav-subitem" data-inventory="history">Stock History</a>
-                        <a href="#" class="nav-subitem admin-only" data-inventory="assign">Assign Legacy Stock</a>
-                        <a href="#" class="nav-subitem" data-operations="legacy" data-operations-nav="true">Bulk Legacy Stock</a>
+                        <a href="#" class="nav-subitem" data-operations="deliveries" data-operations-nav="true">Cuisine Deliveries</a>
+                    </div>
+                </div>
+                        <div class="nav-group" id="navGroupLegacy">
+                            <a href="#" class="nav-subitem" id="navLegacy" aria-expanded="false" aria-controls="navLegacySubmenu">Legacy Stock<i data-lucide="chevron-down" id="navLegacyChevron" style="width:14px;height:14px;margin-left:auto"></i></a>
+                            <div class="nav-submenu" id="navLegacySubmenu">
+                                <a href="#" class="nav-subitem" data-inventory="assign">Add Legacy Stock</a>
+                                <a href="#" class="nav-subitem" data-operations="legacy" data-operations-nav="true">Bulk Legacy Stock</a>
+                            </div>
+                        </div>
+                        <a href="#" class="nav-subitem admin-only" data-operations="wastage" data-operations-nav="true">Wastage</a>
                     </div>
                 </div>
                 <div class="nav-group no-chef" id="navGroupRequests">
@@ -115,6 +131,8 @@
                         <i data-lucide="chevron-down" id="navRequestsChevron" style="width: 14px; height: 14px; margin-left: 6px; transition: transform 0.25s ease;"></i>
                     </a>
                     <div class="nav-submenu" id="navRequestsSubmenu">
+                        <a href="#" class="nav-subitem" data-operations="approvals" data-operations-nav="true">Approvals</a>
+                        <a href="#" class="nav-subitem" data-operations="vendor-orders" data-operations-nav="true">Generate Vendor Orders</a>
                         <a href="#" class="nav-subitem supervisor-only" id="navSidebarRaiseRequest"><i data-lucide="plus-circle" style="width:14px;height:14px"></i>Raise Request</a>
                         <a href="#" class="nav-subitem" id="navManageRequests">
                             <i data-lucide="list-checks" style="width: 14px; height: 14px;"></i> Manage Request
@@ -131,7 +149,7 @@
                     <i data-lucide="chef-hat"></i> Add Cuisine Head
                 </a>
                 <div class="nav-section-label admin-only">Administration</div>
-                <div class="nav-group admin-only"><a href="#" class="nav-item" data-inventory="catalog"><i data-lucide="database"></i>Item Catalog</a><div class="nav-submenu open"><a href="#" class="nav-subitem" data-operations="category" data-operations-nav="true">Categories</a><a href="#" class="nav-subitem" data-operations="unit" data-operations-nav="true">Units</a></div></div>
+                <div class="nav-group admin-only"><a href="#" class="nav-item" id="navCatalog" data-inventory="catalog" aria-expanded="false" aria-controls="navCatalogSubmenu"><i data-lucide="database"></i>Item Catalog<i data-lucide="chevron-down" id="navCatalogChevron" style="width:14px;height:14px;margin-left:auto"></i></a><div class="nav-submenu" id="navCatalogSubmenu"><a href="#" class="nav-subitem" data-operations="category" data-operations-nav="true">Categories</a><a href="#" class="nav-subitem" data-operations="unit" data-operations-nav="true">Units</a></div></div>
                 <a href="#" class="nav-item admin-only" data-inventory="cuisines"><i data-lucide="utensils"></i>Cuisine Sections</a>
                 <a href="#" class="nav-item admin-only" id="navVendors">
                     <i data-lucide="truck"></i> Vendors
@@ -139,24 +157,10 @@
                 <a href="#" class="nav-item admin-only" id="navLocations">
                     <i data-lucide="map-pin"></i> Locations
                 </a>
-                <div class="nav-group admin-only" id="navGroupUsers">
-                    <a href="#" class="nav-item" id="navUsers">
-                        <i data-lucide="users"></i>
-                        <span>Users</span>
-                        <i data-lucide="chevron-down" id="navUsersChevron" style="width: 14px; height: 14px; margin-left: auto; transition: transform 0.25s ease;"></i>
-                    </a>
-                    <div class="nav-submenu" id="navUsersSubmenu">
-                        <a href="#" class="nav-subitem" id="navSubSupervisors">
-                            <i data-lucide="user-check" style="width: 14px; height: 14px;"></i> Executive Cuisine Heads
-                        </a>
-                        <a href="#" class="nav-subitem" id="navSubChefs">
-                            <i data-lucide="chef-hat" style="width: 14px; height: 14px;"></i> Cuisine Heads
-                        </a>
-                        <a href="#" class="nav-subitem" id="navSubAdmins">
-                            <i data-lucide="shield" style="width: 14px; height: 14px;"></i> Admins
-                        </a>
-                    </div>
-                </div>
+                <a href="#" class="nav-item no-chef" id="navUsers"><i data-lucide="users"></i>Users</a>
+                <a href="#" class="nav-item" data-operations="accounts" data-operations-nav="true"><i data-lucide="user-plus"></i>Account Requests</a>
+                <a href="#" class="nav-item" data-operations="notifications" data-operations-nav="true"><i data-lucide="bell"></i>Notifications</a>
+            </nav>
             <div style="padding: 0 16px; margin-bottom: 8px; display: none;">
                 <button type="button" class="btn btn-outline" id="btnRestoreDemoData" onclick="window.resetToDemoData()" style="width: 100%; padding: 7px 10px; font-size: 0.78rem; font-weight: 600; border-color: rgba(255,190,11,0.25); color: var(--primary); display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 8px; cursor: pointer; background: rgba(255,190,11,0.05);">
                     <i data-lucide="database" style="width: 13px; height: 13px;"></i> Reset / Seed Demo Data
@@ -309,7 +313,7 @@
                     </div>
                 </div>
 
-                <!-- SUPERVISOR CONSOLIDATED REQUESTS CONTAINER (Directly sent by Executive Cuisine Heads to Admin) -->
+                <!-- SUPERVISOR CONSOLIDATED REQUESTS CONTAINER (Directly sent by Executive Chefs to Admin) -->
                 <div id="containerSupervisorRequestsView" class="panel table-container" style="margin-bottom: 20px; overflow-x: auto;">
                     <table style="width: 100%;">
                         <thead>
@@ -371,6 +375,8 @@
                         <span style="font-size: 0.75rem; background: rgba(46,196,182,0.12); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.3); padding: 3px 8px; border-radius: 4px; font-weight: 600;">Kitchen Section Matrix View</span>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
+                        <button type="button" class="btn btn-outline" id="btnWsSaveEdits">Save edits</button>
+                        <span id="wsSaveStatus" role="status" style="font-size:.8rem;color:var(--text-muted)"></span>
                         <button class="btn btn-primary" id="btnWsSubmitIndentMid" style="padding: 7px 16px; font-size: 0.82rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; box-shadow: 0 2px 10px rgba(255,190,11,0.25);">
                             <i data-lucide="send" style="width: 14px; height: 14px;"></i> Send Request To Admin
                         </button>
@@ -394,6 +400,7 @@
 
             <!-- CHEF PORTAL VIEW (Cuisine Head Only: Single Clean Raise Request Header Button, Metrics, & Full Requests Table) -->
             <div id="viewChefPortal" class="hidden chef-only-bg">
+                <div class="operations-links"><a href="#" class="btn btn-outline" data-operations="deliveries">Cuisine Deliveries</a></div>
                 <header class="dash-header">
                     <div class="header-title">
                         <h1>Cuisine Head <span class="text-primary">Portal</span></h1>
@@ -627,7 +634,7 @@
                     <!-- Subdivisions Tab Pills -->
                     <div style="display: flex; gap: 6px; background: rgba(0,0,0,0.45); padding: 5px; border-radius: 12px; border: 1px solid var(--border);">
                         <button type="button" class="user-sub-tab active" id="tabUserSupervisors" data-sub="supervisor">
-                            <i data-lucide="user-check" style="width: 15px; height: 15px;"></i> Executive Cuisine Heads
+                            <i data-lucide="user-check" style="width: 15px; height: 15px;"></i> Executive Chefs
                             <span id="badgeCountSupervisors">0</span>
                         </button>
                         <button type="button" class="user-sub-tab" id="tabUserChefs" data-sub="chef">
@@ -696,16 +703,16 @@
                             </div>
                         </div>
 
-                        <!-- Executive Cuisine Heads Table -->
+                        <!-- Executive Chefs Table -->
                         <div class="panel" style="background: rgba(18, 18, 20, 0.85); border: 1px solid var(--border); border-radius: 16px; padding: 22px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                                 <div>
                                     <h3 style="margin: 0; font-size: 1.15rem; color: #fff; display: flex; align-items: center; gap: 8px;">
-                                        <i data-lucide="user-check" style="width: 18px; height: 18px; color: var(--primary);"></i> Executive Cuisine Heads
+                                        <i data-lucide="user-check" style="width: 18px; height: 18px; color: var(--primary);"></i> Executive Chefs
                                     </h3>
                                     <p style="margin: 2px 0 0 0; font-size: 0.78rem; color: var(--text-muted);">Active outlet supervisors</p>
                                 </div>
-                                <span id="supCountBadge" style="background: rgba(255,190,11,0.15); color: var(--primary); padding: 4px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 700;">0 Executive Cuisine Heads</span>
+                                <span id="supCountBadge" style="background: rgba(255,190,11,0.15); color: var(--primary); padding: 4px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 700;">0 Executive Chefs</span>
                             </div>
                             <div class="table-scroll" tabindex="0" role="region" aria-label="Scrollable table">
                                 <table style="width: 100%; font-size: 0.85rem;">
@@ -1105,6 +1112,13 @@
             <button class="icon-btn" id="closeRequestWizardBtn" style="position: absolute; top: 16px; right: 16px;"><i data-lucide="x"></i></button>
             <h2 id="wizardTitle">Request Ingredients</h2>
             
+            <div class="request-date-fields">
+                <label for="wizardRequestDate" id="wizardRequestDateLabel">Request date (IST)</label>
+                <input id="wizardRequestDate" type="date" required aria-describedby="wizardDateHint"><span id="wizardFixedRequestDate" hidden></span>
+                <small id="wizardDateHint">Today or the previous 3 days only.</small>
+                <label id="wizardJustificationLabel" hidden>Backdate justification (required)<textarea id="wizardBackdateJustification" maxlength="500" rows="2"></textarea></label>
+                <section id="wizardExistingRequests" hidden aria-live="polite"><h3>Existing requests for this date</h3><div id="wizardExistingRows"></div><button type="button" class="btn btn-primary" id="wizardPlaceNewOrder">Place new order</button></section>
+            </div>
             <!-- Step 1: Categories -->
             <div id="wizardStep1">
                 <div style="display: flex; gap: 16px; margin-top: 14px; align-items: center; background: rgba(0,0,0,0.25); padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); flex-wrap: wrap;">

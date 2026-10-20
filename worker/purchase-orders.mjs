@@ -1,3 +1,4 @@
+import { money, lineCost } from './operations.mjs';
 import { fail, number, safeText, hasOutlet } from './model.mjs';
 
 // Derive all supplier orders and their workflow links on the server, then persist as one batch.
@@ -42,4 +43,30 @@ export function raiseVendorOrders(state, actor, input) {
     changes.push(valueChange('requests', {...request, status:request.status==='Approved'?'Approved':'PO Raised', purchaseOrderIds:matching.map(p=>p.id)}));
   }
   return [...changes, ...orders.map(p=>valueChange('purchase_orders',p))];
+}
+
+export function planVendorReceipt(state,actor,input){
+  if(!['admin','purchaser'].includes(actor.role))fail('Purchaser permission required.',403);
+  const source=state.purchase_orders.find(p=>p.id===input.poId);
+  if(!source || !hasOutlet(actor,source.outletId))fail('Purchase order access denied.',403);
+  if(source.status==='Received')fail('This order has already been received.',409);
+  const po=structuredClone(source),seen=new Set(),receipts=[],events=[];
+  const rows=input.lines ?? po.items.filter(i=>i.qty>(i.receivedQty || 0)).map(i=>({itemId:i.itemId,receivedQuantity:i.qty-(i.receivedQty || 0),rejectedQuantity:0,unitPrice:input.prices?.[i.itemId]}));
+  if(!Array.isArray(rows) || !rows.length || rows.length>po.items.length)fail('Enter received quantities for this order.');
+  for(const row of rows){
+    const line=po.items.find(i=>i.itemId===row.itemId);
+    if(!line || seen.has(row.itemId))fail('Choose unique items from this purchase order.');seen.add(row.itemId);
+    const received=number(row.receivedQuantity,'Received quantity'),rejected=number(row.rejectedQuantity ?? 0,'Rejected quantity');
+    if(received+rejected>line.qty-(line.receivedQty || 0)+1e-8)fail('Received plus rejected quantity exceeds the outstanding order.');
+    if(received===0 && rejected===0)continue;
+    if(rejected){if(!['Quality issues','Damaged goods','Wrong item','Other'].includes(row.reason))fail('Choose a reason for rejected goods.');if(row.reason==='Other' || row.message)safeText(row.message,'Rejection note',500);}
+    const accepted=received,unitCostMinor=accepted?money(row.unitPrice):null;
+    if(accepted)receipts.push({itemId:line.itemId,outletId:po.outletId,quantity:accepted,unitPrice:row.unitPrice,vendor:state.vendors.find(v=>v.id===po.vendorId)?.name,reason:'Vendor order '+po.poNumber});
+    line.receivedQty=(line.receivedQty || 0)+accepted;line.rejectedQty=(line.rejectedQty || 0)+rejected;
+    events.push({itemId:line.itemId,itemName:line.itemName,receivedQuantity:received+rejected,acceptedQuantity:accepted,rejectedQuantity:rejected,unitCostMinor,totalCostMinor:accepted?lineCost(accepted,unitCostMinor):0,reason:rejected?row.reason:'',message:rejected?(row.message || ''):''});
+  }
+  if(!events.length)fail('Enter at least one received or rejected quantity.');
+  const event={id:crypto.randomUUID(),receivedAt:new Date().toISOString(),receivedBy:actor.id,lines:events};
+  po.receiptEvents=[...(po.receiptEvents || []),event];po.status=po.items.every(i=>(i.receivedQty || 0)>=i.qty-1e-8)?'Received':'Partially Received';po.receivedBy=actor.name;po.receivedAt=event.receivedAt;
+  return {po,receipts,event};
 }

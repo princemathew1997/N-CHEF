@@ -42,7 +42,7 @@ the assistant can run those commands.
 After the assistant starts the local app, open
 `http://localhost:8000/setup.html`. Use the setup key it generated in your
 local `.dev.vars`, then choose your own local admin username and password
-(12–128 characters). Enter the password yourself in the form.
+(4–128 characters). Enter the password yourself in the form.
 
 Cloudflare login and N-CHEF application login are separate. Local accounts
 are also separate from production accounts. Use an existing local admin if

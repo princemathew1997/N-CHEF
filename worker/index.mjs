@@ -1,8 +1,8 @@
-import { canPurchase, operationCommand } from './operations.mjs';
+import { canPurchase, operationCommand, notify, dayIST, editCuisineRequest, recallConsolidatedRequest } from './operations.mjs';
 import { validateLegacyCSV } from '../shared/legacy-import.mjs';
 import { stockCommand } from './stock.mjs';
 import { releaseInfo, requireCurrentClient } from './release.mjs';
-import { raiseVendorOrders } from './purchase-orders.mjs';
+import { raiseVendorOrders, planVendorReceipt } from './purchase-orders.mjs';
 import { digest, equalSecret, getSessionToken, hashPassword, randomToken, sessionCookie, verifyPassword } from './auth.mjs';
 import { clone, fail, hasOutlet, id, number, project, safeText, validateChanges } from './model.mjs';
 import { persistChanges, readState } from './database.mjs';
@@ -159,7 +159,7 @@ export default {
           if(!balance){balance={item_id:row.itemId,outlet_id:row.outletId,quantity:0,unit_cost_minor:null};stock.outletStock.push(balance);}
           balance.quantity+=row.quantity;
           if(balance.unit_cost_minor==null && row.unitCostMinor!==null)balance.unit_cost_minor=row.unitCostMinor;
-          stock.movements.push({item_id:row.itemId,outlet_id:row.outletId,delta:row.quantity,quantity:balance.quantity,kind:'opening',reason:`Bulk legacy stock import: Excel row ${row.row}`,cuisine:'',vendor:'',item_name:row.itemName,unit:row.unit,unit_cost_minor:row.unitCostMinor,total_cost_minor:row.unitCostMinor===null?null:Math.round(row.quantity*row.unitCostMinor)});
+          stock.movements.push({item_id:row.itemId,outlet_id:row.outletId,delta:row.quantity,quantity:balance.quantity,kind:'opening',reason:`Bulk legacy stock import: Excel row ${row.row}`,cuisine:'',vendor:'Legacy Stock',item_name:row.itemName,unit:row.unit,unit_cost_minor:row.unitCostMinor,total_cost_minor:row.unitCostMinor===null?null:Math.round(row.quantity*row.unitCostMinor)});
         }
         return response(await persistChanges(env.DB,state,clone(state),[],actor,input.operationId,stock));
       }
@@ -171,9 +171,11 @@ export default {
         if(input.revision!==state.revision)fail('Data changed. Refresh and try again.',409);
         let stock={outletStock:clone(state.outletStock),legacyStock:clone(state.legacyStock),movements:[],deliveries:[]};
         const transact=(kind,data)=>{const result=stockCommand({...state,...stock},actor,data,kind,true);stock={...result,movements:[...stock.movements,...result.movements],deliveries:[...stock.deliveries,...(result.deliveries || [])]};};
-        const derived=operationCommand(state,actor,input,path.slice('/api/operations/'.length),transact);
+        const editingCuisineRequest=path==='/api/operations/requests/edit';
+        const recallingIndent=path==='/api/operations/indents/recall';
+        const derived=recallingIndent?recallConsolidatedRequest(state,actor,input):editingCuisineRequest?editCuisineRequest(state,actor,input):operationCommand(state,actor,input,path.slice('/api/operations/'.length),transact);
         let next=derived.next,touched=[];
-        if(derived.changes.length){const validated=validateChanges(next,derived.changes,actor);next=validated.next;touched=validated.touched;}
+        if(derived.changes.length){const validated=validateChanges(next,derived.changes,(editingCuisineRequest || recallingIndent)?{...actor,role:'admin'}:actor,editingCuisineRequest || recallingIndent);next=validated.next;touched=validated.touched;}
         return response(await persistChanges(env.DB,state,next,touched,actor,input.operationId,stock));
       }
       if (path === '/api/purchase-orders/raise' && request.method === 'POST') {
@@ -205,9 +207,13 @@ export default {
         const current = state.users.find(u => u.id === actor.id);
         if (!current) fail('Account is inactive.', 401);
         const { next, touched } = validateChanges(state, input.changes, current);
+        const backdated=touched.filter(t=>t.entity==='requests' && !t.old && t.data && t.data.date<dayIST());
+        const higher={cuisine_head:['executive_chef','purchaser','admin'],executive_chef:['purchaser','admin'],purchaser:['admin'],admin:[]}[current.role] || [];
+        for(const row of backdated)notify(next,higher,row.data.outletId,`${current.name} submitted a backdated request for ${row.data.itemName || 'an item'} dated ${row.data.date}. Justification: ${row.data.backdateJustification}`,row.key);
+
         return response(await persistChanges(env.DB, state, next, touched, current, input.operationId));
       }
-      if (['/api/stock/receipt', '/api/stock/distribute', '/api/stock/adjust', '/api/stock/assign', '/api/stock/reconcile', '/api/purchase-orders/receive', '/api/indents/approve', '/api/indents/approve-all', '/api/requests/approve'].includes(path) && request.method === 'POST') {
+      if (['/api/stock/opening', '/api/stock/receipt', '/api/stock/distribute', '/api/stock/adjust', '/api/stock/assign', '/api/stock/reconcile', '/api/purchase-orders/receive', '/api/indents/approve', '/api/indents/approve-all', '/api/requests/approve'].includes(path) && request.method === 'POST') {
         const input = await body(request);
         id(input.operationId);
         const prior = await env.DB.prepare('SELECT actor_id FROM command_receipts WHERE id = ?').bind(input.operationId).first();
@@ -238,20 +244,9 @@ export default {
         if (path.startsWith('/api/stock/')) {
           transact(path.split('/').pop(), input);
         } else if (path === '/api/purchase-orders/receive') {
-          if (!canPurchase(current)) fail('Only admins or supervisors can receive orders.', 403);
-          const po = clone(state.purchase_orders.find(p => p.id === input.poId) || null);
-          if (!po || !hasOutlet(current, po.outletId)) fail('Purchase order access denied.', 403);
-          if (po.status === 'Received') fail('This order has already been received.', 409);
-          for (const line of po.items) {
-            const quantity = line.qty - (line.receivedQty || 0);
-            if (quantity <= 0) continue;
-            const item = itemFor(line.itemId);
-            transact('receipt', { itemId: item.id, outletId: po.outletId, quantity, unitPrice: input.prices?.[line.itemId], vendor: state.vendors.find(v => v.id === po.vendorId)?.name });
-            line.receivedQty = line.qty;
-
-          }
-          po.status = 'Received'; po.receivedBy = current.name; po.receivedAt = new Date().toISOString();
-          modify('purchase_orders', po);
+          const planned=planVendorReceipt(state,current,input);
+          for(const receipt of planned.receipts)transact('receipt',receipt);
+          modify('purchase_orders',planned.po);
         } else if (path === '/api/indents/approve-all') {
           if (!canPurchase(current)) fail('Purchaser permission required.', 403);
           const selected = r => hasOutlet(current, r.outletId) && (input.outletId === 'all' || r.outletId === input.outletId);
@@ -287,6 +282,10 @@ export default {
         }
         // All changes above are derived on the server after explicit action permissions.
         const { next, touched } = changes.length ? validateChanges(state, changes, { ...current, role: 'admin' }, true) : { next: clone(state), touched: [] };
+        if(path==='/api/purchase-orders/receive'){
+          const po=next.purchase_orders.find(p=>p.id===input.poId);
+          for(const line of po.receiptEvents.at(-1).lines.filter(r=>r.rejectedQuantity>0))notify(next,['admin','executive_chef','purchaser'],po.outletId,`${po.vendorName} / ${po.poNumber}: rejected ${line.rejectedQuantity} of ${line.itemName} (${line.reason}). ${line.message}`,po.id);
+        }
         return response(await persistChanges(env.DB, state, next, touched, current, input.operationId, stock));
       }
       fail('Endpoint not found.', 404);

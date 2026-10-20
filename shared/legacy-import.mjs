@@ -75,7 +75,6 @@ export function validateLegacyCSV(csv,state,actor) {
     if(item && outlet) {
       const balance=state.outletStock.find(b=>b.item_id===item.id && b.outlet_id===outlet.id)?.quantity || 0;
       if(Number.isFinite(quantity) && balance+quantity>1e9)add(row,'Quantity','Resulting outlet stock would exceed 1,000,000,000.',quantityText);
-      if(state.legacyStock?.some(s=>s.item_id===item.id && s.issue))add(row,'Item','Legacy stock has an unresolved reconciliation issue. Ask Admin to reconcile it first.',itemText);
       const pair=item.id+'\0'+outlet.id;
       if(seen.has(pair)) {
         const prior=seen.get(pair);

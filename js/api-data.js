@@ -36,6 +36,10 @@ function applyServerState(state) {
     }
     committedState = copyData(state);
     window.liveCatalogReference = null;
+    if(typeof currentUser!=='undefined' && currentUser){
+        if(typeof updateRequestsBadge==='function')updateRequestsBadge();
+        if(typeof updateIndentsBadge==='function')updateIndentsBadge();
+    }
 }
 function reloadDataFromStorage() { /* Kept for legacy view callbacks; never read business localStorage. */ }
 function getItemTotalQty(item) { return Object.values(item.allocations || {}).reduce((sum, q) => sum + q, 0); }

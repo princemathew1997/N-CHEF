@@ -442,7 +442,7 @@ function applyLoggedInUser(user, targetView = null) {
     
     
     window.configureOperationsRole?.();
-    window.switchToView('operations:dashboard');
+    window.goHome();
 }
 window.applyLoggedInUser = applyLoggedInUser;
 
@@ -518,7 +518,33 @@ function initLogin() {
 // ============================================================
 // NAVIGATION & VIEW SWITCHING
 // ============================================================
+window.collapseSidebarGroups = function() {
+    document.querySelectorAll('.nav-menu .nav-submenu').forEach(menu => menu.classList.remove('open'));
+    for (const name of ['Stock', 'Requests', 'Catalog', 'Distribution', 'Legacy', 'Overview']) {
+        const trigger = document.getElementById('nav' + name);
+        if (trigger) trigger.setAttribute('aria-expanded', 'false');
+        const chevron = document.getElementById('nav' + name + 'Chevron');
+        if (chevron) chevron.style.transform = 'rotate(0deg)';
+    }
+};
+window.expandSidebarGroup = function(name) {
+    window.collapseSidebarGroups();
+    if(['Distribution','Legacy','Overview'].includes(name)){
+        document.getElementById('navStockSubmenu')?.classList.add('open');
+        document.getElementById('navStock')?.setAttribute('aria-expanded','true');
+        const stockChevron=document.getElementById('navStockChevron');
+        if(stockChevron)stockChevron.style.transform='rotate(180deg)';
+    }
+    document.getElementById('nav' + name + 'Submenu')?.classList.add('open');
+    document.getElementById('nav' + name)?.setAttribute('aria-expanded', 'true');
+    const chevron = document.getElementById('nav' + name + 'Chevron');
+    if (chevron) chevron.style.transform = 'rotate(180deg)';
+};
 window.switchToView = function(viewName, subDivision = null) {
+    window.collapseSidebarGroups();
+    document.getElementById('navDistribution')?.classList.remove('active');
+    document.getElementById('navLegacy')?.classList.remove('active');
+    document.getElementById('navCatalog')?.classList.remove('active');
     const navMaster = document.getElementById('navMasterOrders');
     const navRequests = document.getElementById('navRequests');
     const navManageRequests = document.getElementById('navManageRequests');
@@ -553,7 +579,7 @@ window.switchToView = function(viewName, subDivision = null) {
 
     document.getElementById("viewOperations")?.classList.add("hidden");
     document.getElementById("viewInventory")?.classList.add("hidden");
-    document.querySelectorAll('[data-inventory]').forEach(a => a.classList.remove('active'));
+    document.querySelectorAll('[data-inventory],[data-operations-nav]').forEach(a => a.classList.remove('active'));
     // Hide all views & deactivate nav items
     [viewMaster, viewRequests, viewConsolidateRequests, viewIndents, viewChef, viewVendors, viewLocations, viewUsers, viewAddChef].forEach(v => {
         if (v) v.classList.add('hidden');
@@ -717,7 +743,7 @@ function initNavigation() {
                 if (navStockChevron) navStockChevron.style.transform = 'rotate(0deg)';
                 navStock.classList.remove('active');
             } else {
-                if (navStockSubmenu) navStockSubmenu.classList.add('open');
+                window.expandSidebarGroup('Stock');
                 if (navStockChevron) navStockChevron.style.transform = 'rotate(180deg)';
                 navStock.classList.add('active');
             }
@@ -728,11 +754,11 @@ function initNavigation() {
         navRequests.addEventListener('click', (e) => {
             e.preventDefault();
             const isOpen = navRequestsSubmenu && navRequestsSubmenu.classList.contains('open');
-            if (isOpen && (currentView === 'viewRequests' || currentView === 'viewConsolidateRequests')) {
+            window.switchToView('viewRequests');
+            if (isOpen) {
                 navRequestsSubmenu.classList.remove('open');
+                navRequests.setAttribute('aria-expanded','false');
                 if (navRequestsChevron) navRequestsChevron.style.transform = 'rotate(0deg)';
-            } else {
-                window.switchToView('viewRequests');
             }
         });
     }
@@ -784,13 +810,7 @@ function initNavigation() {
     if (navUsers) {
         navUsers.addEventListener('click', (e) => {
             e.preventDefault();
-            const isOpen = navUsersSubmenu && navUsersSubmenu.classList.contains('open');
-            if (isOpen && currentView === 'viewUsers') {
-                navUsersSubmenu.classList.remove('open');
-                if (navUsersChevron) navUsersChevron.style.transform = 'rotate(0deg)';
-            } else {
-                window.switchToView('viewUsers', 'executive_chef');
-            }
+            window.switchToView('viewUsers');
         });
     }
 
@@ -1797,7 +1817,8 @@ function loadChefPortalData() {
             
             const outletName = r.outletName || (outletsData.find(o => o.id === r.outletId)?.name) || allocatedOutlet.name;
             
-            const actionHtml = (r.status === 'Pending' || r.status === 'Accepted') 
+            const editAction=r.status==='Pending' && !r.indentId?`<button class="btn btn-outline" onclick="editChefPlacedRequest('${r.id}')">Edit quantity</button> `:'';
+            const actionHtml = (r.status === 'Pending' && !r.indentId)
                 ? `<button class="btn btn-outline" style="padding: 3px 9px; font-size: 0.72rem; border-color: rgba(230,57,70,0.4); color: #ff6b6b; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;" onclick="deleteChefRequest('${r.id}')" title="Cancel this request">
                     <i data-lucide="trash-2" style="width: 12px; height: 12px;"></i> Cancel
                    </button>`
@@ -1811,7 +1832,7 @@ function loadChefPortalData() {
                     <td style="font-size: 0.85rem; color: var(--text-muted);">${outletName}</td>
                     <td><strong style="color: var(--text-main); font-size: 0.95rem;">${r.qty}</strong> <span style="font-size: 0.75rem; color: var(--text-muted);">${r.unit || 'kg'}</span>${r.status==='Approved'?`<small style="display:block">Approved: ${r.approvedQuantity ?? r.revisedQty ?? r.qty}</small>`:r.revisedQty!==undefined?`<small style="display:block">Revised: ${r.revisedQty}</small>`:''}</td>
                     <td>${statusHtml}</td>
-                    <td>${actionHtml}</td>
+                    <td>${editAction}${actionHtml}</td>
                 </tr>
             `;
         }).join('');
@@ -1823,9 +1844,20 @@ function loadChefPortalData() {
 }
 window.loadChefPortalData = loadChefPortalData;
 
+window.editChefPlacedRequest=async function(id){
+    const request=requestsData.find(r=>r.id===id);
+    if(!request || currentUser?.role!=='cuisine_head')return;
+    const input=await window.showPromptModal('Enter the requested quantity:',request.qty,'Edit order quantity');
+    if(input===null || input===false)return;
+    const quantity=Number(input);
+    if(!Number.isFinite(quantity) || quantity<=0){window.showToast('Enter a quantity greater than zero.','danger');return;}
+    try{await runDatabaseAction('operations/requests/edit',{id,quantity});loadChefPortalData();window.showToast('Request quantity updated.','success');}
+    catch(error){window.showUiModal({title:'Request was not changed',message:error.message,type:'warning'});}
+};
+
 window.deleteChefRequest = async function(reqId) {
     const req = requestsData.find(r => String(r.id) === String(reqId));
-    if (!req || (req.status !== 'Pending' && req.status !== 'Accepted')) return;
+    if (!req || req.status !== 'Pending' || req.indentId) return;
     
     const confirmed = await window.showConfirmModal(
         `Are you sure you want to cancel the request for "${req.itemName}" (${req.qty} ${req.unit || 'kg'})?`,
@@ -1890,34 +1922,61 @@ window.deleteItem = async function(itemId) {
 // ============================================================
 // REQUESTS VIEWS
 // ============================================================
+window.updateSidebarAttention=function(){
+    if(!currentUser || !committedState)return;
+    const counts=InventoryTools.menuAttention(committedState,currentUser);
+    const mark=(link,count)=>{
+        if(!link)return;
+        link.classList.toggle('has-pending-requests',count>0);
+        let badge=link.querySelector('.nav-attention-count');
+        if(count){if(!badge){badge=document.createElement('span');badge.className='nav-attention-count';link.append(badge);}badge.textContent=count;badge.setAttribute('aria-label',count+' pending actions');}
+        else badge?.remove();
+    };
+    mark(document.querySelector('[data-operations-nav][data-operations=approvals]'),counts.approvals);
+    mark(document.getElementById('navManageRequests'),counts.manage);
+    mark(document.getElementById('navConsolidateRequests'),counts.consolidate);
+    mark(document.querySelector('[data-operations-nav][data-operations="vendor-orders"]'),counts.vendorOrders);
+    mark(document.querySelector('[data-operations-nav][data-operations=deliveries]'),counts.deliveries);
+    mark(document.querySelector('[data-operations-nav][data-operations=accounts]'),counts.accounts);
+    mark(document.getElementById('navDistribution'),counts.deliveries);
+    document.getElementById('navStock')?.classList.toggle('has-pending-requests',counts.deliveries>0);
+    document.getElementById('navRequests')?.classList.toggle('has-pending-requests',counts.approvals+counts.manage+counts.consolidate+counts.vendorOrders>0);
+};
+function getVisibleNotifications(){
+    return (typeof committedState!=='undefined'?committedState?.operationRecords || []:[]).filter(r=>r.kind==='notification' && !r.system && r.userId===currentUser?.id && typeof r.message==='string' && r.message.trim());
+}
+const requestNoticeState=new Map();
 function updateRequestsBadge() {
-    const badge = document.getElementById('pendingRequestsBadge');
-    if (!badge) return;
-    
-    if (currentUser.role === 'admin') {
-        // Admin manages stock through Indents
-        badge.classList.add('hidden');
-        return;
-    } else if (currentUser.role === 'executive_chef') {
-        const vis = getVisibleOutlets();
-        const visIds = vis.map(o => (o.id || '').toLowerCase());
-        const visNames = vis.map(o => (o.name || '').toLowerCase());
-        const pendingCount = requestsData.filter(r => {
-            if (r.status !== 'Pending' && r.status !== 'Accepted') return false;
-            if (currentUser.assignedLocations && currentUser.assignedLocations.includes('all')) return true;
-            const rOutletId = (r.outletId || '').toLowerCase();
-            const rOutletName = (r.outletName || '').toLowerCase();
-            return visIds.includes(rOutletId) || visNames.includes(rOutletName) || visNames.includes(rOutletId);
-        }).length;
-        
-        if (pendingCount > 0) {
-            badge.textContent = pendingCount;
-            badge.classList.remove('hidden');
-        } else {
-            badge.classList.add('hidden');
-        }
-    } else {
-        badge.classList.add('hidden');
+    if(!currentUser)return;
+    const requests=currentUser.role==='executive_chef'?requestsData.filter(r=>r.status==='Pending'):[];
+    const approvals=['admin','purchaser'].includes(currentUser.role)?indentsData.filter(r=>r.status==='Pending Approval'):[];
+    const pending=[...requests.map(r=>'request:'+r.id),...approvals.map(r=>'approval:'+r.id)];
+    const badge=document.getElementById('pendingRequestsBadge');
+    if(badge){badge.textContent=pending.length;badge.classList.toggle('hidden',!pending.length);}
+    document.getElementById('navRequests')?.classList.toggle('has-pending-requests',pending.length>0);
+    window.updateSidebarAttention?.();
+    const unread=getVisibleNotifications().filter(r=>!r.read);
+    const notificationMenu=document.querySelector('[data-operations-nav][data-operations=notifications]');
+    if(notificationMenu)notificationMenu.textContent='Notifications'+(unread.length?' ('+unread.length+')':'');
+    const pendingSources=new Set([...requests.map(r=>r.id),...approvals.map(r=>r.id)]);
+    const attention=pending.length+unread.filter(n=>!pendingSources.has(n.sourceId)).length;
+    document.title=(attention?'('+attention+') ':'')+'N-CHEF';
+    const key=currentUser.id || currentUser.username;
+    const ids=[...pending,...unread.map(r=>'notification:'+r.id)];
+    const previous=requestNoticeState.get(key);
+    const fresh=previous?ids.filter(id=>!previous.has(id)):[];
+    requestNoticeState.set(key,new Set(ids));
+    const existingNotice=document.getElementById('requestNoticeOverlay');
+    if(existingNotice && (!ids.length || existingNotice.attentionIds?.some(id=>!ids.includes(id))))existingNotice.hidden=true;
+    if(fresh.length){
+        let notice=document.getElementById('requestNoticeOverlay');
+        if(!notice){notice=document.createElement('div');notice.id='requestNoticeOverlay';notice.setAttribute('role','status');document.body.append(notice);}
+        notice.replaceChildren();
+        const newRequests=fresh.filter(id=>!id.startsWith('notification:')).length;
+        const newNotifications=fresh.filter(id=>id.startsWith('notification:')).length;
+        const message=document.createElement('span');message.textContent=newRequests?newRequests+' new request(s) need your attention.':newNotifications+' new notification(s).';
+        const close=document.createElement('button');close.type='button';close.textContent='×';close.setAttribute('aria-label','Dismiss notification');close.onclick=()=>notice.hidden=true;
+        notice.append(message,close);notice.attentionIds=fresh;notice.hidden=false;clearTimeout(window.requestNoticeTimer);window.requestNoticeTimer=setTimeout(()=>notice.hidden=true,8000);
     }
 }
 
@@ -3372,6 +3431,7 @@ window.updateSectionItemQty = async function(reqId, val) {
 // ============================================================
 // CONSOLIDATE REQUESTS WORKSPACE (Dedicated Executive Chef View)
 // ============================================================
+let workspaceRequestSnapshots=new Map();
 let activeWorkspaceConsolidation = {
     outletId: '',
     outletName: '',
@@ -3390,6 +3450,14 @@ window.loadConsolidateWorkspace = function() {
         groupedItems: {}
     };
     
+    document.getElementById('wsPendingConsolidation')?.remove();
+    const pendingConsolidations=indentsData.filter(i=>i.outletId===outlet.id && i.status==='Pending Approval');
+    if(pendingConsolidations.length){
+        const banner=document.createElement('div');banner.id='wsPendingConsolidation';banner.className='panel';
+        const message=document.createElement('p');message.textContent='A consolidated request is awaiting approval. Recall it to combine existing and new requests before submitting again.';banner.append(message);
+        pendingConsolidations.forEach(indent=>{const button=document.createElement('button');button.type='button';button.className='btn btn-outline';button.textContent='Recall '+indent.indentNumber;button.disabled=indent.ownerId!==currentUser.id;button.onclick=async()=>{button.disabled=true;try{await runDatabaseAction('operations/indents/recall',{id:indent.id});window.loadConsolidateWorkspace();}catch(error){button.disabled=false;window.showToast(error.message,'danger');}};banner.append(button);});
+        document.getElementById('viewConsolidateRequests').prepend(banner);
+    }
     const outletNameEl = document.getElementById('wsConsolidateOutletName');
     if (outletNameEl) outletNameEl.textContent = outlet.name;
     
@@ -3417,6 +3485,9 @@ window.loadConsolidateWorkspace = function() {
         return rOutletId === outlet.id.toLowerCase();
     });
     
+    workspaceRequestSnapshots=new Map(targetReqs.map(r=>[r.id,JSON.stringify(r)]));
+    const saveButton=document.getElementById('btnWsSaveEdits');if(saveButton)saveButton.onclick=window.saveWorkspaceEdits;
+    const saveStatus=document.getElementById('wsSaveStatus');if(saveStatus)saveStatus.textContent='';
     targetReqs.forEach(req => {
         const item = masterItemsData.find(i => i.id === req.itemId) || { id: req.itemId, name: req.itemName || 'Unknown Item', unit: req.unit || 'kg', category: 'General' };
         if (!activeWorkspaceConsolidation.groupedItems[req.itemId]) {
@@ -3435,6 +3506,7 @@ window.loadConsolidateWorkspace = function() {
         activeWorkspaceConsolidation.groupedItems[req.itemId].originalQty += q;
         activeWorkspaceConsolidation.groupedItems[req.itemId].revisedQty += req.revisedQty ?? q;
         activeWorkspaceConsolidation.groupedItems[req.itemId].chefRequests.push({...req, revisedQty: req.revisedQty ?? q});
+        activeWorkspaceConsolidation.groupedItems[req.itemId].comment=InventoryTools.consolidationNote(activeWorkspaceConsolidation.groupedItems[req.itemId].chefRequests);
     });
     
     window.renderConsolidateWorkspaceTable();
@@ -3511,14 +3583,16 @@ window.renderConsolidateWorkspaceTable = function() {
             const secReqs = (entry.chefRequests || []).filter(cr => (cr.cuisine || '').toLowerCase() === sec.toLowerCase());
             const secQty = secReqs.reduce((sum,cr) => sum + (cr.revisedQty ?? cr.qty), 0);
             if (!secReqs.length) return '<td style="text-align:center">—</td>';
-            return `<td style="text-align:center;padding:10px 14px"><input aria-label="${entry.itemName} - ${sec}" type="number" min="0" step="any" value="${secQty}" data-cuisine-qty="${entry.itemId}" oninput="updateWorkspaceCuisineQty('${entry.itemId}','${encodeURIComponent(sec)}',this)" style="width:82px;padding:6px;background:var(--dark);color:var(--text-main);border:1px solid var(--border);border-radius:6px"><span style="font-size:.75rem"> ${entry.unit}</span></td>`;
+            const requested=secReqs.reduce((sum,r)=>sum+r.qty,0);
+            const revisionHint=Math.abs(secQty-requested)>1e-8?`<small style="display:block;color:var(--text-muted)">Requested: ${requested} ${entry.unit}</small>`:'';
+            return `<td style="text-align:center;padding:10px 14px"><input aria-label="${entry.itemName} - ${sec}" type="number" min="0" step="any" value="${secQty}" data-cuisine-qty="${entry.itemId}" oninput="updateWorkspaceCuisineQty('${entry.itemId}','${encodeURIComponent(sec)}',this)" style="width:82px;padding:6px;background:var(--dark);color:var(--text-main);border:1px solid var(--border);border-radius:6px"><span style="font-size:.75rem"> ${entry.unit}</span>${revisionHint}</td>`;
         }).join('');
         const totalCell = `<td style="text-align:center;padding:10px 14px;background:rgba(255,190,11,.08)"><output id="wsItemTotal_${entry.itemId}">${entry.revisedQty}</output> ${entry.unit}</td>`;
 
         // Note / comments
         const noteCell = `<td style="padding: 10px 14px; border-left: 1px solid rgba(255,255,255,0.04);">
             <div style="display: flex; align-items: center; gap: 6px;">
-                <input type="text" placeholder="Reason / note..." value="${entry.comment || ''}" oninput="updateWorkspaceItemComment('${entry.itemId}', this.value)" style="width: 100%; padding: 5px 8px; font-size: 0.82rem; background: #0d0d0d; color: #fff; border: 1px solid var(--border); border-radius: 5px;">
+                <input data-consolidation-note="${entry.itemId}" aria-label="Reason for quantity change" type="text" placeholder="Required when quantity is edited" value="${entry.comment || ''}" oninput="updateWorkspaceItemComment('${entry.itemId}', this.value)" style="width: 100%; padding: 5px 8px; font-size: 0.82rem; background: #0d0d0d; color: #fff; border: 1px solid var(--border); border-radius: 5px;">
             </div>
         </td>`;
 
@@ -3535,32 +3609,7 @@ window.renderConsolidateWorkspaceTable = function() {
         `;
     }).join('');
 
-    // Summary footer row
-    const sectionTotalsHtml = sections.map(sec => {
-        let secSum = 0;
-        items.forEach(it => {
-            const reqs = (it.chefRequests || []).filter(cr => (cr.cuisine || '').toLowerCase() === sec.toLowerCase());
-            secSum += reqs.reduce((acc, cr) => acc + (cr.revisedQty ?? (parseFloat(cr.qty) || 0)), 0);
-        });
-        return `<td data-section-total="${encodeURIComponent(sec)}" style="text-align: center; padding: 12px; font-weight: 800; color: var(--primary); border-left: 1px solid rgba(255,255,255,0.06); font-size: 0.92rem;">${secSum.toFixed(1)}</td>`;
-    }).join('');
-
-    tbody.innerHTML += `
-        <tr style="background: rgba(0,0,0,0.55); border-top: 2px solid rgba(255,190,11,0.3);">
-            <td style="padding: 14px 16px; font-weight: 800; color: var(--primary); text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.5px;">
-                Total Section Units
-            </td>
-            ${sectionTotalsHtml}
-            <td id="wsMatrixGrandTotalCell" style="text-align: center; padding: 12px; font-weight: 800; color: #fff; background: rgba(255,190,11,0.15); border-left: 1px solid rgba(255,190,11,0.3); font-size: 1rem;">
-                ${grandSum.toFixed(1)}
-            </td>
-            <td style="border-left: 1px solid rgba(255,255,255,0.06);"></td>
-        </tr>
-    `;
-
-    if (summaryTextEl) {
-        summaryTextEl.textContent = `Consolidating ${items.length} items (${grandSum.toFixed(1)} units total across ${sections.length} sections)`;
-    }
+    if (summaryTextEl) summaryTextEl.textContent = `Consolidating ${items.length} items across ${sections.length} sections`;
 
     if (typeof lucide !== 'undefined') lucide.createIcons();
 };
@@ -3746,23 +3795,47 @@ window.updateWorkspaceCuisineQty = function(itemId, encodedCuisine, input) {
     const total = document.getElementById('wsItemTotal_'+itemId);
     if (total) total.textContent = Number(entry.revisedQty.toFixed(6));
     const items = Object.values(activeWorkspaceConsolidation.groupedItems);
-    const grandSum = items.reduce((sum,it)=>sum+it.revisedQty,0);
-    document.getElementById('wsMatrixGrandTotalCell').textContent = grandSum.toFixed(1);
-    document.querySelectorAll('[data-section-total]').forEach(cell=>{
-        const section=decodeURIComponent(cell.dataset.sectionTotal);
-        cell.textContent=items.reduce((sum,it)=>sum+(it.chefRequests || []).filter(r=>r.cuisine===section).reduce((s,r)=>s+(r.revisedQty ?? r.qty),0),0).toFixed(1);
-    });
     const summary=document.getElementById('wsFooterSummaryText');
-    if (summary) summary.textContent=`Consolidating ${items.length} items (${grandSum.toFixed(1)} units total)`;
+    if (summary) summary.textContent=`Consolidating ${items.length} items`;
+
 };
 
 window.updateWorkspaceItemComment = function(itemId, val) {
     if (activeWorkspaceConsolidation.groupedItems[itemId]) {
         activeWorkspaceConsolidation.groupedItems[itemId].comment = val;
+        const note=Array.from(document.querySelectorAll('[data-consolidation-note]')).find(el=>el.dataset.consolidationNote===itemId);
+        if(note && val.trim()){note.classList.remove('missing-note');note.removeAttribute('aria-invalid');}
+
     }
 };
 
+window.saveWorkspaceEdits=async function(){
+    const button=document.getElementById('btnWsSaveEdits');
+    const invalid=document.querySelector('#wsConsolidateTableBody input:invalid');
+    if(invalid){invalid.reportValidity();return;}
+    const items=Object.values(activeWorkspaceConsolidation.groupedItems || {});
+    let firstMissing=null;
+    for(const entry of items){
+        const edited=(entry.chefRequests || []).some(r=>Math.abs((r.revisedQty ?? r.qty)-r.qty)>1e-8);
+        const note=Array.from(document.querySelectorAll('[data-consolidation-note]')).find(el=>el.dataset.consolidationNote===entry.itemId);
+        const missing=edited && !String(entry.comment || '').trim();
+        if(note){note.classList.toggle('missing-note',missing);note.setAttribute('aria-invalid',String(missing));}
+        if(missing && !firstMissing)firstMissing=note;
+    }
+    if(firstMissing){firstMissing.scrollIntoView({block:'center',behavior:'smooth'});firstMissing.focus({preventScroll:true});return;}
+    if(button)button.disabled=true;
+    try{
+        const changes=InventoryTools.workspaceEditChanges(items,requestsData,workspaceRequestSnapshots,activeWorkspaceConsolidation.outletId,indentsData);
+        if(changes.length)await runDatabaseAction('changes',{changes});
+        window.loadConsolidateWorkspace();
+        const status=document.getElementById('wsSaveStatus');if(status)status.textContent='Edits saved · not sent for approval';
+        window.showToast('Edits saved. You can combine more requests before sending.','success');
+    }catch(error){window.showUiModal({title:'Edits were not saved',message:error.message,type:'warning'});}
+    finally{if(button)button.disabled=false;}
+};
+
 window.submitWorkspaceConsolidatedIndent = async function() {
+    if(indentsData.some(i=>i.outletId===activeWorkspaceConsolidation.outletId && i.status==='Pending Approval')){document.getElementById('wsPendingConsolidation')?.scrollIntoView({block:'center'});window.showToast('Recall the pending request and combine existing and new items before submitting.','warning');return;}
     const invalid = document.querySelector('#wsConsolidateTableBody input:invalid');
     if (invalid) { invalid.reportValidity(); return; }
     Object.values(activeWorkspaceConsolidation.groupedItems || {}).forEach(entry => {
@@ -3778,11 +3851,21 @@ window.submitWorkspaceConsolidatedIndent = async function() {
         return;
     }
     
+    let missingNote=null;
+    items.forEach(entry=>{
+        const edited=(entry.chefRequests || []).some(r=>Math.abs((r.revisedQty ?? r.qty)-r.qty)>0.00000001);
+        const note=Array.from(document.querySelectorAll('[data-consolidation-note]')).find(el=>el.dataset.consolidationNote===entry.itemId);
+        const missing=edited && !String(entry.comment || '').trim();
+        if(note){note.classList.toggle('missing-note',missing);note.setAttribute('aria-invalid',String(missing));}
+        if(missing && !missingNote)missingNote=note;
+    });
+    if(missingNote){missingNote.scrollIntoView({block:'center',behavior:'smooth'});missingNote.focus({preventScroll:true});return;}
+
     // Count how many items have adjustments or notes
     const adjustedItems = items.filter(it => Math.abs((parseFloat(it.revisedQty) || 0) - (parseFloat(it.originalQty) || 0)) > 0.001 || (it.comment && it.comment.trim()));
     const grandUnits = items.reduce((sum, it) => sum + (parseFloat(it.revisedQty) || 0), 0);
     
-    let confirmPrompt = `Send consolidated request with ${items.length} ingredients (${grandUnits.toFixed(1)} total units) to Admin for approval?`;
+    let confirmPrompt = `Send consolidated request with ${items.length} ingredients to Admin for approval?`;
     if (adjustedItems.length > 0) {
         confirmPrompt += `\n\nNote: ${adjustedItems.length} item(s) have supervisor quantity modifications or notes that will be included in the request.`;
     }

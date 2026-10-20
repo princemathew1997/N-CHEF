@@ -1,5 +1,5 @@
 import { entities, clone, project, fail } from './model.mjs';
-import { updateThresholds, putRecord } from './operations.mjs';
+import { clearHandledNotifications, updateThresholds, putRecord } from './operations.mjs';
 import { hashPassword } from './auth.mjs';
 
 export async function readState(db) {
@@ -88,6 +88,7 @@ export async function persistChanges(db, state, next, touched, actor, operationI
   }
   for(const delivery of stock?.deliveries || []) putRecord(next,'delivery',delivery);
   updateThresholds(next, stock?.outletStock || next.outletStock);
+  clearHandledNotifications(state,next,actor);
   for(const record of next.operationRecords || []) {
     const old=(state.operationRecords || []).find(r=>r.id===record.id);
     if(JSON.stringify(old)!==JSON.stringify(record)) {

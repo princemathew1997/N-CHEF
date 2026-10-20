@@ -21,3 +21,23 @@ test('purchaser projection hides other outlets while retaining unassigned centra
     assert.equal(result.outletStock.length,1);
     assert.deepEqual(result.vendors,[{id:'v',name:'Vendor'}]);
 });
+
+test('user directory follows role hierarchy and hides unrelated outlets',()=>{
+    const users=[['admin','admin',['all']],['p','purchaser',['a']],['exec','executive_chef',['a']],['head','cuisine_head',['a','b']],['outside','cuisine_head',['b']],['peer','purchaser',['a']]].map(([id,role,assignedLocations])=>({id,role,assignedLocations}));
+    const state={outlets:[{id:'a'},{id:'b'}],items:[],requests:[],indents:[],purchase_orders:[],users,vendors:[]};
+    const directory=id=>project(state,users.find(u=>u.id===id)).users;
+    assert.equal(directory('admin').length,6);
+    assert.deepEqual(directory('p').map(u=>u.id),['p','exec','head']);
+    assert.deepEqual(directory('exec').map(u=>u.id),['exec','head']);
+    assert.deepEqual(directory('head').map(u=>u.id),['head']);
+    assert.deepEqual(directory('p').find(u=>u.id==='head').assignedLocations,['a']);
+});
+
+test('legacy opening stock joins the normal outlet balance and is consumed normally',()=>{
+ const actor={id:'p',name:'Purchaser',role:'purchaser',assignedLocations:['a']};
+ const state={outlets:[{id:'a'}],items:[{id:'rice',name:'Rice',unit:'kg'}],vendors:[],cuisines:[{name:'Indian'}],outletStock:[{item_id:'rice',outlet_id:'a',quantity:2}],legacyStock:[],requests:[],operationRecords:[]};
+ const opened=stockCommand(state,actor,{outletId:'a',itemId:'rice',quantity:5,unitPrice:4},'opening');
+ assert.equal(opened.outletStock[0].quantity,7);assert.equal(opened.legacyStock.length,0);assert.equal(opened.movements[0].vendor,'Legacy Stock');assert.equal(opened.outletStock[0].unit_cost_minor,400);
+ const issued=stockCommand({...state,...opened},actor,{outletId:'a',itemId:'rice',quantity:3,cuisine:'Indian'},'distribute');assert.equal(issued.outletStock[0].quantity,4);
+ assert.throws(()=>stockCommand(state,{...actor,assignedLocations:['b']},{outletId:'a',itemId:'rice',quantity:1},'opening'));
+});
