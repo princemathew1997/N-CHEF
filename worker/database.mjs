@@ -1,5 +1,5 @@
 import { entities, clone, project, fail } from './model.mjs';
-import { clearHandledNotifications, updateThresholds, putRecord } from './operations.mjs';
+import { clearHandledNotifications, updateThresholds, putRecord, notifyIssuedDeliveries } from './operations.mjs';
 import { hashPassword } from './auth.mjs';
 
 export async function readState(db) {
@@ -87,6 +87,7 @@ export async function persistChanges(db, state, next, touched, actor, operationI
     for (const m of stock.movements) writes.push(query(db, 'INSERT INTO outlet_stock_history (id,operation_id,item_id,outlet_id,delta,quantity,kind,reason,cuisine,vendor,item_name,unit,actor_id,actor_name,unit_cost_minor,total_cost_minor,delivery_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', crypto.randomUUID(), operationId, m.item_id, m.outlet_id, m.delta, m.quantity, m.kind, m.reason, m.cuisine, m.vendor, m.item_name, m.unit, actor.id, actor.name, m.unit_cost_minor ?? null, m.total_cost_minor ?? null, m.delivery_id ?? null));
   }
   for(const delivery of stock?.deliveries || []) putRecord(next,'delivery',delivery);
+  notifyIssuedDeliveries(next,stock?.deliveries || []);
   updateThresholds(next, stock?.outletStock || next.outletStock);
   clearHandledNotifications(state,next,actor);
   for(const record of next.operationRecords || []) {

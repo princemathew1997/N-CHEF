@@ -3,6 +3,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { build } from 'esbuild';
 import { resolve, extname, sep } from 'node:path';
+import { readState } from '../worker/database.mjs';
+import { notifyIssuedDeliveries } from '../worker/operations.mjs';
 const bundle = await build({ entryPoints: ['worker/index.mjs'], bundle: true, format: 'esm', platform: 'browser', write: false });
 const site = resolve('dist/site');
 const port=Number(process.env.NCHEF_QA_PORT || 8888);
@@ -21,5 +23,10 @@ for (const file of readdirSync('migrations').filter(f => f.endsWith('.sql')).sor
 const res = await mf.dispatchFetch('http://localhost/api/setup', { method: 'POST', headers: { Origin: 'http://localhost', 'Content-Type': 'application/json' }, body: JSON.stringify({ setupToken: 'qa-only-key', username: 'qa_admin', name: 'QA Admin', password: 'qa-only-password-2026' }) });
 if (res.status !== 201) throw new Error(await res.text());
 }
+const previewState=await readState(db);
+const existingRecordIds=new Set(previewState.operationRecords.map(record=>record.id));
+notifyIssuedDeliveries(previewState,previewState.operationRecords.filter(record=>record.kind==='delivery' && record.status==='Issued'));
+const missingNotifications=previewState.operationRecords.filter(record=>record.kind==='notification' && !existingRecordIds.has(record.id));
+if(missingNotifications.length)await db.batch([...missingNotifications.map(record=>db.prepare('INSERT OR IGNORE INTO operation_records (id,kind,payload_json) VALUES (?, ?, ?)').bind(record.id,'notification',JSON.stringify(record))),db.prepare('UPDATE app_revision SET revision=revision+1 WHERE id=1')]);
 console.log(`Local QA app ready at http://127.0.0.1:${port}; qa_admin / qa-only-password-2026`);
 process.on('SIGINT', async () => { await mf.dispose(); process.exit(0); });

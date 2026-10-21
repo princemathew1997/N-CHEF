@@ -1371,6 +1371,28 @@ body.database-saving::after {
 
 .master-stock-panel > div:first-child > div { width:100%; }
 
+/* Size the request workspace to its items, bounded by the display. */
+#requestWizardModal { padding: 12px !important; }
+#requestWizardModal > .request-ingredients-panel {
+    box-sizing: border-box;
+    width: fit-content !important;
+    min-width: min(680px, 100%);
+    max-width: 100% !important;
+    height: auto;
+    max-height: calc(100dvh - 24px) !important;
+    min-height: 0;
+    overflow-y: auto;
+}
+@media (max-width: 768px) {
+    #requestWizardModal { padding: 4px !important; }
+    #requestWizardModal > .request-ingredients-panel {
+        width: fit-content !important;
+        height: auto;
+        max-height: calc(100dvh - 8px) !important;
+        border-radius: 8px !important;
+    }
+}
+
 /* Ingredient cards must fit their grid cells rather than inherit modal sizing. */
 #wizardItemsGrid { grid-template-columns:repeat(auto-fill,minmax(min(200px,100%),1fr)) !important; }
 #wizardItemsGrid > .panel { min-width:0; width:auto; max-width:100%; overflow-wrap:anywhere; }
@@ -1471,7 +1493,8 @@ body.database-saving::after {
 
 .request-date-fields { display:grid; gap:8px; margin:16px 0; }
 .request-date-fields textarea { width:100%; padding:10px; background:var(--dark); color:var(--text-main); border:1px solid var(--border); border-radius:6px; }
-#wizardExistingRequests { border:1px solid var(--primary); border-radius:8px; padding:12px; max-height:200px; overflow:auto; }
+#wizardExistingRequests { min-width:0; border:1px solid var(--primary); border-radius:8px; padding:12px; }
+#wizardExistingRows { max-width:100%; overflow-x:auto; }
 #wizardExistingRows p { margin:6px 0; }
 
 .approval-request-list { display:grid; gap:24px; }

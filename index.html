@@ -123,6 +123,7 @@
                         <a href="#" class="nav-subitem admin-only" data-operations="wastage" data-operations-nav="true">Wastage</a>
                     </div>
                 </div>
+                <a href="#" class="nav-item hidden" id="navReceiveOrder" data-operations="deliveries" data-operations-nav="true"><i data-lucide="package-check"></i><span>Receive Order</span></a>
                 <div class="nav-group no-chef" id="navGroupRequests">
                     <a href="#" class="nav-item" id="navRequests">
                         <i data-lucide="clipboard-list"></i>
@@ -400,7 +401,6 @@
 
             <!-- CHEF PORTAL VIEW (Cuisine Head Only: Single Clean Raise Request Header Button, Metrics, & Full Requests Table) -->
             <div id="viewChefPortal" class="hidden chef-only-bg">
-                <div class="operations-links"><a href="#" class="btn btn-outline" data-operations="deliveries">Cuisine Deliveries</a></div>
                 <header class="dash-header">
                     <div class="header-title">
                         <h1>Cuisine Head <span class="text-primary">Portal</span></h1>
@@ -1108,7 +1108,7 @@
 
     <!-- REQUEST WIZARD MODAL -->
     <div id="requestWizardModal" class="modal hidden" style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 9999; display: flex; align-items: center; justify-content: center;">
-        <div class="panel" style="width: 90%; max-width: 800px; max-height: 90vh; overflow-y: auto; position: relative;">
+        <div class="panel request-ingredients-panel" style="position: relative;">
             <button class="icon-btn" id="closeRequestWizardBtn" style="position: absolute; top: 16px; right: 16px;"><i data-lucide="x"></i></button>
             <h2 id="wizardTitle">Request Ingredients</h2>
             

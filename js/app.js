@@ -1831,7 +1831,7 @@ function loadChefPortalData() {
                     <td><span style="background: rgba(255,190,11,0.12); color: var(--primary); padding: 2px 7px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">${r.cuisine || '-'}</span></td>
                     <td style="font-size: 0.85rem; color: var(--text-muted);">${outletName}</td>
                     <td><strong style="color: var(--text-main); font-size: 0.95rem;">${r.qty}</strong> <span style="font-size: 0.75rem; color: var(--text-muted);">${r.unit || 'kg'}</span>${r.status==='Approved'?`<small style="display:block">Approved: ${r.approvedQuantity ?? r.revisedQty ?? r.qty}</small>`:r.revisedQty!==undefined?`<small style="display:block">Revised: ${r.revisedQty}</small>`:''}</td>
-                    <td>${statusHtml}</td>
+                    <td>${statusHtml}${r.rejectReason ? `<small style="display:block; margin-top:6px;">Reason: ${String(r.rejectReason).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}</small>` : ''}</td>
                     <td>${editAction}${actionHtml}</td>
                 </tr>
             `;
@@ -1939,6 +1939,7 @@ window.updateSidebarAttention=function(){
     mark(document.querySelector('[data-operations-nav][data-operations=deliveries]'),counts.deliveries);
     mark(document.querySelector('[data-operations-nav][data-operations=accounts]'),counts.accounts);
     mark(document.getElementById('navDistribution'),counts.deliveries);
+    mark(document.getElementById('navReceiveOrder'),counts.deliveries);
     document.getElementById('navStock')?.classList.toggle('has-pending-requests',counts.deliveries>0);
     document.getElementById('navRequests')?.classList.toggle('has-pending-requests',counts.approvals+counts.manage+counts.consolidate+counts.vendorOrders>0);
 };
@@ -2088,6 +2089,24 @@ function loadRequestsData() {
     // Attach filters
     const filterOutlet = document.getElementById('filterOutlet');
     const filterStatus = document.getElementById('filterStatus');
+    if (filterOutlet) {
+        const visible = getVisibleOutlets();
+        const previous = filterOutlet.value;
+        filterOutlet.replaceChildren();
+        if (visible.length > 1) filterOutlet.add(new Option('All Outlets', 'all'));
+        visible.forEach(outlet => filterOutlet.add(new Option(outlet.name, outlet.id)));
+        filterOutlet.value = visible.length === 1 ? visible[0].id : visible.some(outlet => outlet.id === previous) ? previous : 'all';
+        filterOutlet.disabled = visible.length <= 1;
+        filterOutlet.style.display = visible.length <= 1 ? 'none' : '';
+        let display = document.getElementById('filterOutletSingleDisplay');
+        if (!display) {
+            display = document.createElement('span');
+            display.id = 'filterOutletSingleDisplay';
+            filterOutlet.before(display);
+        }
+        display.textContent = visible.length === 1 ? `Outlet: ${visible[0].name}` : 'No assigned outlet';
+        display.style.display = visible.length <= 1 ? '' : 'none';
+    }
     
     if (filterOutlet && !filterOutlet.dataset.bound) {
         filterOutlet.addEventListener('change', loadRequestsData);
@@ -2266,7 +2285,7 @@ function loadRequestsData() {
         const ongoingSectionRequests = viewableRequests.filter(r => {
             if (!r.cuisine || r.cuisine.toLowerCase() === 'general') return false;
             if (selStatus === 'all') {
-                return r.status === 'Pending' || r.status === 'Accepted' || r.status === 'Sent to Admin';
+                return r.status === 'Pending' || r.status === 'Accepted' || r.status === 'Sent to Admin' || r.status === 'Rejected';
             }
             return true;
         });
@@ -2353,8 +2372,8 @@ function loadRequestsData() {
                                 <button class="btn btn-primary" style="padding: 4px 10px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #2ec4b6, #208b82); border: none; color: white; font-weight: 600; border-radius: 6px; box-shadow: 0 2px 8px rgba(46,196,182,0.3); cursor: pointer;" onclick="acceptChefRequest('${r.id}')" title="Accept this request from Cuisine Head">
                                     <i data-lucide="check" style="width:12px; height:12px;"></i> Accept
                                 </button>
-                                <button class="btn btn-outline" style="padding: 3px 7px; font-size: 0.72rem; border-color: var(--danger); color: var(--danger); border-radius: 6px;" onclick="deleteRequest('${r.id}')" title="Delete item">
-                                    <i data-lucide="trash-2" style="width:11px; height:11px;"></i>
+                                <button class="btn btn-outline" style="padding: 3px 7px; font-size: 0.72rem; border-color: var(--danger); color: var(--danger); border-radius: 6px;" onclick="rejectChefRequest('${r.id}')" title="Reject with reason">
+                                    Reject
                                 </button>
                             `;
                         } else if (r.status === 'Accepted') {
@@ -2364,6 +2383,8 @@ function loadRequestsData() {
                                 </span>
                                 <button class="btn btn-outline" style="padding: 2px 6px; font-size: 0.68rem; margin-left: 6px; color: var(--text-muted); border-radius: 4px;" onclick="revertChefRequest('${r.id}')" title="Revert to Pending">Undo</button>
                             `;
+                        } else if (r.status === 'Rejected') {
+                            actionHtml = `<button class="btn btn-outline" onclick="reviewChefRequests(['${r.id}'])">Review / edit / approve</button>`;
                         } else if (r.status === 'Sent to Admin' || r.status === 'Consolidated') {
                             actionHtml = `<span style="font-size: 0.75rem; color: #4895ef; font-weight: 500;">Awaiting Admin Approval</span>`;
                         } else if (r.status === 'Approved') {
@@ -2399,8 +2420,8 @@ function loadRequestsData() {
                 }).join('');
 
                 const acceptSectionBtnHtml = (currentUser.role === 'executive_chef' && pendingInSec > 0)
-                    ? `<button class="btn btn-outline" style="font-size: 0.74rem; padding: 4px 10px; border-color: rgba(46,196,182,0.4); color: #2ec4b6; display: inline-flex; align-items: center; gap: 4px; border-radius: 6px; cursor: pointer;" onclick="acceptAllSection('${secName}')">
-                        <i data-lucide="check-check" style="width: 13px; height: 13px;"></i> Accept Section (${pendingInSec})
+                    ? `<button class="btn btn-outline" style="font-size: 0.74rem; padding: 4px 10px; border-color: rgba(46,196,182,0.4); color: #2ec4b6; display: inline-flex; align-items: center; gap: 4px; border-radius: 6px; cursor: pointer;" onclick="reviewChefRequests(${JSON.stringify(reqs.filter(r => r.status === 'Pending').map(r => r.id)).replace(/"/g, '&quot;')})">
+                        <i data-lucide="check-check" style="width: 13px; height: 13px;"></i> Review / approve section (${pendingInSec})
                        </button>`
                     : '';
 
@@ -2450,6 +2471,19 @@ function loadRequestsData() {
     }
 
     // -------------------------------------------------------------
+    // Review the filtered requests together before accepting their quantities.
+    if (currentUser.role === 'executive_chef' && containerSec) {
+        const reviewable = viewableRequests.filter(r => ['Pending', 'Rejected'].includes(r.status));
+        if (reviewable.length) {
+            const reviewButton = document.createElement('button');
+            reviewButton.className = 'btn btn-primary';
+            reviewButton.style.marginBottom = '16px';
+            reviewButton.textContent = `Review / approve all (${reviewable.length})`;
+            reviewButton.onclick = () => window.reviewChefRequests(reviewable.map(r => r.id));
+            containerSec.prepend(reviewButton);
+        }
+    }
+
     // 2. RENDER FLAT ALL REQUESTS LIST TABLE
     // -------------------------------------------------------------
     if (viewableRequests.length === 0) {
@@ -2505,7 +2539,7 @@ function loadRequestsData() {
                     <button class="btn btn-primary" style="padding: 4px 10px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 4px; background: rgba(46,196,182,0.18); border-color: rgba(46,196,182,0.4); color: #2ec4b6;" onclick="acceptChefRequest('${req.id}')" title="Accept this request from Cuisine Head">
                         <i data-lucide="check" style="width: 12px; height: 12px;"></i> Accept
                     </button>
-                    <button class="btn btn-outline" style="padding: 4px 8px; font-size: 0.72rem; border-color: var(--danger); color: var(--danger);" onclick="deleteRequest('${req.id}')" title="Delete request">Delete</button>
+                    <button class="btn btn-outline" style="padding: 4px 8px; font-size: 0.72rem; border-color: var(--danger); color: var(--danger);" onclick="rejectChefRequest('${req.id}')" title="Reject with reason">Reject</button>
                 `;
             } else if (req.status === 'Accepted') {
                 actionsHtml = `
@@ -2514,6 +2548,8 @@ function loadRequestsData() {
                     </span>
                     <button class="btn btn-outline" style="padding: 2px 6px; font-size: 0.68rem; margin-left: 6px; color: var(--text-muted); border-radius: 4px;" onclick="revertChefRequest('${req.id}')" title="Revert to Pending">Undo</button>
                 `;
+            } else if (req.status === 'Rejected') {
+                actionsHtml = `<button class="btn btn-outline" onclick="reviewChefRequests(['${req.id}'])">Review / edit / approve</button>`;
             } else if (req.status === 'Sent to Admin' || req.status === 'Consolidated') {
                 actionsHtml = `<span style="font-size: 0.75rem; color: #4895ef; font-weight: 500; display: inline-flex; align-items: center; gap: 4px;"><i data-lucide="clock" style="width: 12px; height: 12px;"></i> Awaiting Admin Approval</span>`;
             } else if (req.status === 'Approved') {
@@ -2891,6 +2927,7 @@ function loadIndentsData() {
         const vis = getVisibleOutlets();
         const previous = outletFilter.value;
         outletFilter.disabled = vis.length === 1;
+        outletFilter.style.display = vis.length <= 1 ? 'none' : '';
         outletFilter.innerHTML = (vis.length > 1 ? '<option value="all">All Outlets</option>' : '') + vis.map(o => `<option value="${o.id}">${o.name}</option>`).join('');
         outletFilter.value = vis.some(o => o.id === previous) ? previous : (vis.length === 1 ? vis[0].id : 'all');
     }
@@ -3327,6 +3364,66 @@ window.rejectRequest = async function(reqId) {
     }
 };
 
+window.reviewChefRequests = function(ids) {
+    if (currentUser?.role !== 'executive_chef') return;
+    const selected = requestsData.filter(r => ids.includes(r.id));
+    const parentIds = new Set(selected.filter(r => r.status === 'Rejected' && r.indentId).map(r => r.indentId));
+    const rows = requestsData.filter(r => ids.includes(r.id) || parentIds.has(r.indentId));
+    const dialog = document.createElement('dialog');
+    dialog.className = 'operations-dialog vendor-receipt-dialog';
+    const title = document.createElement('h2');
+    title.textContent = 'Review requests and approve quantities';
+    const note = document.createElement('p');
+    note.textContent = 'Review every item below and edit quantities as needed. Rejected consolidated requests include all their items. Approval makes these items ready to consolidate and submit again.';
+    const form = document.createElement('form');
+    const scroll = document.createElement('div');
+    scroll.className = 'table-container';
+    const table = document.createElement('table');
+    const heading = table.createTHead().insertRow();
+    for (const label of ['Item', 'Outlet / cuisine', 'Status', 'Requested', 'Approve quantity']) {
+        const cell = document.createElement('th'); cell.textContent = label; heading.append(cell);
+    }
+    const body = table.createTBody();
+    const inputs = rows.map(request => {
+        const row = body.insertRow();
+        for (const value of [request.itemName, `${request.outletName || request.outletId} / ${request.cuisine}`, request.status, `${request.qty} ${request.unit || ''}`]) row.insertCell().textContent = value;
+        const input = document.createElement('input');
+        input.type = 'number'; input.min = '0.000001'; input.step = 'any'; input.required = true;
+        input.value = request.revisedQty ?? request.qty;
+        input.setAttribute('aria-label', `Approve quantity for ${request.itemName}`);
+        row.insertCell().append(input);
+        return {request: {...request}, input};
+    });
+    const approve = document.createElement('button');
+    approve.type = 'submit'; approve.className = 'btn btn-primary'; approve.textContent = 'Approve all reviewed items';
+    const cancel = document.createElement('button');
+    cancel.type = 'button'; cancel.className = 'btn btn-outline'; cancel.textContent = 'Cancel'; cancel.onclick = () => dialog.close();
+    scroll.append(table); form.append(scroll, approve, cancel); dialog.append(title, note, form); document.body.append(dialog);
+    dialog.onclose = () => dialog.remove();
+    form.onsubmit = async event => {
+        event.preventDefault(); approve.disabled = true;
+        try {
+            await runDatabaseAction('operations/requests/review', {lines: inputs.map(({request, input}) => ({id:request.id, quantity:Number(input.value), expectedQuantity:request.qty, expectedStatus:request.status}))});
+            dialog.close(); loadRequestsData(); updateRequestsBadge();
+            window.showToast('All reviewed items approved. Ready to consolidate.', 'success');
+        } catch (error) { window.showToast(error.message, 'warning'); }
+        finally { approve.disabled = false; }
+    };
+    dialog.showModal();
+};
+
+window.rejectChefRequest = async function(reqId) {
+    if (currentUser?.role !== 'executive_chef') return;
+    const reason = await window.showPromptModal('Provide the rejection reason. This will be sent to the requesting Cuisine Head.', '', 'Reject request');
+    if (reason === null || reason === false) return;
+    if (!String(reason).trim()) { window.showToast('A rejection reason is required.', 'warning'); return; }
+    try {
+        await runDatabaseAction('operations/requests/reject', {id:reqId, reason:String(reason).trim()});
+        loadRequestsData(); updateRequestsBadge();
+        window.showToast('Request rejected. The reason was sent to the Cuisine Head.', 'success');
+    } catch (error) { window.showToast(error.message, 'warning'); }
+};
+
 window.acceptChefRequest = async function(reqId) {
     const req = requestsData.find(r => r.id === reqId);
     if (!req) return;
@@ -3364,7 +3461,7 @@ window.acceptAllSection = async function(secName) {
         if (r.status !== 'Pending') return false;
         if ((r.cuisine || '').toLowerCase() !== (secName || '').toLowerCase()) return false;
         const rOutletId = (r.outletId || '').toLowerCase();
-        return rOutletId === outlet.id.toLowerCase();
+        return visIds.includes(rOutletId);
     });
     
     if (pendingInSec.length === 0) {
@@ -3372,20 +3469,7 @@ window.acceptAllSection = async function(secName) {
         return;
     }
     
-    const nowIso = new Date().toISOString();
-    const supName = (currentUser && currentUser.name) ? currentUser.name : 'Executive Chef';
-    pendingInSec.forEach(r => {
-        r.status = 'Accepted';
-        r.acceptedBy = supName;
-        r.acceptedAt = nowIso;
-    });
-    
-    await saveData();
-    loadRequestsData();
-    if (typeof loadChefPortalData === 'function') loadChefPortalData();
-    updateRequestsBadge();
-    
-    window.showToast(`Accepted all ${pendingInSec.length} requests in ${secName} section! Ready to consolidate.`, "success");
+    window.reviewChefRequests(pendingInSec.map(r => r.id));
 };
 
 window.sendRequestToAdmin = async function(reqId) {

@@ -6,14 +6,14 @@ module.exports=async function reviewFlow(browser,base){
  const login=async(page,username)=>{await page.goto(base);await page.locator('#username').fill(username);await page.locator('#password').fill('qa-only-password-2026');await page.locator('#loginBtn').click();await page.locator('#page-loader').waitFor({state:'hidden'});await page.waitForFunction(()=>currentUser!==null);};
  const state=async page=>(await page.request.get(base+'/api/state')).json();
  await login(head,'qa_head');await login(exec,'qa_exec');
- const item=(await state(head)).items.find(i=>i.name==='QA priced item');
+ const item=(await state(head)).items.find(i=>i.name==='QA live item');
  await head.evaluate(()=>openRequestWizard());await head.locator('#requestWizardModal').waitFor({state:'visible'});
  assert.equal(await head.locator('#wizardRequestDate').isVisible(),false);assert.match(await head.locator('#wizardFixedRequestDate').innerText(),/Request date/);
  assert.equal(await head.locator('#navUsers').isVisible(),false);
  if(await head.locator('#wizardPlaceNewOrder').isVisible())await head.locator('#wizardPlaceNewOrder').click();
  await head.evaluate(id=>toggleWizardItem(id),item.id);await head.locator('#wizardReviewBtn').click();await head.locator('#wizardQty_'+item.id).fill('4');await head.locator('#wizardSubmitBtn').click();await head.locator('#uiAlertOkBtn').click();
  console.log('Review flow: existing-order table and pending edit');
- await head.evaluate(()=>openRequestWizard());await head.locator('#wizardExistingRows table').waitFor();assert.match(await head.locator('#wizardExistingRows').innerText(),/QA priced item/);assert.equal(await head.locator('#wizardStep1').isVisible(),false);
+ await head.evaluate(()=>openRequestWizard());await head.locator('#wizardExistingRows table').waitFor();assert.match(await head.locator('#wizardExistingRows').innerText(),/QA live item/);assert.equal(await head.locator('#wizardStep1').isVisible(),false);
  await head.locator('#wizardExistingRows button').first().click();await head.locator('#uiAlertInput').fill('5');await head.locator('#uiAlertOkBtn').click();await head.waitForFunction(()=>requestsData.some(r=>r.qty===5 && r.status==='Pending'));
  await head.locator('#wizardPlaceNewOrder').click();assert.equal(await head.locator('#wizardStep1').isVisible(),true);await head.locator('#closeRequestWizardBtn').click();
  const req=(await state(head)).requests.find(r=>r.itemId===item.id && r.status==='Pending');

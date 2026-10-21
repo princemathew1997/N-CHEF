@@ -52,6 +52,20 @@ export function updateThresholds(state, balances) {
   }
 }
 
+export function notifyIssuedDeliveries(state, deliveries) {
+  for(const delivery of deliveries) {
+    const recipients=state.users.filter(user=>user.role==='cuisine_head'
+      && hasOutlet(user,delivery.outletId)
+      && (user.assignedSections || user.assignedCuisines || []).includes(delivery.cuisine)
+      && (!delivery.recipientId || delivery.recipientId===user.id));
+    for(const user of recipients) {
+      const notificationId=`delivery_${delivery.id}_${user.id}`;
+      if((state.operationRecords || []).some(r=>r.id===notificationId))continue;
+      putRecord(state,'notification',{id:notificationId,userId:user.id,outletId:delivery.outletId,eventType:'delivery_issued',sourceId:delivery.id,read:false,createdAt:delivery.createdAt,message:`${delivery.quantity} ${delivery.unit || ''} ${delivery.itemName} issued to ${delivery.cuisine}. Open Cuisine Deliveries to confirm receipt or report an issue.`});
+    }
+  }
+}
+
 export function recallConsolidatedRequest(state,actor,input){
   const parent=state.indents.find(i=>i.id===input.id);
   if(actor.role!=='executive_chef' || !parent || !hasOutlet(actor,parent.outletId) || parent.ownerId!==actor.id)fail('Only the owning Executive Chef can recall this request.',403);
@@ -63,6 +77,35 @@ export function recallConsolidatedRequest(state,actor,input){
   putRecord(next,'notification',{id:crypto.randomUUID(),system:true,eventType:'indent_recall',outletId:parent.outletId,indentId:parent.id,indent:parent,recalledBy:actor.id,recalledAt:new Date().toISOString()});
   for(const n of next.operationRecords || [])if(n.kind==='notification' && n.sourceId===parent.id)n.read=true;
   notify(next,['purchaser','admin'],parent.outletId,`${actor.name} recalled ${parent.indentNumber} before approval. It will be combined with new requests and resubmitted.`,parent.id);
+  return {next,changes};
+}
+
+export function reviewChefRequests(state,actor,input){
+  if(actor.role!=='executive_chef')fail('Executive Chef permission required.',403);
+  if(!Array.isArray(input.lines) || !input.lines.length)fail('Choose requests to review.');
+  const next=clone(state),changes=[],seen=new Set(),parents=new Set();
+  for(const line of input.lines){
+    const request=state.requests.find(r=>r.id===line.id);
+    if(!request || !hasOutlet(actor,request.outletId))fail('Request access denied.',403);
+    if(seen.has(request.id))fail('Duplicate request.');
+    seen.add(request.id);
+    if(!['Pending','Rejected'].includes(request.status))fail('Request changed. Reopen the review.',409);
+    if(line.expectedQuantity!==request.qty || line.expectedStatus!==request.status)fail('Request changed. Reopen the review.',409);
+    number(line.quantity,'Reviewed quantity',true);
+    if(request.indentId){
+      const parent=state.indents.find(i=>i.id===request.indentId);
+      if(!parent || parent.status!=='Rejected' || parent.ownerId!==actor.id || state.purchase_orders.some(p=>p.indentId===parent.id))fail('This consolidated request cannot be reopened.',409);
+      parents.add(parent.id);
+    }
+    const value={...request,revisedQty:line.quantity,status:'Accepted',acceptedBy:actor.name,acceptedAt:new Date().toISOString()};
+    delete value.indentId;
+    changes.push({entity:'requests',key:value.id,value});
+  }
+  for(const id of parents){
+    if(state.requests.some(r=>r.indentId===id && !seen.has(r.id)))fail('Review all items in the rejected consolidated request together.',409);
+    putRecord(next,'notification',{id:crypto.randomUUID(),system:true,eventType:'rejected_indent_review',indent:state.indents.find(i=>i.id===id),reviewedBy:actor.id,reviewedAt:new Date().toISOString()});
+    changes.push({entity:'indents',key:id,value:null});
+  }
   return {next,changes};
 }
 
@@ -94,7 +137,18 @@ export function operationCommand(state, actor, input, action, transact) {
   const purchase=()=>{if(!canPurchase(actor))fail('Purchaser permission required.',403);};
   const outlet=id=>{if(!state.outlets.some(o=>o.id===id) || !hasOutlet(actor,id))fail('Outlet access denied.',403);};
   const now=new Date().toISOString();
-  if(action==='distribution/issue'){
+  if(action==='requests/reject'){
+    if(actor.role!=='executive_chef')fail('Executive Chef permission required.',403);
+    const request=state.requests.find(r=>r.id===input.id);
+    if(!request)fail('Request not found.',404);
+    outlet(request.outletId);
+    if(request.indentId || !['Pending','Accepted'].includes(request.status))fail('Only unforwarded requests can be rejected.',409);
+    const reason=safeText(input.reason,'Rejection reason',500).trim();
+    if(!reason)fail('Provide a rejection reason.');
+    const value={...request,status:'Rejected',rejectReason:reason,rejectedBy:actor.name,rejectedAt:now};
+    changes.push({entity:'requests',key:value.id,value});
+    putRecord(next,'notification',{id:crypto.randomUUID(),userId:request.ownerId,outletId:request.outletId,message:`${actor.name} rejected ${request.itemName} (${request.qty} ${request.unit || ''}). Reason: ${reason}`,sourceId:request.id,read:false,createdAt:now});
+  } else if(action==='distribution/issue'){
     purchase();
     const indent=state.indents.find(i=>i.id===input.indentId);
     if(!indent || indent.status!=='Approved')fail('Choose an approved consolidated order.',409);
@@ -144,6 +198,15 @@ export function operationCommand(state, actor, input, action, transact) {
       putRecord(next,'account_request',{...r,status:'Rejected',reason,resolvedAt:now,resolvedBy:actor.id});
     }
     putRecord(next,'notification',{id:crypto.randomUUID(),userId:r.requestedBy,outletId:r.outletId,message:`Account request for ${r.name}: ${input.approve?'Approved':'Rejected'}.`,sourceId:r.id,read:false,createdAt:now});
+  } else if(action==='deliveries/accept-all') {
+    if(actor.role!=='cuisine_head')fail('Cuisine Head permission required.',403);
+    if(!Array.isArray(input.ids) || !input.ids.length || new Set(input.ids).size!==input.ids.length)fail('Choose the remaining deliveries.');
+    for(const id of input.ids){
+      const delivery=get('delivery',id);outlet(delivery.outletId);
+      if(!(actor.assignedSections || actor.assignedCuisines || []).includes(delivery.cuisine) || (delivery.recipientId && delivery.recipientId!==actor.id))fail('Delivery access denied.',403);
+      if(delivery.status!=='Issued')fail('A delivery has already been handled. Refresh and try again.',409);
+      putRecord(next,'delivery',{...delivery,status:'Received',receivedQuantity:delivery.quantity,affectedQuantity:0,reason:'',message:'',confirmedBy:actor.id,confirmedAt:now});
+    }
   } else if(action==='deliveries/confirm') {
     const r=get('delivery',input.id);outlet(r.outletId);
     if(actor.role!=='cuisine_head' || !(actor.assignedSections || actor.assignedCuisines || []).includes(r.cuisine) || (r.recipientId && r.recipientId!==actor.id))fail('Delivery access denied.',403);

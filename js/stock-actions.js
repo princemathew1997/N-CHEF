@@ -127,10 +127,10 @@
         }
         if(['receipt','distribute','adjust','assign'].includes(page)) {
             const items=page==='adjust'?masterItemsData:activeItems();
-            content.innerHTML=`<form id="outletStockForm" class="inventory-form">
+            content.innerHTML=`${page==='receipt' && ['admin','purchaser'].includes(currentUser.role)?'<div style="margin-bottom:16px;"><button type="button" class="btn btn-outline" data-receive-po>Receive stock from Vendor Order</button></div>':''}<form id="outletStockForm" class="inventory-form">
             ${field('Outlet',outletSelect())}${field('Item','<div id="stockItemPicker"></div>')}
             <p id="availableStock"></p>
-            ${page==='receipt'?field('Vendor',select('vendor',options(vendorsData,v=>v.name,v=>v.name)))+field('<span id="receiptPriceLabel">Unit price (INR)</span>','<input name="unitPrice" type="number" min="0" step="0.01" required>')+'<p id="receiptTotal">Total: ₹0.00</p><a href="#" data-operations="receipts">View today’s receipts and invoice comparison</a>':''}
+            ${page==='receipt'?field('Vendor',select('vendor',options(vendorsData,v=>v.name,v=>v.name)))+field('<span id="receiptPriceLabel">Unit price (INR)</span>','<input name="unitPrice" type="number" min="0" step="0.01" required>')+'<p id="receiptTotal">Total: ₹0.00</p>':''}
             ${page==='assign'?'<p>Vendor: <strong>Legacy Stock</strong>. Quantity is added directly to this outlet’s available stock.</p>'+field('Unit price (optional, INR)','<input name="unitPrice" type="number" min="0" step="0.01">'):''}
             ${page==='distribute'?field('Cuisine',select('cuisine',options(cuisinesData,c=>c.name,c=>c.name)))+'<input type="hidden" name="requestId"><label id="requestChoiceLabel" class="hidden">Approved cuisine request<select name="requestChoice"></select></label><p id="distributionRequestHint"></p><a href="#" data-operations="deliveries">View cuisine deliveries and receipt issues</a>':''}
             ${field(page==='adjust'?'Actual on-hand quantity':'Quantity',`<span class="quantity-entry"><input name="quantity" type="number" step="any" min="${page==='adjust'?'0':'0.00000001'}" required><span class="stock-unit" aria-label="Unit"></span></span>`)}
@@ -214,7 +214,8 @@
         });
         document.addEventListener('click',async e=>{
             const button=e.target.closest('[data-receive-po]');if(!button)return;
-            button.disabled=true;try {window.switchToView('operations:purchases');}catch(e){error(e);}finally{button.disabled=false;}
+            e.preventDefault();
+            button.disabled=true;try {window.openVendorOrderReceiving();}catch(e){error(e);}finally{button.disabled=false;}
         });
         const oldSync=window.onLiveSyncReceived;window.onLiveSyncReceived=()=>{oldSync?.();if(currentView.startsWith('inventory:') && !panel.querySelector('form') && !panel.contains(document.activeElement))render();};
         window.openAddItemModal=()=>{editing=null;window.switchToView('inventory:catalog');};

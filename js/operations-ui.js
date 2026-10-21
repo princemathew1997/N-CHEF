@@ -12,19 +12,21 @@
     const button=(action,id,label)=>`<button class="btn btn-outline" data-action="${action}" data-id="${esc(id)}">${esc(label)}</button>`;
     const table=(heads,rows)=>`<div class="table-container"><table><thead><tr>${heads.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.length?rows.map(row=>`<tr>${row.map(c=>`<td>${c}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${heads.length}">No records.</td></tr>`}</tbody></table></div>`;
     const stock=(id,outlet)=>committedState.outletStock.find(b=>b.item_id===id && b.outlet_id===outlet)?.quantity || 0;
+    const receiptComparisons=po=>(po.receiptEvents || []).filter(event=>event.vendorInvoiceTotalMinor!=null).map(event=>`<p>Receipt ${esc(InventoryTools.timestamp(event.receivedAt))}: Our total: <strong>${price(event.stockTotalMinor)}</strong> · Vendor invoice: <strong>${price(event.vendorInvoiceTotalMinor)}</strong> · Difference (vendor − ours): <strong>${price(event.invoiceDifferenceMinor)}</strong></p>`).join('');
     const outletName=id=>outletsData.find(o=>o.id===id)?.name || id;
     const link=(page,text)=>`<a class="btn btn-outline" href="#" data-operations="${page}">${esc(text || titles[page])}</a>`;
     let panel,page='approvals',editor=null,filterDate=InventoryTools.day(),filterVendor='',filterOutlet='',wasteFrom=InventoryTools.day(),wasteTo=InventoryTools.day();
     let purchaseSection='open',purchaseFrom='',purchaseTo='';
+    const purchaseDates={open:{from:'',to:''},received:null};
     async function act(path,data){await runDatabaseAction(path,data);render();window.showToast?.('Saved successfully','success');}
     function bindForm(form,handler){configureUserAssignments(form);form.onsubmit=async e=>{e.preventDefault();const buttons=form.querySelectorAll('button');buttons.forEach(b=>b.disabled=true);try{await handler(Object.fromEntries(new FormData(form)),form);}catch(error){window.showUiModal({title:'Change was not saved',message:error.message,type:'warning'});}finally{buttons.forEach(b=>b.disabled=false);}};}
     const formHTML=body=>`<form class="inventory-form">${body}<button class="btn btn-primary">Save</button></form>`;
     function render(){
         if(!panel || !currentUser || !committedState)return;
-        panel.innerHTML=`<header class="dash-header"><div><h1>${titles[page]}</h1><p>${esc(names[currentUser.role])}</p></div></header><div class="panel inventory-workspace" id="operationsContent"></div>`;
+        panel.innerHTML=`<header class="dash-header"><div><h1>${page==='deliveries' && currentUser.role==='cuisine_head'?'Receive Order':titles[page]}</h1><p>${esc(names[currentUser.role])}</p></div></header><div class="panel inventory-workspace" id="operationsContent"></div>`;
         const content=panel.querySelector('#operationsContent');
         if(page==='legacy')window.renderLegacyImport(content);
-        if(page==='notifications')content.innerHTML=`<div class="notification-actions"><button type="button" class="btn btn-outline" data-action="read-all" ${records('notification').some(n=>!n.read)?'':'disabled'}>Mark all as read</button></div>`+table(['When','Message','Action'],records('notification').slice().reverse().map(n=>[esc(InventoryTools.timestamp(n.createdAt)),esc(n.message),n.read?'Read':button('read',n.id,'Mark read')]));
+        if(page==='notifications')content.innerHTML=`<div class="notification-actions"><button type="button" class="btn btn-outline" data-action="read-all" ${records('notification').some(n=>!n.read)?'':'disabled'}>Mark all as read</button></div>`+table(['When','Message','Action'],records('notification').slice().reverse().map(n=>[esc(InventoryTools.timestamp(n.createdAt)),esc(n.message),(n.eventType==='delivery_issued'?link('deliveries','Confirm delivery')+' ':' ')+(n.read?'Read':button('read',n.id,'Mark read'))]));
         if(page==='category' || page==='unit'){
             content.innerHTML=formHTML(input('name','New '+page,'text','','required maxlength="200"'))+table(['Name'],records(page).map(r=>[esc(r.name)]));
             bindForm(content.querySelector('form'),data=>act('operations/'+page+'/add',data));
@@ -47,7 +49,12 @@
             if(!filteredOrders.length)content.innerHTML='<p>No '+(purchaseSection==='received'?'received orders':'outstanding purchase orders')+' match the selected dates.</p>';
             const controls=`<div class="purchase-order-tabs"><button type="button" class="btn ${purchaseSection==='open'?'btn-primary':'btn-outline'}" data-purchase-section="open">PO Raised (${purchaseOrdersData.filter(p=>p.status!=='Received').length})</button><button type="button" class="btn ${purchaseSection==='received'?'btn-primary':'btn-outline'}" data-purchase-section="received">Received (${purchaseOrdersData.filter(p=>p.status==='Received').length})</button></div><div class="user-table-filters"><label>From date (IST)<input id="purchaseFrom" type="date" value="${esc(purchaseFrom)}"></label><label>To date (IST)<input id="purchaseTo" type="date" value="${esc(purchaseTo)}"></label><button type="button" class="btn btn-outline" id="purchaseClearDates">Clear dates</button><span>${purchaseSection==='received'?'Filter by received date':'Filter by order date'} · ${filteredOrders.length} order(s)</span></div>`;
             content.insertAdjacentHTML('afterbegin',controls);
-            content.querySelectorAll('[data-purchase-section]').forEach(b=>b.onclick=()=>{purchaseSection=b.dataset.purchaseSection;render();});
+            content.querySelectorAll('[data-purchase-section]').forEach(b=>b.onclick=()=>{
+                purchaseDates[purchaseSection]={from:purchaseFrom,to:purchaseTo};
+                purchaseSection=b.dataset.purchaseSection;
+                const dates=purchaseDates[purchaseSection] || {from:InventoryTools.day(),to:InventoryTools.day()};
+                purchaseFrom=dates.from;purchaseTo=dates.to;render();
+            });
             const changeDates=()=>{const from=content.querySelector('#purchaseFrom'),to=content.querySelector('#purchaseTo');to.setCustomValidity(from.value && to.value && from.value>to.value?'To date must be on or after From date.':'');if(!to.reportValidity())return;purchaseFrom=from.value;purchaseTo=to.value;render();};
             content.querySelector('#purchaseFrom').onchange=changeDates;content.querySelector('#purchaseTo').onchange=changeDates;
             content.querySelector('#purchaseClearDates').onclick=()=>{purchaseFrom='';purchaseTo='';render();};
@@ -65,6 +72,10 @@
             bindForm(form,data=>act('operations/receipts/reconcile',{outletId:filterOutlet,vendor:filterVendor,date:filterDate,vendorTotal:Number(data.vendorTotal)}));
         }
         if(page==='deliveries')content.innerHTML=table(['When','Outlet / cuisine','Item','Issued / received','Issue comment','Status / reason','Action'],records('delivery').slice().reverse().map(d=>[esc(InventoryTools.timestamp(d.createdAt)),esc(outletName(d.outletId)+' / '+d.cuisine),esc(d.itemName),esc(d.quantity+' / '+(d.receivedQuantity ?? 'Awaiting')),esc(d.issueComment || ''),esc(d.status+(d.reason?' — '+d.reason:'')+(d.resolution?' — '+d.resolution:'')+(d.message?' — '+d.message:'')),currentUser.role==='cuisine_head' && d.status==='Issued'?button('confirm-delivery',d.id,'Confirm / report issue'):purchaser() && d.status==='Issue reported'?button('resolve-delivery',d.id,'Resolve issue'):'']));
+        if(page==='deliveries' && currentUser.role==='cuisine_head'){
+            const remaining=records('delivery').filter(d=>d.status==='Issued');
+            if(remaining.length)content.insertAdjacentHTML('afterbegin',`<div style="margin-bottom:16px;"><button type="button" class="btn btn-primary" data-action="accept-all-deliveries">Accept all remaining (${remaining.length})</button><p>Report issues on individual items first, then accept the remaining items in full.</p></div>`);
+        }
         if(page==='wastage'){
             content.innerHTML=`<div class="inventory-form" id="wasteFilters">${select('period','Period','<option value="daily">Daily</option><option value="weekly">Last 7 days</option><option value="custom">Custom</option>')}${input('from','From (IST)','date',wasteFrom)}${input('to','To (IST)','date',wasteTo)}<button class="btn btn-outline" id="applyWaste">Apply</button></div><div id="wasteRows"></div>`;
             const filters=content.querySelector('#wasteFilters');filters.querySelector('[name=period]').onchange=e=>{if(e.target.value!=='custom'){wasteTo=InventoryTools.day();wasteFrom=e.target.value==='daily'?wasteTo:InventoryTools.day(Date.now()-6*86400000);filters.querySelector('[name=from]').value=wasteFrom;filters.querySelector('[name=to]').value=wasteTo;}};
@@ -117,6 +128,12 @@
         const dialog=document.createElement('dialog');dialog.className='operations-dialog';dialog.innerHTML=`<h2>${esc(title)}</h2>${html}<button class="btn btn-outline" type="button" data-close>Cancel</button>`;document.body.append(dialog);dialog.querySelector('[data-close]').onclick=()=>dialog.close();dialog.onclose=()=>dialog.remove();dialog.showModal();bindForm(dialog.querySelector('form'),async(data,form)=>{await handler(data,form);dialog.close();});return dialog;
     }
     async function handle(action,id){
+        if(action==='accept-all-deliveries'){
+            const remaining=records('delivery').filter(d=>d.status==='Issued');
+            if(!remaining.length)return;
+            if(!await window.showConfirmModal(`Accept all ${remaining.length} remaining deliveries as received in full? Items already confirmed or reported with issues will stay unchanged.`, 'Accept remaining deliveries'))return;
+            return act('operations/deliveries/accept-all',{ids:remaining.map(d=>d.id)});
+        }
         if(action==='read-all'){
             const unread=records('notification').filter(n=>!n.read).map(n=>n.id);
             for(const id of unread)await runDatabaseAction('operations/notifications/read',{id});
@@ -126,7 +143,7 @@
         if(action==='approve-indent')return act('indents/approve',{indentId:id});
         if(action==='view-received-po'){
             const po=purchaseOrdersData.find(p=>p.id===id);if(!po)return;
-            const dialog=document.createElement('dialog');dialog.className='operations-dialog';dialog.innerHTML=`<h2>${esc(po.poNumber)} · ${esc(po.vendorName)}</h2><p>Outlet: ${esc(outletName(po.outletId))} · Received: ${esc(InventoryTools.timestamp(po.receivedAt))}</p>${table(['Item','Unit','Ordered','Received','Rejected'],po.items.map(i=>[esc(i.itemName),esc(i.unit || masterItemsData.find(x=>x.id===i.itemId)?.unit),esc(i.qty),esc(i.receivedQty || 0),esc(i.rejectedQty || 0)]))}<button type="button" class="btn btn-outline" data-close>Close</button>`;document.body.append(dialog);dialog.querySelector('[data-close]').onclick=()=>dialog.close();dialog.onclose=()=>dialog.remove();dialog.showModal();return;
+            const dialog=document.createElement('dialog');dialog.className='operations-dialog';dialog.innerHTML=`<h2>${esc(po.poNumber)} · ${esc(po.vendorName)}</h2><p>Outlet: ${esc(outletName(po.outletId))} · Received: ${esc(InventoryTools.timestamp(po.receivedAt))}</p>${receiptComparisons(po)}${table(['Item','Unit','Ordered','Received','Rejected'],po.items.map(i=>[esc(i.itemName),esc(i.unit || masterItemsData.find(x=>x.id===i.itemId)?.unit),esc(i.qty),esc(i.receivedQty || 0),esc(i.rejectedQty || 0)]))}<button type="button" class="btn btn-outline" data-close>Close</button>`;document.body.append(dialog);dialog.querySelector('[data-close]').onclick=()=>dialog.close();dialog.onclose=()=>dialog.remove();dialog.showModal();return;
         }
         if(action==='receive-po'){
             const po=purchaseOrdersData.find(p=>p.id===id);
@@ -134,15 +151,15 @@
             const html=formHTML(`<p>Received means accepted into stock. Enter rejected goods separately; they are not charged and remain outstanding for replacement.</p><div class="vendor-receipt-table">${table(['Item / unit','Outstanding','Received','Rejected','Unit cost (INR)','Received total','Rejection reason / note'],rows.map((line,index)=>{
                 const remaining=line.qty-(line.receivedQty || 0),unit=line.unit || masterItemsData.find(i=>i.id===line.itemId)?.unit || '';
                 return [esc(line.itemName)+' ('+esc(unit)+')',esc(remaining),`<input aria-label="Received ${esc(line.itemName)}" name="received_${index}" type="number" min="0" max="${remaining}" step="any" value="${remaining}" required>`,`<input aria-label="Rejected ${esc(line.itemName)}" name="rejected_${index}" type="number" min="0" max="${remaining}" step="any" value="0" required>`,`<input aria-label="Unit cost ${esc(line.itemName)}" name="cost_${index}" type="number" min="0" step=".01">`,`<output data-line-total="${index}"></output>`,`<select aria-label="Rejection reason ${esc(line.itemName)}" name="reason_${index}"><option value="">Choose reason</option>${opt(['Quality issues','Damaged goods','Wrong item','Other'],r=>r,r=>r)}</select><input aria-label="Rejection note ${esc(line.itemName)}" name="message_${index}" maxlength="500" placeholder="Note (required for Other)">`];
-            }))}</div><p id="vendorReceiveTotal">Received stock total: ₹0.00</p>`);
-            const dialog=editorForm('Receive '+po.poNumber+' · '+po.vendorName,html,(data,form)=>act('purchase-orders/receive',{poId:id,lines:rows.map((line,index)=>({itemId:line.itemId,receivedQuantity:Number(data['received_'+index]),rejectedQuantity:Number(data['rejected_'+index]),unitPrice:data['cost_'+index]===''?undefined:Number(data['cost_'+index]),reason:data['reason_'+index],message:data['message_'+index]}))}));
+            }))}</div><p id="vendorReceiveTotal">Our received stock total: ₹0.00</p>${input('vendorInvoiceTotal','Vendor invoice total for this receipt (INR, optional)','number','','min="0" step="0.01"')}<p id="vendorInvoiceDifference" aria-live="polite"></p><small>Compare the invoice amount for this receipt with the accepted stock total. A positive difference means the vendor amount is higher.</small>${receiptComparisons(po)}`);
+            const dialog=editorForm('Receive '+po.poNumber+' · '+po.vendorName,html,(data,form)=>act('purchase-orders/receive',{poId:id,vendorInvoiceTotal:data.vendorInvoiceTotal===''?undefined:Number(data.vendorInvoiceTotal),lines:rows.map((line,index)=>({itemId:line.itemId,receivedQuantity:Number(data['received_'+index]),rejectedQuantity:Number(data['rejected_'+index]),unitPrice:data['cost_'+index]===''?undefined:Number(data['cost_'+index]),reason:data['reason_'+index],message:data['message_'+index]}))}));
             dialog.classList.add('vendor-receipt-dialog');
             const form=dialog.querySelector('form');form.querySelector('button[type=submit],button.btn-primary').textContent='Save received stock';
             const update=()=>{let total=0;rows.forEach((line,index)=>{
                 const received=form.elements['received_'+index],rejected=form.elements['rejected_'+index],cost=form.elements['cost_'+index],reason=form.elements['reason_'+index],message=form.elements['message_'+index];
                 const remaining=line.qty-(line.receivedQty || 0);received.max=Math.max(0,remaining-Number(rejected.value || 0));rejected.max=Math.max(0,remaining-Number(received.value || 0));cost.required=Number(received.value)>0;reason.required=Number(rejected.value)>0;message.required=Number(rejected.value)>0 && reason.value==='Other';
                 const amount=Math.round(Math.max(0,Number(received.value))*Math.round(Number(cost.value || 0)*100));total+=amount;form.querySelector('[data-line-total="'+index+'"]').textContent=price(amount);
-            });form.querySelector('#vendorReceiveTotal').textContent='Received stock total: '+price(total);};form.oninput=update;form.onchange=update;update();return dialog;
+            });form.querySelector('#vendorReceiveTotal').textContent='Our received stock total: '+price(total);const invoice=form.elements.vendorInvoiceTotal.value;form.querySelector('#vendorInvoiceDifference').textContent=invoice===''?'Enter the vendor invoice total to compare.':'Difference (vendor − ours): '+price(Math.round(Number(invoice)*100)-total);};form.oninput=update;form.onchange=update;update();return dialog;
         }
         if(action==='raise-po'){activeReviewingIndentId=id;return window.VendorOrderUI.open();}
         if(action==='pdf')return window.VendorOrderUI.download(id);
@@ -179,6 +196,8 @@
     window.configureOperationsRole=()=>{
         document.getElementById('userTitle').textContent=names[currentUser.role];
         document.querySelectorAll('[data-operations-nav]').forEach(a=>{const p=a.dataset.operations;a.classList.toggle('hidden',!allowed(p));});
+        document.getElementById('navGroupStock')?.classList.toggle('hidden',currentUser.role==='cuisine_head');
+        document.getElementById('navReceiveOrder')?.classList.toggle('hidden',currentUser.role!=='cuisine_head');
         document.getElementById('navAddChef')?.classList.add('hidden');
         document.getElementById('navUsers')?.classList.toggle('hidden',currentUser.role==='cuisine_head');
         document.getElementById('navGroupLegacy')?.classList.toggle('hidden',!purchaser());
@@ -190,6 +209,13 @@
         });
     };
     function allowed(p){if(p==='users')return ['admin','purchaser','executive_chef'].includes(currentUser?.role);if(['vendors','category','unit','wastage'].includes(p))return currentUser?.role==='admin';if(['legacy','approvals','vendor-orders','purchases','receipts','accounts'].includes(p))return purchaser();return true;}
+    window.openVendorOrderReceiving=()=>{
+        if(!allowed('purchases'))return;
+        purchaseDates[purchaseSection]={from:purchaseFrom,to:purchaseTo};
+        purchaseSection='open';purchaseFrom='';purchaseTo='';
+        purchaseDates.open={from:'',to:''};
+        window.switchToView('operations:purchases');
+    };
     window.homeViewForRole=role=>({admin:'viewMasterOrders',executive_chef:'viewRequests',purchaser:'operations:approvals',cuisine_head:'viewChefPortal'}[role] || 'viewMasterOrders');
     window.goHome=()=>window.switchToView(window.homeViewForRole(currentUser?.role));
     window.showOperationsView=view=>{
