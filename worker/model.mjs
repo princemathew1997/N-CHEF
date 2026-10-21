@@ -140,6 +140,7 @@ export function validateChanges(state, changes, actor, stockAction = false) {
           const sections = actor.assignedSections || actor.assignedCuisines || [];
           if (data && !sections.includes(data.cuisine)) fail('Cuisine access denied.', 403);
         } else {
+          if(actor.role==='executive_chef' && old && !data)fail('Reject the request with a reason instead of deleting it.',403);
           if (old && ['Approved', 'Rejected', 'PO Raised'].includes(old.status)) fail('Completed requests cannot be changed by supervisors.', 403);
           if (data && !['Pending', 'Accepted', 'Sent to Admin', 'Consolidated', 'Rejected'].includes(data.status)) fail('Supervisors cannot approve stock.', 403);
           if (old && data && (old.itemId !== data.itemId || old.ownerId !== data.ownerId)) fail('Request identity cannot change.', 403);

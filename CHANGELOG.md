@@ -4,6 +4,22 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 2.2.0 - 2026-10-21
+
+- Let Executive Chefs review and revise quantities before approving requests in
+  bulk, including rejected requests resubmitted for consolidation. Replace request
+  deletion with rejection reasons delivered to the requesting Cuisine Head.
+- Notify Cuisine Heads when stock is issued and let them accept all remaining
+  deliveries after reporting individual issues. Provide a direct Receive Order menu.
+- Add optional vendor invoice totals and saved per-receipt comparisons to purchase
+  order receiving. Default received-order history to today in IST and link Receive
+  Stock directly to outstanding vendor orders.
+- Let existing ingredient requests grow with their content, block duplicate items
+  for the same requester/date/outlet, and refresh outlet filters from assignments.
+- Validate 86 JavaScript/API tests, six database/migration tests, browser workflows,
+  desktop/mobile receiving layouts, build and deployment packaging.
+- Preserve the existing operations-v2 schema; no database migrations or reset.
+
 ## 2.1.0 - 2026-10-20
 
 - Integrate role-aware navigation, nested Stock menus and action badges; open each

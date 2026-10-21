@@ -1,4 +1,4 @@
-import { canPurchase, operationCommand, notify, dayIST, editCuisineRequest, recallConsolidatedRequest } from './operations.mjs';
+import { canPurchase, operationCommand, notify, dayIST, editCuisineRequest, recallConsolidatedRequest, reviewChefRequests } from './operations.mjs';
 import { validateLegacyCSV } from '../shared/legacy-import.mjs';
 import { stockCommand } from './stock.mjs';
 import { releaseInfo, requireCurrentClient } from './release.mjs';
@@ -171,11 +171,12 @@ export default {
         if(input.revision!==state.revision)fail('Data changed. Refresh and try again.',409);
         let stock={outletStock:clone(state.outletStock),legacyStock:clone(state.legacyStock),movements:[],deliveries:[]};
         const transact=(kind,data)=>{const result=stockCommand({...state,...stock},actor,data,kind,true);stock={...result,movements:[...stock.movements,...result.movements],deliveries:[...stock.deliveries,...(result.deliveries || [])]};};
+        const reviewingChefRequests=path==='/api/operations/requests/review';
         const editingCuisineRequest=path==='/api/operations/requests/edit';
         const recallingIndent=path==='/api/operations/indents/recall';
-        const derived=recallingIndent?recallConsolidatedRequest(state,actor,input):editingCuisineRequest?editCuisineRequest(state,actor,input):operationCommand(state,actor,input,path.slice('/api/operations/'.length),transact);
+        const derived=reviewingChefRequests?reviewChefRequests(state,actor,input):recallingIndent?recallConsolidatedRequest(state,actor,input):editingCuisineRequest?editCuisineRequest(state,actor,input):operationCommand(state,actor,input,path.slice('/api/operations/'.length),transact);
         let next=derived.next,touched=[];
-        if(derived.changes.length){const validated=validateChanges(next,derived.changes,(editingCuisineRequest || recallingIndent)?{...actor,role:'admin'}:actor,editingCuisineRequest || recallingIndent);next=validated.next;touched=validated.touched;}
+        if(derived.changes.length){const privileged=editingCuisineRequest || recallingIndent || reviewingChefRequests;const validated=validateChanges(next,derived.changes,privileged?{...actor,role:'admin'}:actor,privileged);next=validated.next;touched=validated.touched;}
         return response(await persistChanges(env.DB,state,next,touched,actor,input.operationId,stock));
       }
       if (path === '/api/purchase-orders/raise' && request.method === 'POST') {

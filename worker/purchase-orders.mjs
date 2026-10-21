@@ -67,6 +67,11 @@ export function planVendorReceipt(state,actor,input){
   }
   if(!events.length)fail('Enter at least one received or rejected quantity.');
   const event={id:crypto.randomUUID(),receivedAt:new Date().toISOString(),receivedBy:actor.id,lines:events};
+  event.stockTotalMinor=events.reduce((sum,line)=>sum+line.totalCostMinor,0);
+  if(input.vendorInvoiceTotal!==undefined){
+    event.vendorInvoiceTotalMinor=money(input.vendorInvoiceTotal);
+    event.invoiceDifferenceMinor=event.vendorInvoiceTotalMinor-event.stockTotalMinor;
+  }
   po.receiptEvents=[...(po.receiptEvents || []),event];po.status=po.items.every(i=>(i.receivedQty || 0)>=i.qty-1e-8)?'Received':'Partially Received';po.receivedBy=actor.name;po.receivedAt=event.receivedAt;
   return {po,receipts,event};
 }

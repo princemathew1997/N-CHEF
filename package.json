@@ -1,6 +1,6 @@
 {
   "name": "nchef-kitchen-stock-tracker",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Commercial multi-outlet kitchen inventory management, cuisine sections indents & stock tracking platform.",
   "main": "js/app.js",
   "scripts": {

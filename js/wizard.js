@@ -6,6 +6,19 @@ let currentWizardCat = '';
 let allCategories = [];
 let wizardNewOrderStarted=false;
 
+function wizardHasExistingItem(itemId) {
+    const date = document.getElementById('wizardRequestDate').value;
+    const outlet = document.getElementById('wizardOutlet').value;
+    return requestsData.some(request => request.ownerId === currentUser.id
+        && request.outletId === outlet
+        && (request.date || InventoryTools.day(request.timestamp)) === date
+        && request.itemId === itemId);
+}
+
+function showWizardExistingItemMessage() {
+    alert('This item is already in your initial order for this date and outlet. Please edit the initial order to change its quantity.');
+}
+
 function refreshWizardDateContext(){
     const date=document.getElementById('wizardRequestDate');
     const today=InventoryTools.day();
@@ -34,6 +47,11 @@ function refreshWizardDateContext(){
     section.hidden=!showExisting;
     if(showExisting){document.getElementById('wizardStep1').classList.add('hidden');document.getElementById('wizardStep2').classList.add('hidden');}
     else if(document.getElementById('wizardStep2').classList.contains('hidden'))document.getElementById('wizardStep1').classList.remove('hidden');
+    for (const itemId of Object.keys(wizardSelectedItems)) {
+        if (wizardHasExistingItem(itemId)) delete wizardSelectedItems[itemId];
+    }
+    updateWizardSelectedCount();
+    renderWizardItems();
 }
 function validateWizardRequestDate(){
     refreshWizardDateContext();
@@ -184,6 +202,10 @@ function initRequestWizard() {
     });
 
     document.getElementById('wizardSubmitBtn')?.addEventListener('click', async () => {
+        if (Object.keys(wizardSelectedItems).some(wizardHasExistingItem)) {
+            showWizardExistingItemMessage();
+            return;
+        }
         if(!validateWizardRequestDate())return;
         const items = [];
         for (const itemId in wizardSelectedItems) {
@@ -295,6 +317,7 @@ function renderWizardItems() {
     if(!grid) return;
     const items = masterItemsData.filter(i => i.active !== false && i.category === currentWizardCat);
     grid.innerHTML = items.map(item => {
+        const alreadyRequested = wizardHasExistingItem(item.id);
         const selData = wizardSelectedItems[item.id];
         const isSelected = !!selData;
         const assignedCuisine = (typeof selData === 'object' && selData?.cuisine) ? selData.cuisine : '';
@@ -304,6 +327,7 @@ function renderWizardItems() {
             <div>
                 <strong style="display:block; font-size:0.92rem; line-height:1.2; margin-bottom:4px;">${item.name}</strong>
                 <span style="font-size:0.75rem; color:var(--text-muted);">${item.unit}</span>
+                ${alreadyRequested ? '<small style="display:block; margin-top:8px; color:var(--primary);">Already ordered — edit the initial order</small>' : ''}
             </div>
             <div style="margin-top:10px; width:22px; height:22px; border-radius:50%; background:${isSelected ? 'var(--primary)' : 'rgba(255,255,255,0.08)'}; display:flex; align-items:center; justify-content:center;">
                 <i data-lucide="check" style="width:13px; height:13px; color:${isSelected ? '#000' : 'transparent'};"></i>
@@ -316,6 +340,10 @@ function renderWizardItems() {
 window.renderWizardItems = renderWizardItems;
 
 function toggleWizardItem(itemId) {
+    if (wizardHasExistingItem(itemId)) {
+        showWizardExistingItemMessage();
+        return;
+    }
     const cuisineSelect = document.getElementById('wizardCuisine');
     const activeCuisine = (cuisineSelect && cuisineSelect.value && cuisineSelect.value !== 'all') ? cuisineSelect.value : 'Indian';
     
