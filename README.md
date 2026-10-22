@@ -9,8 +9,8 @@ Merging to main validates changes; it does not publish a production release.
 
 ## User guides
 
-See the [role-based user wiki](docs/user-guides/README.md) for illustrated Admin,
-Supervisor and Chef instructions and shareable PDFs. The wiki also records
+See the [role-based user wiki](docs/user-guides/README.md) for current Admin,
+Executive Chef, Purchaser (Supervisor) and Cuisine Head instructions and shareable PDFs. The wiki also records
 [current gaps and limitations](docs/user-guides/implementation-gaps.md).
 
 Raise to Vendor starts each consolidated ingredient with its catalog preferred
@@ -150,6 +150,6 @@ saved together and used for stock distribution on approval.
 
 ## Operations workflow release
 
-See the [current role guides](docs/user-guides/README.md) for Executive Chef, Purchaser (Supervisor), Cuisine Head and Admin. Migration `0006_operations.sql` preserves account IDs and credentials, maps existing Supervisors to Executive Chef, and adds operation records and priced receipts. Apply migrations 0007 and 0008 as well: they update role titles and prevent historical approvals from being issued twice. The compatibility epoch is `operations-v2`; deploy the matching API and frontend together. Rehearse the migration on a database copy, verify foreign keys, and apply it before releasing the new pair. Do not roll back to the old role/stock workflow after this migration. No production migration is run by the test scripts.
+See the [current role guides](docs/user-guides/README.md) for Executive Chef, Purchaser (Supervisor), Cuisine Head and Admin. Migration `0006_operations.sql` preserves account IDs and credentials, maps existing Supervisors to Executive Chef, and adds operation records and priced receipts. The latest local candidate also includes migration `0009_dispatch_queues.sql` for grouped delivery queues and paginated history; apply it through the coordinated release process before deploying that candidate. Apply migrations 0007 and 0008 as well: they update role titles and prevent historical approvals from being issued twice. The compatibility epoch is `operations-v2`; deploy the matching API and frontend together. Rehearse the migration on a database copy, verify foreign keys, and apply it before releasing the new pair. Do not roll back to the old role/stock workflow after this migration. No production migration is run by the test scripts.
 
 Run `npm test`, `python -m unittest discover -s tests -v`, `node scripts/check-migrations.mjs`, and `npm run build`. Browser validation uses a fresh disposable `node scripts/qa-server.mjs`, then `node scripts/qa-operations.cjs` with `NCHEF_PLAYWRIGHT_ROOT` pointing to the bundled Node package directory. The QA server uses only an in-memory local database.

@@ -1,4 +1,4 @@
-"""Build the three shareable PDFs from their Markdown wiki sources.
+"""Build the four role-specific PDFs from their Markdown wiki sources.
 
 Requires reportlab, Pillow and pypdf. Optional --render uses Poppler pdftoppm.
 Run from any directory: python scripts/build-user-guides.py [--render]
@@ -70,7 +70,7 @@ class GuideDoc(BaseDocTemplate):
         canvas.setFont('GuideSans', 8)
         canvas.drawRightString(A4[0]-self.rightMargin, A4[1]-12*mm, self.role.upper())
         canvas.setFillColor(colors.HexColor('#68717d'))
-        canvas.drawString(self.leftMargin, 11*mm, 'Revision 16 October 2026  |  Screenshots: sample data')
+        canvas.drawString(self.leftMargin, 11*mm, 'Revision 22 October 2026  |  N-CHEF 2.3.0')
         canvas.drawRightString(A4[0]-self.rightMargin, 11*mm, str(doc.page))
         canvas.restoreState()
 
@@ -126,7 +126,7 @@ def build(role):
             style = 'Caption' if block.startswith('Sample data') else 'GuideBody'
             story.append(Paragraph(inline(block.replace('\n', ' ')), STYLES[style]))
     target = OUT / f'nchef-{role}-guide.pdf'
-    GuideDoc(target, role).multiBuild(story)
+    GuideDoc(target, {'admin':'Admin','supervisor':'Executive Chef','purchaser':'Purchaser (Supervisor)','chef':'Cuisine Head'}[role]).multiBuild(story)
     reader = PdfReader(target)
     extracted = '\n'.join(page.extract_text() for page in reader.pages)
     normalize = lambda s: re.sub(r'\s+', ' ', s).strip()
@@ -146,7 +146,7 @@ if __name__ == '__main__':
     parser.add_argument('--render', action='store_true')
     args = parser.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
-    for role in ('admin', 'supervisor', 'chef'):
+    for role in ('admin', 'supervisor', 'purchaser', 'chef'):
         target = build(role)
         if args.render:
             renderer = shutil.which('pdftoppm')

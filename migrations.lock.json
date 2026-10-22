@@ -30,5 +30,9 @@
   {
     "name": "0008_preserve_issued_requests.sql",
     "sha256": "29343af37e758c529a82bffb9e174936ac8d61ca5066c501651cf7a851686ce7"
+  },
+  {
+    "name": "0009_dispatch_queues.sql",
+    "sha256": "0b49836bfe5eb7581aac8c9128e7d1bfa23e5433897b6e9c10f0aa8baca0da4b"
   }
 ]

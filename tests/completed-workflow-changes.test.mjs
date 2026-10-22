@@ -5,7 +5,7 @@ import {planVendorReceipt} from '../worker/purchase-orders.mjs';
 
 const head={id:'head',role:'cuisine_head',name:'Head',assignedLocations:['a'],assignedSections:['Indian']};
 const exec={id:'exec',role:'executive_chef',name:'Executive Chef',assignedLocations:['a']};
-const delivery=(id,status='Issued')=>({id,kind:'delivery',status,outletId:'a',cuisine:'Indian',recipientId:'head',quantity:3,itemName:'Rice',unit:'kg',createdAt:new Date().toISOString()});
+const delivery=(id,status='Issued')=>({id,dispatchId:'dispatch',kind:'delivery',status,outletId:'a',cuisine:'Indian',recipientId:'head',quantity:3,itemName:'Rice',unit:'kg',createdAt:new Date().toISOString()});
 const fixture=()=>({users:[head,exec,{...head,id:'other'}],outlets:[{id:'a'}],operationRecords:[],requests:[],indents:[],purchase_orders:[]});
 
 test('bulk delivery acceptance preserves issues and rejects unauthorized or stale batches',()=>{

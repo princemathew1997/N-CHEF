@@ -14,7 +14,8 @@
     const stock=(id,outlet)=>committedState.outletStock.find(b=>b.item_id===id && b.outlet_id===outlet)?.quantity || 0;
     const receiptComparisons=po=>(po.receiptEvents || []).filter(event=>event.vendorInvoiceTotalMinor!=null).map(event=>`<p>Receipt ${esc(InventoryTools.timestamp(event.receivedAt))}: Our total: <strong>${price(event.stockTotalMinor)}</strong> · Vendor invoice: <strong>${price(event.vendorInvoiceTotalMinor)}</strong> · Difference (vendor − ours): <strong>${price(event.invoiceDifferenceMinor)}</strong></p>`).join('');
     const outletName=id=>outletsData.find(o=>o.id===id)?.name || id;
-    const link=(page,text)=>`<a class="btn btn-outline" href="#" data-operations="${page}">${esc(text || titles[page])}</a>`;
+    const pageTitle=key=>key==='deliveries' && currentUser?.role==='cuisine_head'?'Receive Order':titles[key];
+    const link=(page,text)=>`<a class="btn btn-outline" href="#" data-operations="${page}">${esc(text || pageTitle(page))}</a>`;
     let panel,page='approvals',editor=null,filterDate=InventoryTools.day(),filterVendor='',filterOutlet='',wasteFrom=InventoryTools.day(),wasteTo=InventoryTools.day();
     let purchaseSection='open',purchaseFrom='',purchaseTo='';
     const purchaseDates={open:{from:'',to:''},received:null};
@@ -26,15 +27,12 @@
         panel.innerHTML=`<header class="dash-header"><div><h1>${page==='deliveries' && currentUser.role==='cuisine_head'?'Receive Order':titles[page]}</h1><p>${esc(names[currentUser.role])}</p></div></header><div class="panel inventory-workspace" id="operationsContent"></div>`;
         const content=panel.querySelector('#operationsContent');
         if(page==='legacy')window.renderLegacyImport(content);
-        if(page==='notifications')content.innerHTML=`<div class="notification-actions"><button type="button" class="btn btn-outline" data-action="read-all" ${records('notification').some(n=>!n.read)?'':'disabled'}>Mark all as read</button></div>`+table(['When','Message','Action'],records('notification').slice().reverse().map(n=>[esc(InventoryTools.timestamp(n.createdAt)),esc(n.message),(n.eventType==='delivery_issued'?link('deliveries','Confirm delivery')+' ':' ')+(n.read?'Read':button('read',n.id,'Mark read'))]));
+        if(page==='notifications')content.innerHTML=`<div class="notification-actions"><button type="button" class="btn btn-outline" data-action="read-all" ${(committedState.unreadNotificationCount ?? records('notification').filter(n=>!n.read).length)?'':'disabled'}>Mark all as read</button></div>`+table(['When','Message','Action'],records('notification').slice().reverse().map(n=>[esc(InventoryTools.timestamp(n.createdAt)),esc(n.message),(n.eventType==='delivery_issued'?link('deliveries',currentUser.role==='cuisine_head'?'Receive Order':'Confirm delivery')+' ':' ')+(n.read?'Read':button('read',n.id,'Mark read'))]));
         if(page==='category' || page==='unit'){
             content.innerHTML=formHTML(input('name','New '+page,'text','','required maxlength="200"'))+table(['Name'],records(page).map(r=>[esc(r.name)]));
             bindForm(content.querySelector('form'),data=>act('operations/'+page+'/add',data));
         }
-        if(page==='legacy'){window.expandSidebarGroup('Legacy');document.getElementById('navLegacy')?.classList.add('active');}
-        if(page==='deliveries'){window.expandSidebarGroup('Distribution');document.getElementById('navDistribution')?.classList.add('active');}
-        if(['category','unit'].includes(page)){window.expandSidebarGroup('Catalog');document.getElementById('navCatalog')?.classList.add('active');}
-        if(['approvals','vendor-orders'].includes(page)){window.expandSidebarGroup('Requests');
+        if(['approvals','vendor-orders'].includes(page)){
             const ordering=page==='vendor-orders';
             const indents=indentsData.filter(i=>ordering?i.status==='Approved' && !i.purchaseOrderIds?.length:i.status==='Pending Approval');
             content.innerHTML=`<div class="approval-request-list">${indents.map(i=>`<section class="operations-card approval-request-card" data-approval-request="${esc(i.id)}" aria-label="${esc(i.indentNumber)}"><header class="approval-request-header"><div><small>Consolidated request</small><h3>${esc(i.indentNumber)}</h3><p>Outlet: <strong>${esc(outletName(i.outletId))}</strong> · ${i.items.length} item(s)${i.supervisorName?' · Executive Chef: '+esc(i.supervisorName):''}</p></div><span class="approval-request-status ${i.status==='Pending Approval'?'awaiting':'approved'}">${i.status==='Pending Approval'?'Awaiting approval':esc(i.status)}</span></header>${table(['Item','Requested','Revised','Available','Shortage'],i.items.map(row=>[esc(masterItemsData.find(x=>x.id===row.itemId)?.name),esc(row.originalQty),esc(row.revisedQty),esc(stock(row.itemId,i.outletId)),esc(Math.max(0,row.revisedQty-stock(row.itemId,i.outletId)))]))}<footer class="approval-request-actions">${i.status==='Pending Approval'?button('edit-indent',i.id,'Edit quantities')+button('approve-indent',i.id,'Approve for order'):''}${ordering?button('raise-po',i.id,'Generate vendor orders'):''}</footer></section>`).join('')}</div>`;
@@ -63,19 +61,25 @@
             if(!filterOutlet || !outletsData.some(o=>o.id===filterOutlet))filterOutlet=outletsData[0]?.id || '';
             if(!filterVendor || !vendorsData.some(v=>v.name===filterVendor))filterVendor=vendorsData[0]?.name || '';
             const receipts=committedState.stockHistory.filter(m=>m.kind==='receipt' && m.outlet_id===filterOutlet && m.vendor===filterVendor && InventoryTools.day(m.created_at)===filterDate);
-            const total=receipts.reduce((sum,r)=>sum+(r.total_cost_minor || 0),0),unknown=receipts.some(r=>r.total_cost_minor==null);
+            let total=receipts.reduce((sum,r)=>sum+(r.total_cost_minor || 0),0);const unknown=receipts.some(r=>r.total_cost_minor==null);
             const saved=records('reconciliation').find(r=>r.outletId===filterOutlet && r.vendor===filterVendor && r.date===filterDate);
             content.innerHTML=`<div class="inventory-form" id="receiptFilters">${input('date','Date (IST)','date',filterDate,'required')}${select('outlet','Outlet',opt(outletsData))}${select('vendor','Vendor',opt(vendorsData,r=>r.name))}</div>${table(['Time','Item','Quantity','Unit price','Line total'],receipts.map(r=>[esc(InventoryTools.timestamp(r.created_at)),esc(r.item_name),esc(r.delta),price(r.unit_cost_minor),price(r.total_cost_minor)]))}<h3>Entered stock total: ${price(total)}</h3>${unknown?'<p>Some historical receipts have no cost; this total includes priced receipts only.</p>':''}${formHTML(input('vendorTotal','Vendor invoice goods total (INR)','number',saved?saved.vendorTotalMinor/100:'','required min="0" step="0.01"')+'<p id="invoiceDifference"></p>')}`;
             const filters=content.querySelector('#receiptFilters');filters.querySelector('[name=outlet]').value=filterOutlet;filters.querySelector('[name=vendor]').value=filterVendor;
             filters.onchange=()=>{filterDate=filters.querySelector('[name=date]').value;filterOutlet=filters.querySelector('[name=outlet]').value;filterVendor=filters.querySelector('[name=vendor]').value;render();};
             const form=content.querySelector('form');const difference=()=>{content.querySelector('#invoiceDifference').textContent=form.elements.vendorTotal.value===''?'Enter vendor total to compare.':'Vendor total − stock total: '+price(Math.round(Number(form.elements.vendorTotal.value)*100)-total);};form.oninput=difference;difference();
             bindForm(form,data=>act('operations/receipts/reconcile',{outletId:filterOutlet,vendor:filterVendor,date:filterDate,vendorTotal:Number(data.vendorTotal)}));
+            if(committedState.historyPaged){
+                apiRequest('stock/history?'+new URLSearchParams({type:'receipt',outlet:filterOutlet,vendor:filterVendor,from:filterDate,to:filterDate,limit:100})).then(result=>{
+                    if(!content.isConnected)return;
+                    total=result.totals.totalCostMinor;
+                    content.querySelector('.table-container').outerHTML=table(['Time','Item','Quantity','Unit price','Line total'],result.rows.map(r=>[esc(InventoryTools.timestamp(r.created_at)),esc(r.item_name),esc(r.delta),price(r.unit_cost_minor),price(r.total_cost_minor)]));
+                    content.querySelector('h3').textContent='Entered stock total: '+price(total)+(result.totals.unknownCosts?' (unpriced receipts excluded)':'');
+                    if(result.nextCursor)content.querySelector('h3').insertAdjacentHTML('beforebegin','<p>Showing the latest 100 receipts. The total includes all matching receipts; use Stock History to browse every movement.</p>');
+                    difference();
+                }).catch(error=>{if(content.isConnected)window.showToast(error.message,'warning');});
+            }
         }
-        if(page==='deliveries')content.innerHTML=table(['When','Outlet / cuisine','Item','Issued / received','Issue comment','Status / reason','Action'],records('delivery').slice().reverse().map(d=>[esc(InventoryTools.timestamp(d.createdAt)),esc(outletName(d.outletId)+' / '+d.cuisine),esc(d.itemName),esc(d.quantity+' / '+(d.receivedQuantity ?? 'Awaiting')),esc(d.issueComment || ''),esc(d.status+(d.reason?' — '+d.reason:'')+(d.resolution?' — '+d.resolution:'')+(d.message?' — '+d.message:'')),currentUser.role==='cuisine_head' && d.status==='Issued'?button('confirm-delivery',d.id,'Confirm / report issue'):purchaser() && d.status==='Issue reported'?button('resolve-delivery',d.id,'Resolve issue'):'']));
-        if(page==='deliveries' && currentUser.role==='cuisine_head'){
-            const remaining=records('delivery').filter(d=>d.status==='Issued');
-            if(remaining.length)content.insertAdjacentHTML('afterbegin',`<div style="margin-bottom:16px;"><button type="button" class="btn btn-primary" data-action="accept-all-deliveries">Accept all remaining (${remaining.length})</button><p>Report issues on individual items first, then accept the remaining items in full.</p></div>`);
-        }
+        if(page==='deliveries')window.DeliveryQueues.render(content);
         if(page==='wastage'){
             content.innerHTML=`<div class="inventory-form" id="wasteFilters">${select('period','Period','<option value="daily">Daily</option><option value="weekly">Last 7 days</option><option value="custom">Custom</option>')}${input('from','From (IST)','date',wasteFrom)}${input('to','To (IST)','date',wasteTo)}<button class="btn btn-outline" id="applyWaste">Apply</button></div><div id="wasteRows"></div>`;
             const filters=content.querySelector('#wasteFilters');filters.querySelector('[name=period]').onchange=e=>{if(e.target.value!=='custom'){wasteTo=InventoryTools.day();wasteFrom=e.target.value==='daily'?wasteTo:InventoryTools.day(Date.now()-6*86400000);filters.querySelector('[name=from]').value=wasteFrom;filters.querySelector('[name=to]').value=wasteTo;}};
@@ -128,16 +132,9 @@
         const dialog=document.createElement('dialog');dialog.className='operations-dialog';dialog.innerHTML=`<h2>${esc(title)}</h2>${html}<button class="btn btn-outline" type="button" data-close>Cancel</button>`;document.body.append(dialog);dialog.querySelector('[data-close]').onclick=()=>dialog.close();dialog.onclose=()=>dialog.remove();dialog.showModal();bindForm(dialog.querySelector('form'),async(data,form)=>{await handler(data,form);dialog.close();});return dialog;
     }
     async function handle(action,id){
-        if(action==='accept-all-deliveries'){
-            const remaining=records('delivery').filter(d=>d.status==='Issued');
-            if(!remaining.length)return;
-            if(!await window.showConfirmModal(`Accept all ${remaining.length} remaining deliveries as received in full? Items already confirmed or reported with issues will stay unchanged.`, 'Accept remaining deliveries'))return;
-            return act('operations/deliveries/accept-all',{ids:remaining.map(d=>d.id)});
-        }
+        if(action==='accept-dispatch')return window.DeliveryQueues.accept(id,act);
         if(action==='read-all'){
-            const unread=records('notification').filter(n=>!n.read).map(n=>n.id);
-            for(const id of unread)await runDatabaseAction('operations/notifications/read',{id});
-            render();window.showToast?.('All notifications marked as read','success');return;
+            return act('operations/notifications/read-all',{});
         }
         if(action==='read')return act('operations/notifications/read',{id});
         if(action==='approve-indent')return act('indents/approve',{indentId:id});
@@ -181,11 +178,11 @@
             });
         }
         if(action==='confirm-delivery'){
-            const d=records('delivery').find(r=>r.id===id);
+            const d=window.DeliveryQueues?.find(id) || records('delivery').find(r=>r.id===id);
             return editorForm('Confirm delivery / report issue',formHTML(input('receivedQuantity','Actual quantity received','number',d.quantity,`required min="0" max="${d.quantity}" step="any"`)+select('reason','Outcome',opt(['Received in full','Less quantity','Not available','Quality issues','Other'],r=>r,r=>r))+input('affectedQuantity','Affected quantity (for issue)','number',0,`min="0" max="${d.quantity}" step="any"`)+input('message','Message (required for Other)','text','','maxlength="500"')),data=>act('operations/deliveries/confirm',{id,receivedQuantity:Number(data.receivedQuantity),affectedQuantity:Number(data.affectedQuantity),reject:data.reason!=='Received in full',reason:data.reason,message:data.message}));
         }
         if(action==='resolve-delivery'){
-            const d=records('delivery').find(r=>r.id===id),physical=['Quality issues','Other'].includes(d.reason) && d.affectedQuantity<=d.receivedQuantity;
+            const d=window.DeliveryQueues?.find(id) || records('delivery').find(r=>r.id===id),physical=['Quality issues','Other'].includes(d.reason) && d.affectedQuantity<=d.receivedQuantity;
             return editorForm('Resolve delivery issue',formHTML(select('resolution','Resolution',opt(physical?['replacement','return','wastage']:['replacement','shortage'],r=>r,r=>({replacement:'Issue replacement',shortage:'Confirm shortage',return:'Return usable stock',wastage:'Record confirmed wastage'}[r])))+(physical?select('disposition','If replacing: handling of rejected goods','<option value="">Choose when issuing replacement</option><option value="wastage">Confirmed wastage</option><option value="return">Return usable stock</option>').replace(' required',''):'')+input('note','Resolution note','text','','required maxlength="500"')),data=>act('operations/deliveries/resolve',{id,...data}));
         }
         if(action==='account-reject')return editorForm('Reject account request',formHTML(input('reason','Reason','text','','required maxlength="500"')),data=>act('operations/accounts/resolve',{id,approve:false,...data}));
@@ -198,6 +195,7 @@
         document.querySelectorAll('[data-operations-nav]').forEach(a=>{const p=a.dataset.operations;a.classList.toggle('hidden',!allowed(p));});
         document.getElementById('navGroupStock')?.classList.toggle('hidden',currentUser.role==='cuisine_head');
         document.getElementById('navReceiveOrder')?.classList.toggle('hidden',currentUser.role!=='cuisine_head');
+        document.getElementById('navIndents')?.classList.toggle('hidden',!purchaser());
         document.getElementById('navAddChef')?.classList.add('hidden');
         document.getElementById('navUsers')?.classList.toggle('hidden',currentUser.role==='cuisine_head');
         document.getElementById('navGroupLegacy')?.classList.toggle('hidden',!purchaser());
@@ -207,6 +205,7 @@
             const visible=currentUser.role==='admin' || (currentUser.role==='purchaser' && !['catalog','cuisines'].includes(p)) || (currentUser.role==='executive_chef' && ['overview','history'].includes(p));
             a.classList.toggle('hidden',!visible);
         });
+        window.NavigationGroups?.configure();
     };
     function allowed(p){if(p==='users')return ['admin','purchaser','executive_chef'].includes(currentUser?.role);if(['vendors','category','unit','wastage'].includes(p))return currentUser?.role==='admin';if(['legacy','approvals','vendor-orders','purchases','receipts','accounts'].includes(p))return purchaser();return true;}
     window.openVendorOrderReceiving=()=>{
@@ -226,42 +225,19 @@
         if(aliases[view])view='operations:'+aliases[view];
         if(!view.startsWith('operations:'))return false;
         page=view.slice(11);if(!titles[page] || !allowed(page)){window.goHome();return true;}editor=null;currentView='operations:'+page;localStorage.setItem('nchef_active_view',currentView);panel?.classList.remove('hidden');
-        document.getElementById('mobileActivePage').textContent=titles[page];
+        document.getElementById('mobileActivePage').textContent=pageTitle(page);
         document.querySelectorAll('[data-operations-nav]').forEach(a=>a.classList.toggle('active',a.dataset.operations===page));
-        if(page==='wastage'){
-            window.expandSidebarGroup('Stock');
-            document.getElementById('navStockSubmenu')?.classList.add('open');
-            document.getElementById('navStock')?.classList.add('active');
-            const chevron=document.getElementById('navStockChevron');if(chevron)chevron.style.transform='rotate(180deg)';
-        }
-        if(page==='legacy'){window.expandSidebarGroup('Legacy');document.getElementById('navLegacy')?.classList.add('active');}
-        if(page==='deliveries'){window.expandSidebarGroup('Distribution');document.getElementById('navDistribution')?.classList.add('active');}
-        if(['category','unit'].includes(page)){window.expandSidebarGroup('Catalog');document.getElementById('navCatalog')?.classList.add('active');}
-        if(['approvals','vendor-orders'].includes(page)){window.expandSidebarGroup('Requests');document.getElementById('navRequestsSubmenu')?.classList.add('open');document.getElementById('navRequests')?.classList.add('active');}
         if(page==='users')document.getElementById('navUsers')?.classList.add('active');
         if(page==='purchases')document.getElementById('navIndents')?.classList.add('active');
-        render();return true;
+        render();window.NavigationGroups?.sync();return true;
     };
     document.addEventListener('DOMContentLoaded',()=>{
-        document.getElementById('navLegacy')?.addEventListener('click',e=>{
-            e.preventDefault();
-            if(document.getElementById('navLegacySubmenu').classList.contains('open')){
-                document.getElementById('navLegacySubmenu').classList.remove('open');
-                document.getElementById('navLegacy').setAttribute('aria-expanded','false');
-                document.getElementById('navLegacyChevron').style.transform='rotate(0deg)';
-            }else window.expandSidebarGroup('Legacy');
-        });
-        document.getElementById('navDistribution')?.addEventListener('click',e=>{
-            e.preventDefault();
-            if(document.getElementById('navDistributionSubmenu').classList.contains('open')){document.getElementById('navDistributionSubmenu').classList.remove('open');document.getElementById('navDistribution').setAttribute('aria-expanded','false');document.getElementById('navDistributionChevron').style.transform='rotate(0deg)';}
-            else window.expandSidebarGroup('Distribution');
-        });
         panel=document.createElement('div');panel.id='viewOperations';panel.className='hidden';document.getElementById('viewMasterOrders').parentElement.append(panel);
         document.querySelectorAll('.sidebar-logo .logo-mark,.mobile-logo').forEach(logo=>{logo.setAttribute('role','button');logo.tabIndex=0;logo.onclick=e=>{if(!e.target.closest('button'))window.goHome();};logo.onkeydown=e=>{if(e.target===logo && ['Enter',' '].includes(e.key)){e.preventDefault();logo.click();}};});
         document.addEventListener('click',async e=>{
             const link=e.target.closest('[data-operations],[data-view]');if(link){e.preventDefault();window.switchToView(link.dataset.operations?'operations:'+link.dataset.operations:link.dataset.view);return;}
             const b=e.target.closest('#viewOperations [data-action]');if(!b)return;e.preventDefault();b.disabled=true;try{await handle(b.dataset.action,b.dataset.id);}catch(error){window.showUiModal({title:'Action unavailable',message:error.message,type:'warning'});}finally{b.disabled=false;}
         });
-        const old=window.onLiveSyncReceived;window.onLiveSyncReceived=()=>{old?.();if(typeof updateRequestsBadge==='function')updateRequestsBadge();if(currentView.startsWith('operations:') && !panel.querySelector('form') && !document.querySelector('.operations-dialog'))render();};
+        const old=window.onLiveSyncReceived;window.onLiveSyncReceived=()=>{old?.();if(typeof updateRequestsBadge==='function')updateRequestsBadge();if(currentView==='operations:deliveries' && !document.activeElement?.closest('.queue-filters') && !document.querySelector('.operations-dialog'))window.DeliveryQueues.refresh();if(currentView.startsWith('operations:') && !panel.querySelector('form') && !document.querySelector('.operations-dialog'))render();};
     });
 })();

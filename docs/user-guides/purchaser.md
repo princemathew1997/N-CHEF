@@ -1,37 +1,51 @@
 # N-CHEF | Purchaser (Supervisor) guide
 
-Revision: 20 October 2026
+Revision: 22 October 2026 | N-CHEF 2.3.0
 
-Supervisor and Purchaser mean the same role. Existing Supervisor accounts have become Executive Chefs; Admin creates the new Purchaser accounts and assigns outlets.
+Admin creates Purchaser accounts and assigns their outlets. Existing accounts formerly called Supervisor now use Executive Chef; they do not automatically become Purchasers.
 
-## Approve and purchase
+## Home and compact menus
 
-Sign-in opens Dashboard. Approval Queue contains requests forwarded or consolidated by Executive Chef. Review requested, revised, available and shortage quantities, edit quantities, approve for distribution and generate vendor-wise purchase orders. Approval does not deduct stock. Download each vendor's separate PDF from Vendor Purchase Orders.
+Sign-in opens Approvals. Select the N-CHEF logo to return there. Main sidebar labels open their pages; the separate arrow reveals related actions one level below. Icons identify each action and badges remain visible on collapsed groups. On mobile, use the menu button.
 
-## Receive and distribute
+Stock Overview contains Receive Stock, Stock Adjustments and Stock History. Distribute to Cuisine contains Cuisine Deliveries. Add Legacy Stock contains Bulk Legacy Stock. Approvals contains Generate Vendor Orders and Manage Request. Users provides the permitted staff directory and related Account Requests. You cannot maintain catalog, locations, cuisines, units, categories or vendors.
 
-Receive Stock requires outlet, item, vendor, quantity and unit price. Confirm the calculated line total before saving. Vendor Purchase Orders also supports priced receiving. Stock Overview shows latest purchase unit price and remaining value for assigned outlets; historical unpriced stock is clearly marked.
+## Approve and generate vendor orders
 
-Receipt Totals consolidates today's receipts by vendor and outlet. Enter the vendor invoice goods total; difference equals vendor total minus stock total. Date filters use IST.
+Review consolidated requests in Approvals, including requested/revised quantities and available stock. Review and edit quantities, then Approve for order. Approval alone does not receive or deduct stock.
 
-Distribute to Cuisine records the quantity actually issued. Link an approved cuisine request where applicable. Issued stock is deducted once and appears in Cuisine Deliveries for confirmation by the Cuisine Head.
+Open Generate Vendor Orders for an approved request. Preferred vendors are preselected where configured; choose a vendor for every included item. Confirm quantities and send to create separate purchase orders per vendor. Zero-quantity lines are excluded. Download the relevant vendor's PDF; a supplier document contains that supplier's order only.
 
-## Resolve delivery problems
+## Receive stock and compare an invoice
 
-Less quantity, Not available, Quality issues and Other notify Purchaser, Executive Chef and Admin. Investigate the problem, record a resolution note, then arrange replacement, confirm shortage, return usable stock or record confirmed wastage. Missing goods never automatically become wastage. Issued bad goods already left store stock, so recording their wastage does not deduct them twice. Wastage notifies Admin.
+1. Open Receive Stock, then select Receive stock from Vendor Order. This opens Purchase Orders in PO Raised with date filters cleared so outstanding orders remain visible. It does not submit the manual form.
+2. Choose the order's Receive action. Review the remaining quantities.
+3. Enter quantities received, rejected quantities and the required rejection reason. Enter unit prices for usable stock. Rejected goods are not added to available stock.
+4. At the end of the form, optionally enter Vendor invoice total. Compare it with the calculated accepted-stock total. Difference equals vendor invoice total minus stock total; a positive difference means the invoice is higher.
+5. Save and check the order status. Partial receiving keeps the outstanding quantity available for a later delivery. A fully received order appears under Received.
 
-## Request accounts
+For example, 8 usable units at INR 12.50 produce a stock total of INR 100. An invoice total of INR 105 shows a difference of INR 5. The comparison does not split tax or freight into separate components.
 
-Use Account Requests to ask Admin to add a Cuisine Head or Executive Chef. Provide the person's name, requested role and outlet/cuisine. Admin must approve and configure credentials and assignments. Purchaser cannot create users or maintain items, units, categories, cuisines, locations or vendors.
+Manual Receive Stock remains available: select outlet, item and vendor, enter quantity and unit price, review the line total and save. The previous receipt/comparison shortcuts are no longer above this form; use the vendor-order receiving form for order invoice comparison.
 
-Use Notifications for updates and the N-CHEF logo to return to Dashboard.
+Purchase Orders separates PO Raised and Received. Received defaults to today's IST date range. Change or clear dates to find older receipts; From must not be later than To. Stock Overview values balances using the latest receipt price at the outlet; older unpriced stock is shown as unavailable cost.
 
-When issuing a replacement for physically rejected goods, explicitly choose whether those goods are usable returns or confirmed wastage. Replacement stock is issued immediately, so receive or arrange available stock first.
+## Distribute and resolve delivery issues
 
-## Bulk legacy opening stock
+Open Distribute to Cuisine, select an approved request and enter actual issued quantities. Explain changes from approved quantities where required. Distribution deducts store stock once and creates a delivery card for each dispatch to a cuisine. It cannot exceed the approved remaining demand or available stock.
 
-Open Stock → Bulk Legacy Stock. Download the CSV template and allowed-values reference. Enter existing outlet/item names and matching category/unit in Excel, then Save As CSV UTF-8 (.csv). The first row is the column header. Quantity must be positive; unit price in INR is optional. Use up to 150 entries / 100 KB per file. Native XLSX/XLS files must first be saved as CSV.
+Open Cuisine Deliveries to follow confirmations and problems. Needs attention includes older unfinished work and prioritizes reported issues. Today shows today's dispatches. History shows fully handled dispatches. Expand a card for item details; use View request and Stock movement to trace its origin. Filters include outlet, cuisine, status, item, order reference and IST dates, with page controls for older results.
 
-Choose the file and select Validate entire file. All errors appear together with their Excel row number, column, entered value and explanation. Download the error report if needed, correct every error and upload again. Category and unit must exist in the admin-managed lists and match that catalog item; imports never create items or new list values. Repeated item/outlet pairs must be combined into one row.
+Cuisine Heads report problem lines individually, then use Accept all remaining for the correct lines in one delivery card. Reported issues retain their status. Investigate each issue, use Resolve issue and record a resolution note. Choose replacement, confirmed shortage, usable return or confirmed wastage as appropriate.
 
-Review the preview, including current and resulting stock, then Import all validated rows. Any invalid row blocks the whole import. Quantities are added to outlet stock, not substituted for existing balances, and no unassigned central stock is consumed. Opening movements and the batch audit identify who imported the data. Existing latest purchase costs are preserved; a supplied price fills a missing valuation only. Re-uploading the same entries is blocked to prevent double counting.
+Missing goods are not automatically wastage. Issued goods already left store stock, so confirmed wastage does not deduct them again. Usable returns increase the balance. Replacement issues need available stock and create a new delivery requiring confirmation. For physically rejected goods, explicitly identify usable return versus confirmed wastage.
+
+## History, opening stock and account requests
+
+Stock History starts with today and supports item, vendor, movement, person and date filters. Apply filters and use page controls. Master Orders/stock reports keep quantities by item and unit; do not add unlike units together.
+
+Use Add Legacy Stock for individual opening stock, or Bulk Legacy Stock for a CSV import. Download the template and allowed-values reference. Save Excel files as CSV UTF-8; XLSX/XLS are not accepted. Use existing outlet/item names with matching managed category/unit. Quantity must be positive; unit price is optional. Limit files to 150 entries and 100 KB, with each item/outlet pair appearing once.
+
+Validate entire file, correct all reported row/column errors and review current/resulting balances. Import all validated rows adds quantities rather than replacing balances. Any invalid row blocks the whole import. It does not consume a central stock pool. Existing latest costs are preserved; a supplied opening price fills missing valuation only. Reimporting the same entries is blocked to prevent double counting.
+
+Use Account Requests to ask Admin for a Cuisine Head or Executive Chef account. Admin confirms credentials and assignments before access exists. Notifications tracks requests, delivery issues and other updates. Mark reviewed notices read. If a save conflicts with another update, refresh and review before retrying.

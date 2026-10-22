@@ -60,7 +60,7 @@
     }
     function distributionRequests(requests,records,itemId,outletId,cuisine) {
         return requests.filter(r=>r.status==='Approved' && r.itemId===itemId && r.outletId===outletId && r.cuisine===cuisine).map(r=>{
-            const issued=(r.legacyIssuedQuantity || 0)+records.filter(d=>d.kind==='delivery' && d.requestId===r.id && !d.replacementFor).reduce((sum,d)=>sum+d.quantity,0);
+            const issued=(r.legacyIssuedQuantity || 0)+records.filter(d=>['delivery','issued_summary'].includes(d.kind) && d.requestId===r.id && !d.replacementFor).reduce((sum,d)=>sum+d.quantity,0);
             return {...r,remainingQuantity:Math.max(0,(r.approvedQuantity ?? r.revisedQty ?? r.qty)-issued)};
         });
     }
@@ -83,7 +83,7 @@
     function menuAttention(state,user){
         const purchasing=['admin','purchaser'].includes(user.role),executive=user.role==='executive_chef';
         const requests=state.requests || [],indents=state.indents || [],records=state.operationRecords || [];
-        const deliveries=records.filter(r=>r.kind==='delivery' && (user.role==='cuisine_head'?r.status==='Issued':purchasing?r.status==='Issue reported':false)).length;
+        const deliveries=state.deliveryCounts?(user.role==='cuisine_head'?state.deliveryCounts.awaiting:purchasing?state.deliveryCounts.issues:0):records.filter(r=>r.kind==='delivery' && (user.role==='cuisine_head'?r.status==='Issued':purchasing?r.status==='Issue reported':false)).length;
         return {approvals:purchasing?indents.filter(i=>i.status==='Pending Approval').length+requests.filter(r=>!r.indentId && r.status==='Sent to Admin').length:0,
             manage:executive?requests.filter(r=>r.status==='Pending').length:0,
             consolidate:executive?requests.filter(r=>r.status==='Accepted' && !r.indentId).length:0,
@@ -99,7 +99,7 @@
         const indent=(state.indents || []).find(i=>i.id===indentId && i.status==='Approved');
         if(!indent)return [];
         return (state.requests || []).filter(r=>r.indentId===indentId && r.status==='Approved').map(r=>{
-            const issued=(r.legacyIssuedQuantity || 0)+(state.operationRecords || []).filter(d=>d.kind==='delivery' && d.requestId===r.id && !d.replacementFor).reduce((n,d)=>n+d.quantity,0);
+            const issued=(r.legacyIssuedQuantity || 0)+(state.operationRecords || []).filter(d=>['delivery','issued_summary'].includes(d.kind) && d.requestId===r.id && !d.replacementFor).reduce((n,d)=>n+d.quantity,0);
             const remaining=Math.max(0,(r.approvedQuantity ?? r.revisedQty ?? r.qty)-issued);
             return {...r,remaining,available:(state.outletStock || []).find(b=>b.item_id===r.itemId && b.outlet_id===indent.outletId)?.quantity || 0};
         }).filter(r=>r.remaining>1e-8);

@@ -5,7 +5,8 @@ import { releaseInfo, requireCurrentClient } from './release.mjs';
 import { raiseVendorOrders, planVendorReceipt } from './purchase-orders.mjs';
 import { digest, equalSecret, getSessionToken, hashPassword, randomToken, sessionCookie, verifyPassword } from './auth.mjs';
 import { clone, fail, hasOutlet, id, number, project, safeText, validateChanges } from './model.mjs';
-import { persistChanges, readState } from './database.mjs';
+import { persistChanges as persistDatabaseChanges, readState,readClientState,markAllNotifications } from './database.mjs';
+import {dispatchList,dispatchItems,stockHistoryPage,stockReport} from './queues.mjs';
 
 function response(body, status = 200, extra = {}) {
   return Response.json(body, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...extra } });
@@ -43,6 +44,15 @@ async function actorFor(request, db) {
 }
 export default {
   async fetch(request, env) {
+    const paged=request.headers.get('X-NCHEF-Workspace')==='paged';
+    let sessionActor=null;
+    const persistChanges=(db,state,next,touched,actor,operationId,stock=null)=>persistDatabaseChanges(db,state,next,touched,actor,operationId,stock,{compact:paged});
+    const commandState=input=>readState(env.DB,paged?{operational:true,actor:sessionActor,dispatchId:input.dispatchId,allNotifications:path.endsWith('notifications/read-all'),recordIds:[input.id,input.indentId,input.requestId,...(input.ids || []),...(input.lines || []).map(row=>row.id),...(input.changes || []).map(row=>row.key)].filter(Boolean)}:{});
+    const send=async(data,status=200,extra={})=>{
+      if(paged && data?.state?.items && !data.state.historyPaged && data.user)data={...data,state:await readClientState(env.DB,data.user)};
+      else if(paged && data?.items && !data.historyPaged && sessionActor)data=await readClientState(env.DB,sessionActor);
+      return response(data,status,extra);
+    };
     const path = new URL(request.url).pathname;
     if (!path.startsWith('/api/')) return env.ASSETS ? env.ASSETS.fetch(request) : new Response('Not found', { status: 404 });
     try {
@@ -56,12 +66,13 @@ export default {
           env.DB.prepare('SELECT effective_role FROM users LIMIT 0'),
           env.DB.prepare('SELECT unit_cost_minor FROM outlet_stock LIMIT 0'),
           env.DB.prepare('SELECT kind FROM operation_records LIMIT 0'),
+          env.DB.prepare('SELECT delivery_dispatch FROM operation_records LIMIT 0'),
         ]);
-        return response({ ok: true, release:releaseInfo(env) });
+        return send({ ok: true, release:releaseInfo(env) });
       }
       if (path === '/api/setup-status' && request.method === 'GET') {
         const first = await env.DB.prepare('SELECT id FROM setup_lock WHERE id = 1').first();
-        return response({ required: !first });
+        return send({ required: !first });
       }
       if (path === '/api/setup' && request.method === 'POST') {
         const input = await body(request);
@@ -83,7 +94,7 @@ export default {
           if (/UNIQUE constraint failed/.test(error.message)) fail('Administrator setup is already complete.', 409);
           throw error;
         }
-        return response({ ok: true }, 201);
+        return send({ ok: true }, 201);
       }
       if (path === '/api/login' && request.method === 'POST') {
         const input = await body(request);
@@ -101,29 +112,38 @@ export default {
           env.DB.prepare('DELETE FROM login_attempts WHERE key = ?').bind(await digest('user:' + username)),
           env.DB.prepare('INSERT INTO sessions VALUES (?, ?, ?, ?)').bind(await digest(token), user.id, now + 28800, now),
         ]);
-        const state = await readState(env.DB);
+        const state = await readState(env.DB,paged?{compact:true,actor:{id:user.id}}:{});
         const actor = state.users.find(u => u.id === user.id);
-        return response({ user: actor, state: project(state, actor) }, 200, { 'Set-Cookie': sessionCookie(request, token) });
+        return send({ user: actor, state: project(state, actor) }, 200, { 'Set-Cookie': sessionCookie(request, token) });
       }
       const actor = await actorFor(request, env.DB);
+      sessionActor=actor;
       requireCurrentClient(request, env, path);
+      if(request.method==='GET'){
+        const query=new URL(request.url).searchParams;
+        if(path==='/api/dispatches')return send(await dispatchList(env.DB,actor,query));
+        if(path==='/api/dispatches/items')return send(await dispatchItems(env.DB,actor,query));
+        if(path==='/api/stock/history')return send(await stockHistoryPage(env.DB,actor,query));
+        if(path==='/api/stock/report')return send(await stockReport(env.DB,actor,query));
+      }
       if (['/api/session', '/api/state'].includes(path) && request.method === 'GET') {
+        if(paged){const state=await readClientState(env.DB,actor);return send(path==='/api/session'?{user:actor,state}:state);}
         const state = await readState(env.DB);
         const current = state.users.find(u => u.id === actor.id);
         if (!current) fail('Account is inactive.', 401);
-        return response(path === '/api/session' ? { user: current, state: project(state, current) } : project(state, current));
+        return send(path === '/api/session' ? { user: current, state: project(state, current) } : project(state, current));
       }
-      if (path === '/api/revision' && request.method === 'GET') return response(await env.DB.prepare('SELECT revision FROM app_revision WHERE id=1').first());
+      if (path === '/api/revision' && request.method === 'GET') return send(await env.DB.prepare('SELECT revision FROM app_revision WHERE id=1').first());
       if (path === '/api/logout' && request.method === 'POST') {
         await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await digest(getSessionToken(request))).run();
-        return response({ ok: true }, 200, { 'Set-Cookie': sessionCookie(request, '', 0) });
+        return send({ ok: true }, 200, { 'Set-Cookie': sessionCookie(request, '', 0) });
       }
       if (path === '/api/cuisines/add' && request.method === 'POST') {
         if (actor.role !== 'admin') fail('Administrator permission required.', 403);
         const input = await body(request); id(input.operationId);
         const prior = await env.DB.prepare('SELECT actor_id FROM command_receipts WHERE id=?').bind(input.operationId).first();
-        if (prior) { if (prior.actor_id !== actor.id) fail('Command access denied.',403); return response(project(await readState(env.DB),actor)); }
-        const state = await readState(env.DB);
+        if (prior) { if (prior.actor_id !== actor.id) fail('Command access denied.',403); return send(project(await commandState(input),actor)); }
+        const state = await commandState(input);
         if (input.revision !== state.revision) fail('Data changed. Refresh and try again.',409);
         const name = safeText(input.name, 'Cuisine name').trim();
         if (state.cuisines.some(c => c.name.toLowerCase() === name.toLowerCase())) fail('Cuisine already exists.',409);
@@ -135,7 +155,7 @@ export default {
           env.DB.prepare('DELETE FROM revision_guards WHERE command_id=?').bind(input.operationId),
           env.DB.prepare('UPDATE app_revision SET revision=revision+1 WHERE id=1')
         ]); } catch (e) { if (/STALE_REVISION|UNIQUE constraint/.test(e.message)) fail('Data changed. Refresh and try again.',409); throw e; }
-        return response(project(await readState(env.DB),actor));
+        return send(project(await commandState(input),actor));
       }
       if (['/api/stock/legacy-import/validate','/api/stock/legacy-import'].includes(path) && request.method === 'POST') {
         if(!canPurchase(actor))fail('Only Admin and Purchaser (Supervisor) can import legacy stock.',403);
@@ -143,15 +163,15 @@ export default {
         if(path==='/api/stock/legacy-import') {
           id(input.operationId);
           const prior=await env.DB.prepare('SELECT actor_id FROM command_receipts WHERE id=?').bind(input.operationId).first();
-          if(prior){if(prior.actor_id!==actor.id)fail('Command access denied.',403);return response(project(await readState(env.DB),actor));}
+          if(prior){if(prior.actor_id!==actor.id)fail('Command access denied.',403);return send(project(await commandState(input),actor));}
         }
-        const state=await readState(env.DB);
+        const state=await commandState(input);
         const validation=validateLegacyCSV(input.csv,state,actor);
-        if(validation.errors.length)return response({error:`Found ${validation.errors.length} errors. No stock has been imported.`,errors:validation.errors},422);
+        if(validation.errors.length)return send({error:`Found ${validation.errors.length} errors. No stock has been imported.`,errors:validation.errors},422);
         const fingerprint=await digest(JSON.stringify(validation.rows.map(r=>[r.outletId,r.itemId,r.quantity,r.unitCostMinor]).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)))));
         const previous=await env.DB.prepare("SELECT id FROM audit_events WHERE action='legacy_import' AND entity_id=?").bind(fingerprint).first();
-        if(previous)return response({error:'This stock sheet has already been imported. No stock has been added.',errors:[{row:1,column:'File',message:'These item, outlet, quantity and price entries were already imported. Check Stock History before entering new stock.'}]},422);
-        if(path.endsWith('/validate'))return response({...validation,revision:state.revision});
+        if(previous)return send({error:'This stock sheet has already been imported. No stock has been added.',errors:[{row:1,column:'File',message:'These item, outlet, quantity and price entries were already imported. Check Stock History before entering new stock.'}]},422);
+        if(path.endsWith('/validate'))return send({...validation,revision:state.revision});
         if(input.revision!==state.revision)fail('Data changed since validation. Validate the complete sheet again before importing.',409);
         const stock={outletStock:clone(state.outletStock),legacyStock:clone(state.legacyStock),movements:[],importSummary:{fingerprint,rows:validation.rows.length}};
         for(const row of validation.rows) {
@@ -161,13 +181,14 @@ export default {
           if(balance.unit_cost_minor==null && row.unitCostMinor!==null)balance.unit_cost_minor=row.unitCostMinor;
           stock.movements.push({item_id:row.itemId,outlet_id:row.outletId,delta:row.quantity,quantity:balance.quantity,kind:'opening',reason:`Bulk legacy stock import: Excel row ${row.row}`,cuisine:'',vendor:'Legacy Stock',item_name:row.itemName,unit:row.unit,unit_cost_minor:row.unitCostMinor,total_cost_minor:row.unitCostMinor===null?null:Math.round(row.quantity*row.unitCostMinor)});
         }
-        return response(await persistChanges(env.DB,state,clone(state),[],actor,input.operationId,stock));
+        return send(await persistChanges(env.DB,state,clone(state),[],actor,input.operationId,stock));
       }
       if (path.startsWith('/api/operations/') && request.method === 'POST') {
         const input=await body(request);id(input.operationId);
+        if(path==='/api/operations/notifications/read-all')return send(await markAllNotifications(env.DB,actor,input,paged));
         const prior=await env.DB.prepare('SELECT actor_id FROM command_receipts WHERE id=?').bind(input.operationId).first();
-        const state=await readState(env.DB);
-        if(prior){if(prior.actor_id!==actor.id)fail('Command access denied.',403);return response(project(state,actor));}
+        const state=await commandState(input);
+        if(prior){if(prior.actor_id!==actor.id)fail('Command access denied.',403);return send(project(state,actor));}
         if(input.revision!==state.revision)fail('Data changed. Refresh and try again.',409);
         let stock={outletStock:clone(state.outletStock),legacyStock:clone(state.legacyStock),movements:[],deliveries:[]};
         const transact=(kind,data)=>{const result=stockCommand({...state,...stock},actor,data,kind,true);stock={...result,movements:[...stock.movements,...result.movements],deliveries:[...stock.deliveries,...(result.deliveries || [])]};};
@@ -177,7 +198,7 @@ export default {
         const derived=reviewingChefRequests?reviewChefRequests(state,actor,input):recallingIndent?recallConsolidatedRequest(state,actor,input):editingCuisineRequest?editCuisineRequest(state,actor,input):operationCommand(state,actor,input,path.slice('/api/operations/'.length),transact);
         let next=derived.next,touched=[];
         if(derived.changes.length){const privileged=editingCuisineRequest || recallingIndent || reviewingChefRequests;const validated=validateChanges(next,derived.changes,privileged?{...actor,role:'admin'}:actor,privileged);next=validated.next;touched=validated.touched;}
-        return response(await persistChanges(env.DB,state,next,touched,actor,input.operationId,stock));
+        return send(await persistChanges(env.DB,state,next,touched,actor,input.operationId,stock));
       }
       if (path === '/api/purchase-orders/raise' && request.method === 'POST') {
         const input = await body(request);
@@ -185,15 +206,15 @@ export default {
         const prior = await env.DB.prepare('SELECT actor_id FROM command_receipts WHERE id = ?').bind(input.operationId).first();
         if (prior) {
           if (prior.actor_id !== actor.id) fail('Command access denied.',403);
-          return response(project(await readState(env.DB),actor));
+          return send(project(await commandState(input),actor));
         }
-        const state = await readState(env.DB);
+        const state = await commandState(input);
         if (!Number.isSafeInteger(input.revision) || input.revision !== state.revision) fail('Data changed. Refresh and try again.',409);
         const current = state.users.find(u=>u.id===actor.id);
         if (!current) fail('Account is inactive.',401);
         const changes = raiseVendorOrders(state,current,input);
         const {next,touched} = validateChanges(state,changes,{...current,role:'admin'},true);
-        return response(await persistChanges(env.DB,state,next,touched,current,input.operationId));
+        return send(await persistChanges(env.DB,state,next,touched,current,input.operationId));
       }
       if (path === '/api/changes' && request.method === 'POST') {
         const input = await body(request);
@@ -201,9 +222,9 @@ export default {
         const prior = await env.DB.prepare('SELECT actor_id FROM command_receipts WHERE id = ?').bind(input.operationId).first();
         if (prior) {
           if (prior.actor_id !== actor.id) fail('Command access denied.', 403);
-          return response(project(await readState(env.DB), actor));
+          return send(project(await commandState(input), actor));
         }
-        const state = await readState(env.DB);
+        const state = await commandState(input);
         if (!Number.isSafeInteger(input.revision) || input.revision !== state.revision) fail('Data changed on another device. Refresh and try again.', 409);
         const current = state.users.find(u => u.id === actor.id);
         if (!current) fail('Account is inactive.', 401);
@@ -212,18 +233,18 @@ export default {
         const higher={cuisine_head:['executive_chef','purchaser','admin'],executive_chef:['purchaser','admin'],purchaser:['admin'],admin:[]}[current.role] || [];
         for(const row of backdated)notify(next,higher,row.data.outletId,`${current.name} submitted a backdated request for ${row.data.itemName || 'an item'} dated ${row.data.date}. Justification: ${row.data.backdateJustification}`,row.key);
 
-        return response(await persistChanges(env.DB, state, next, touched, current, input.operationId));
+        return send(await persistChanges(env.DB, state, next, touched, current, input.operationId));
       }
       if (['/api/stock/opening', '/api/stock/receipt', '/api/stock/distribute', '/api/stock/adjust', '/api/stock/assign', '/api/stock/reconcile', '/api/purchase-orders/receive', '/api/indents/approve', '/api/indents/approve-all', '/api/requests/approve'].includes(path) && request.method === 'POST') {
         const input = await body(request);
         id(input.operationId);
         const prior = await env.DB.prepare('SELECT actor_id FROM command_receipts WHERE id = ?').bind(input.operationId).first();
-        const state = await readState(env.DB);
+        const state = await commandState(input);
         const current = state.users.find(u => u.id === actor.id);
         if (!current) fail('Account is inactive.', 401);
         if (prior) {
           if (prior.actor_id !== current.id) fail('Command access denied.', 403);
-          return response(project(state, current));
+          return send(project(state, current));
         }
         if (input.revision !== state.revision) fail('Data changed on another device. Refresh and try again.', 409);
         let stock = { outletStock: clone(state.outletStock), legacyStock: clone(state.legacyStock), movements: [] };
@@ -287,13 +308,13 @@ export default {
           const po=next.purchase_orders.find(p=>p.id===input.poId);
           for(const line of po.receiptEvents.at(-1).lines.filter(r=>r.rejectedQuantity>0))notify(next,['admin','executive_chef','purchaser'],po.outletId,`${po.vendorName} / ${po.poNumber}: rejected ${line.rejectedQuantity} of ${line.itemName} (${line.reason}). ${line.message}`,po.id);
         }
-        return response(await persistChanges(env.DB, state, next, touched, current, input.operationId, stock));
+        return send(await persistChanges(env.DB, state, next, touched, current, input.operationId, stock));
       }
       fail('Endpoint not found.', 404);
     } catch (error) {
       const status = error.message?.includes('RELEASE_MAINTENANCE') ? 503 : error.status || 500;
       if (status === 500) console.error(JSON.stringify({ event: 'api_error', path, message: error.message }));
-      return response({ error: status === 503 ? 'N-CHEF is being upgraded. Inventory entry is temporarily paused; please try again shortly.' : status === 500 ? 'The server could not save this operation. Please retry.' : error.message }, status);
+      return send({ error: status === 503 ? 'N-CHEF is being upgraded. Inventory entry is temporarily paused; please try again shortly.' : status === 500 ? 'The server could not save this operation. Please retry.' : error.message }, status);
     }
   },
 };

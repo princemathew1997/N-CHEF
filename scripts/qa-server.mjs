@@ -23,6 +23,8 @@ for (const file of readdirSync('migrations').filter(f => f.endsWith('.sql')).sor
 const res = await mf.dispatchFetch('http://localhost/api/setup', { method: 'POST', headers: { Origin: 'http://localhost', 'Content-Type': 'application/json' }, body: JSON.stringify({ setupToken: 'qa-only-key', username: 'qa_admin', name: 'QA Admin', password: 'qa-only-password-2026' }) });
 if (res.status !== 201) throw new Error(await res.text());
 }
+const dispatchSchema=await db.prepare('PRAGMA table_xinfo(operation_records)').all();
+if(!dispatchSchema.results.some(column=>column.name==='delivery_dispatch'))await db.exec(readFileSync('migrations/0009_dispatch_queues.sql','utf8').replace(/--[^\n]*/g,'').replace(/\s+/g,' ').trim());
 const previewState=await readState(db);
 const existingRecordIds=new Set(previewState.operationRecords.map(record=>record.id));
 notifyIssuedDeliveries(previewState,previewState.operationRecords.filter(record=>record.kind==='delivery' && record.status==='Issued'));
