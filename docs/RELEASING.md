@@ -5,6 +5,18 @@ Production releases are manual. The first managed version is **v1.0.0**;
 a PR runs validation but does not publish production. A version badge in the
 sidebar, `/release.json`, and `/api/health` identify the deployed application.
 
+## Version 2.3.0 dispatch queues
+
+Version 2.3.0 requires additive migration `0009_dispatch_queues.sql` before the
+paired API/frontend deployment. Use the maintenance fence and private Time Travel
+bookmark procedure below, verify only migration 0009 is pending, apply it from the
+reviewed committed source, and verify foreign keys and preserved stock/credential
+summaries before publishing. Remove the fence only after version/health and
+read-only role access checks pass. No stock reset or production test transactions
+are needed. The epoch remains `operations-v2`, but exact migration matching means
+older releases with only migrations 0001-0008 are not normal rollback targets.
+The role wiki and all four PDFs now describe version 2.3.0.
+
 ## Version 2.0.0 operations upgrade
 
 Merging this change does not change D1 or production. Merge only after CI passes;
@@ -67,8 +79,8 @@ Restoring an old private D1 recovery point is a separate coordinated incident
 procedure that also needs the corresponding old code and reconciliation of any
 new transactions. Never reset data merely to make release preflight pass.
 
-Existing illustrated PDFs describe v1; the Markdown role guides are the current
-v2 instructions. Do not distribute the old PDFs as v2 guides.
+The role Markdown guides and all four generated PDFs are revised for v2.3.0.
+Historical screenshots remain explicitly labelled as reference material.
 
 ## One-time activation
 

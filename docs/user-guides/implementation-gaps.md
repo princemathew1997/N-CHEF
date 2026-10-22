@@ -1,28 +1,31 @@
-# Older requirements compared with the current app
+# Current scope and limitations
 
-Reviewed 16 October 2026 against the 8 October requirements document. This is an implementation comparison, not a change request or authorization to add features.
+Reviewed 22 October 2026 for N-CHEF 2.3.0. This page replaces the older pre-operations comparison, which contained resolved findings.
 
-| Requirement | Current gap or difference | Evidence |
-| --- | --- | --- |
-| ORG-04: optional Area Manager | No Area Manager account type; supported roles are Admin, Supervisor and Chef. | `worker/model.mjs`, user role validation; `migrations/0001_inventory_schema.sql`, users role constraint |
-| APR-04: routing to Owner/Admin or Area Manager | Approvals are Admin-only. No assignment, routing precedence or fallback through an Area Manager. | `worker/index.mjs`, indent approval endpoints |
-| ISS-02: issue despite insufficient recorded stock | Distribution is rejected if it would make an outlet balance negative. There is no shortage-recording alternative. | `worker/stock.mjs`, stockCommand balance validation |
-| NOT-03: escalate insufficient-stock issues | No next-authority escalation or recipient notification workflow. | Stock commands and API routes; no notification storage or delivery service |
-| NOT-01 / NOT-02: request and approval notifications | On-screen toasts, badges and polling exist, but no event messages delivered to designated supervisors/managers. | `js/api-data.js` success toasts; `worker/index.mjs` routes |
-| NOT-04: WhatsApp integration | No provider integration or WhatsApp delivery implementation. Provider and recipients remain unspecified. | No WhatsApp configuration or sending code in current app |
-| ORG-01: single-outlet Supervisor, no outlet switching | Single-outlet accounts get fixed controls, but Admin can assign multiple locations or all locations to a Supervisor. Such accounts can switch among permitted outlets. | `js/app.js`, supervisor assignments; `js/inventory-ui.js`, OutletSelection |
-| ORG-01 / DASH-03: Chef inventory restriction at the underlying access level | The Chef workspace hides stock screens, but the state API still includes permitted-outlet stock balances and stock history. The restriction is not complete at the data/API layer. | `worker/model.mjs`, project filters outletStock and stockHistory by outlet without removing them for Chef |
-| ORG-02: manager staff transfers | Admin can change a Chef outlet or Supervisor assignments in Users. There is no separate manager role or dedicated transfer workflow. Treat this as partial coverage, rather than an entirely missing ability to reassign staff. | `js/app.js`, saveAdminChefUser and saveSupervisorUser |
+## Roles and access
 
-Approval routing precedence, notification recipients/provider and the shortage accounting mechanism were open decisions in the older document. Those choices need confirmation before implementing the affected features.
+Supported roles are Admin, Executive Chef, Purchaser (Supervisor) and Cuisine Head. There is no separate Area Manager role or configurable approval-routing hierarchy. Admin manages user setup and assignments; Purchasers request accounts for Admin approval. Access follows assigned outlets/cuisines. Cuisine Heads use their request and receipt-confirmation screens rather than store history/reporting.
 
-## Additional display issues found while documenting
+## Stock and accounting
 
-- Resolved in local code on 16 October: Raise to Vendor now preselects catalog preferred vendors per ingredient, allows order-only overrides, saves one order per vendor atomically, and offers isolated vendor PDFs. The former `Record references cannot change.` failure is fixed. Deployment is separate.
-- The sidebar Purchase Orders link opens Consolidated Requests. The actual Purchase Orders Raised to Vendors table and Receive button are in the Admin Vendors view. Supervisors have backend permission to receive an order for a permitted outlet, but no normal navigation to that order table.
+Distribution requires sufficient recorded stock and approved remaining demand. A shortage or issue is recorded through the delivery resolution workflow; it is not permission to drive store stock below zero.
 
-- The Chef Portal counts Consolidated requests in its Approved summary card. The row correctly labels Consolidated, so use row status when distinguishing consolidation from approval.
-- The Chef Portal has no explicit PO Raised label branch, so those rows fall back to Rejected. Confirm purchase-order outcomes with the Supervisor in Purchase Orders.
-- The Chef table shows original requested quantities rather than supervisor-revised quantities. A Chef should confirm the approved quantity with the Supervisor.
+Available stock value uses the latest receipt price at that outlet, not weighted-average costing. Historical unpriced stock/wastage remains unpriced. Vendor invoice comparison uses accepted-stock line totals and an optional invoice total; it does not separately calculate tax or freight. Rejected goods do not increase usable stock.
 
-Unresolved findings remain documented for follow-up. Raising a vendor order does not receive or issue stock. This update has not been deployed.
+Bulk opening stock accepts CSV, not native XLSX/XLS. Save Excel files as CSV UTF-8 first. Imports require managed matching categories and units, existing items/outlets, positive quantities, at most 150 entries and a 100 KB file. Unit changes are blocked once stock history exists.
+
+## Requests and deliveries
+
+Cuisine Heads submit today's IST requests. Executive Chef may use the preceding three days with justification. An initial-order item cannot be selected again through Place new order; edit its initial quantity while permitted or coordinate with Executive Chef once locked.
+
+Only one pending consolidation is allowed per outlet. Recall is limited to the owning Executive Chef before approval or downstream purchasing. Rejected requests remain recorded with their reasons.
+
+Accept all remaining applies to one dispatch card only, not every filtered delivery. Report problem lines first. History shows fully handled dispatches; unresolved cards remain in Needs attention even when old. Earlier deliveries are grouped only when an audit reliably identifies their shared dispatch; others remain separate Earlier delivery cards.
+
+## Notifications, updates and deployment
+
+Notifications are in-app, with menu/tab attention and periodic refresh while visible. WhatsApp, email and operating-system push delivery are not implemented by this workflow. It does not guarantee notifications while the browser is closed.
+
+Concurrent writes can be rejected by revision checks. Refresh and review the saved state before retrying; do not treat a failed save as a successful update. History and delivery screens load pages; current results may change as other users act.
+
+Version 2.3.0 requires migration 0009 for dispatch lookup and history indexes, applied through the coordinated migration/frontend/API release process. The extended local test report does not establish behavior under actual production traffic.

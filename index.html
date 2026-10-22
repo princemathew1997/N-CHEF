@@ -96,49 +96,30 @@
                 </a>
                 <a href="#" class="nav-item no-chef" id="navIndents"><i data-lucide="truck"></i>Purchase Orders</a>
                 <div class="nav-group" id="navGroupStock">
-                    <a href="#" class="nav-item" id="navStock"><i data-lucide="boxes"></i><span>Stock</span><i data-lucide="chevron-down" id="navStockChevron" style="width:14px;height:14px;margin-left:auto"></i></a>
-                    <div class="nav-submenu" id="navStockSubmenu">
-                        <div class="nav-group" id="navGroupOverview">
-                            <a href="#" class="nav-subitem" id="navOverview" data-inventory="overview" aria-expanded="false" aria-controls="navOverviewSubmenu">Stock Overview<i data-lucide="chevron-down" id="navOverviewChevron" style="width:14px;height:14px;margin-left:auto"></i></a>
-                            <div class="nav-submenu" id="navOverviewSubmenu">
-                                <a href="#" class="nav-subitem" data-inventory="receipt">Receive Stock</a>
-                                <a href="#" class="nav-subitem" data-inventory="adjust">Stock Adjustments</a>
-                                <a href="#" class="nav-subitem" data-inventory="history">Stock History</a>
-                            </div>
-                        </div>
-                <div class="nav-group" id="navGroupDistribution">
-                    <a href="#" class="nav-subitem" id="navDistribution" aria-expanded="false" aria-controls="navDistributionSubmenu"><i data-lucide="package-check"></i><span>Cuisine Distribution</span><i data-lucide="chevron-down" id="navDistributionChevron" style="width:14px;height:14px;margin-left:auto"></i></a>
-                    <div class="nav-submenu" id="navDistributionSubmenu">
-                        <a href="#" class="nav-subitem" data-inventory="distribute">Distribute to Cuisine</a>
-                        <a href="#" class="nav-subitem" data-operations="deliveries" data-operations-nav="true">Cuisine Deliveries</a>
-                    </div>
-                </div>
-                        <div class="nav-group" id="navGroupLegacy">
-                            <a href="#" class="nav-subitem" id="navLegacy" aria-expanded="false" aria-controls="navLegacySubmenu">Legacy Stock<i data-lucide="chevron-down" id="navLegacyChevron" style="width:14px;height:14px;margin-left:auto"></i></a>
-                            <div class="nav-submenu" id="navLegacySubmenu">
-                                <a href="#" class="nav-subitem" data-inventory="assign">Add Legacy Stock</a>
-                                <a href="#" class="nav-subitem" data-operations="legacy" data-operations-nav="true">Bulk Legacy Stock</a>
-                            </div>
-                        </div>
-                        <a href="#" class="nav-subitem admin-only" data-operations="wastage" data-operations-nav="true">Wastage</a>
+                    <div class="nav-section-label">Stock</div>
+                    <div id="navStockLinks">
+                        <a href="#" class="nav-item" id="navOverview" data-inventory="overview"><i data-lucide="boxes"></i>Stock Overview</a>
+                        <a href="#" class="nav-item" data-inventory="receipt"><i data-lucide="package-plus"></i>Receive Stock</a>
+                        <a href="#" class="nav-item" data-inventory="adjust"><i data-lucide="sliders-horizontal"></i>Stock Adjustments</a>
+                        <a href="#" class="nav-item" data-inventory="history"><i data-lucide="history"></i>Stock History</a>
+                        <a href="#" class="nav-item" data-inventory="distribute"><i data-lucide="send"></i>Distribute to Cuisine</a>
+                        <a href="#" class="nav-item" id="navCuisineDeliveries" data-operations="deliveries" data-operations-nav="true"><i data-lucide="package-check"></i>Cuisine Deliveries</a>
+                        <a href="#" class="nav-item" data-inventory="assign"><i data-lucide="archive"></i>Add Legacy Stock</a>
+                        <a href="#" class="nav-item" data-operations="legacy" data-operations-nav="true"><i data-lucide="file-up"></i>Bulk Legacy Stock</a>
+                        <a href="#" class="nav-item admin-only" data-operations="wastage" data-operations-nav="true"><i data-lucide="trash-2"></i>Wastage</a>
                     </div>
                 </div>
                 <a href="#" class="nav-item hidden" id="navReceiveOrder" data-operations="deliveries" data-operations-nav="true"><i data-lucide="package-check"></i><span>Receive Order</span></a>
                 <div class="nav-group no-chef" id="navGroupRequests">
-                    <a href="#" class="nav-item" id="navRequests">
-                        <i data-lucide="clipboard-list"></i>
-                        <span style="flex: 1;">Requests</span>
-                        <span id="pendingRequestsBadge" class="hidden" style="background: var(--primary); color: var(--dark); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 0.7rem; margin-left: auto; font-weight: bold; line-height: 1;">0</span>
-                        <i data-lucide="chevron-down" id="navRequestsChevron" style="width: 14px; height: 14px; margin-left: 6px; transition: transform 0.25s ease;"></i>
-                    </a>
-                    <div class="nav-submenu" id="navRequestsSubmenu">
-                        <a href="#" class="nav-subitem" data-operations="approvals" data-operations-nav="true">Approvals</a>
-                        <a href="#" class="nav-subitem" data-operations="vendor-orders" data-operations-nav="true">Generate Vendor Orders</a>
-                        <a href="#" class="nav-subitem supervisor-only" id="navSidebarRaiseRequest"><i data-lucide="plus-circle" style="width:14px;height:14px"></i>Raise Request</a>
-                        <a href="#" class="nav-subitem" id="navManageRequests">
+                    <div class="nav-section-label">Requests<span id="pendingRequestsBadge" class="hidden"></span></div>
+                    <div id="navRequestLinks">
+                        <a href="#" class="nav-item" data-operations="approvals" data-operations-nav="true"><i data-lucide="clipboard-check"></i>Approvals</a>
+                        <a href="#" class="nav-item" data-operations="vendor-orders" data-operations-nav="true"><i data-lucide="shopping-cart"></i>Generate Vendor Orders</a>
+                        <a href="#" class="nav-item supervisor-only" id="navSidebarRaiseRequest"><i data-lucide="plus-circle" style="width:14px;height:14px"></i>Raise Request</a>
+                        <a href="#" class="nav-item" id="navManageRequests">
                             <i data-lucide="list-checks" style="width: 14px; height: 14px;"></i> Manage Request
                         </a>
-                        <a href="#" class="nav-subitem supervisor-only" id="navConsolidateRequests">
+                        <a href="#" class="nav-item supervisor-only" id="navConsolidateRequests">
                             <i data-lucide="boxes" style="width: 14px; height: 14px;"></i> Consolidate Request
                         </a>
                     </div>
@@ -150,7 +131,9 @@
                     <i data-lucide="chef-hat"></i> Add Cuisine Head
                 </a>
                 <div class="nav-section-label admin-only">Administration</div>
-                <div class="nav-group admin-only"><a href="#" class="nav-item" id="navCatalog" data-inventory="catalog" aria-expanded="false" aria-controls="navCatalogSubmenu"><i data-lucide="database"></i>Item Catalog<i data-lucide="chevron-down" id="navCatalogChevron" style="width:14px;height:14px;margin-left:auto"></i></a><div class="nav-submenu" id="navCatalogSubmenu"><a href="#" class="nav-subitem" data-operations="category" data-operations-nav="true">Categories</a><a href="#" class="nav-subitem" data-operations="unit" data-operations-nav="true">Units</a></div></div>
+                <a href="#" class="nav-item admin-only" id="navCatalog" data-inventory="catalog"><i data-lucide="database"></i>Item Catalog</a>
+                <a href="#" class="nav-item admin-only" data-operations="category" data-operations-nav="true"><i data-lucide="tags"></i>Categories</a>
+                <a href="#" class="nav-item admin-only" data-operations="unit" data-operations-nav="true"><i data-lucide="ruler"></i>Units</a>
                 <a href="#" class="nav-item admin-only" data-inventory="cuisines"><i data-lucide="utensils"></i>Cuisine Sections</a>
                 <a href="#" class="nav-item admin-only" id="navVendors">
                     <i data-lucide="truck"></i> Vendors
@@ -160,7 +143,7 @@
                 </a>
                 <a href="#" class="nav-item no-chef" id="navUsers"><i data-lucide="users"></i>Users</a>
                 <a href="#" class="nav-item" data-operations="accounts" data-operations-nav="true"><i data-lucide="user-plus"></i>Account Requests</a>
-                <a href="#" class="nav-item" data-operations="notifications" data-operations-nav="true"><i data-lucide="bell"></i>Notifications</a>
+                <a href="#" class="nav-item" data-operations="notifications" data-operations-nav="true"><i data-lucide="bell"></i><span data-notification-label>Notifications</span></a>
             </nav>
             <div style="padding: 0 16px; margin-bottom: 8px; display: none;">
                 <button type="button" class="btn btn-outline" id="btnRestoreDemoData" onclick="window.resetToDemoData()" style="width: 100%; padding: 7px 10px; font-size: 0.78rem; font-weight: 600; border-color: rgba(255,190,11,0.25); color: var(--primary); display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 8px; cursor: pointer; background: rgba(255,190,11,0.05);">
@@ -1099,6 +1082,8 @@
     <script src="js/app.js?v=d1"></script>
     <script src="js/vendor-order-ui.js"></script>
     <script src="js/wizard.js?v=d1"></script>
+    <script src="js/navigation-ui.js"></script>
+    <script src="js/queue-ui.js"></script>
     <script src="js/stock-actions.js?v=d1"></script>
     <script src="js/operations-ui.js"></script>
     <script src="js/legacy-import-ui.js"></script>

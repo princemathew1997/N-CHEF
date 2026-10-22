@@ -41,7 +41,18 @@ if(!/^http:\/\/127\.0\.0\.1:889[01]$/.test(base))throw new Error('Use a disposab
   const executive=await login('qa_exec');
   assert.equal(await executive.locator('#filterOutlet').isVisible(),false);
   assert.equal(await executive.locator('#filterOutlet option').count(),1);
-  await require('./qa-review-flow.cjs')(browser,base);
+  assert.equal(await executive.locator('#navIndents').isVisible(),false);
+  for(const selector of ['#navOverview','[data-inventory=history]','#navCuisineDeliveries','#navManageRequests','#navConsolidateRequests'])assert.equal(await executive.locator(selector).isVisible(),true);
+  assert.equal(await head.locator('#navCuisineDeliveries').isVisible(),false);
+  await head.setViewportSize({width:390,height:844});
+  await head.evaluate(()=>switchToView('operations:deliveries'));
+  assert.equal(await head.locator('#mobileActivePage').innerText(),'Receive Order');
+  const admin=await login('qa_admin');
+  await admin.locator('#navCatalog').click();
+  await admin.locator('.sidebar-logo .logo-mark').click();
+  await admin.waitForFunction(()=>document.getElementById('navMasterOrders').classList.contains('active'));
+  assert.equal(await admin.locator('#navCatalog').evaluate(el=>el.classList.contains('active')),false);
+  if(!process.env.NCHEF_SKIP_REVIEW_FLOW)await require('./qa-review-flow.cjs')(browser,base);
   assert.deepEqual(errors,[]);
   console.log('Completed-change browser checks passed: received date defaults, vendor-order shortcut, live invoice comparison, desktop/mobile dialog bounds, direct chef Receive Order, executive fixed outlet.');
  }finally{await browser.close();}

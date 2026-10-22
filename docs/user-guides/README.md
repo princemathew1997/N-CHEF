@@ -1,48 +1,46 @@
-# N-CHEF user wiki
+# N-CHEF user guides
 
-Current workflow guides revised 20 October 2026. The Markdown guides describe the new operations release. Existing screenshots and PDFs below document the older three-role release and must be regenerated before sharing as current instructions.
+Revised 22 October 2026 for N-CHEF 2.3.0. Confirm the sidebar version is 2.3.0 or later before following these instructions; refresh the app after an upgrade.
 
-The historical [implementation gaps](implementation-gaps.md) describe the pre-operations release; use the role guides for current behavior.
+## Choose your role
 
-| Role | Editable wiki | Shareable PDF |
+| Role | Editable guide | Shareable PDF |
 | --- | --- | --- |
 | Admin | [Admin guide](admin.md) | [Admin PDF](../../output/pdf/nchef-admin-guide.pdf) |
-| Executive Chef | [Executive Chef guide](supervisor.md) | Legacy PDF only |
-| Purchaser (Supervisor) | [Purchaser guide](purchaser.md) | Not generated |
-| Cuisine Head | [Cuisine Head guide](chef.md) | Legacy PDF only |
+| Executive Chef | [Executive Chef guide](supervisor.md) | [Executive Chef PDF](../../output/pdf/nchef-supervisor-guide.pdf) |
+| Purchaser (Supervisor) | [Purchaser guide](purchaser.md) | [Purchaser PDF](../../output/pdf/nchef-purchaser-guide.pdf) |
+| Cuisine Head | [Cuisine Head guide](chef.md) | [Cuisine Head PDF](../../output/pdf/nchef-chef-guide.pdf) |
 
-## Screenshots
+The supervisor and chef filenames retain compatibility with older links. Their current contents describe Executive Chef and Cuisine Head respectively.
 
-All screenshots use the disposable local QA database, fictional staff and sample transactions. Numbered callouts are explained immediately below each image in the guides. Password fields are empty in published captures.
+## Latest features covered
 
-- [Sign in](images/sign-in.png)
-- [Locations](images/admin-locations.png), [Vendors](images/admin-vendors.png), [Catalog](images/admin-catalog.png), [Users](images/admin-users.png)
-- [Approval review](images/admin-approval.png), [Purchase-order form](images/admin-purchase-order.png), [Stock Overview](images/admin-overview.png)
-- [Separate vendor orders and individual PDF downloads](images/admin-vendor-results.png)
-- [Chef accounts](images/supervisor-chefs.png), [Consolidation](images/supervisor-consolidate.png), [Stock receipt](images/supervisor-receipt.png), [Existing orders in Admin Vendors](images/admin-existing-orders.png)
-- [Chef workspace](images/chef-home.png), [Ingredient selection](images/chef-select.png), [Quantity review](images/chef-review.png), [Request tracking](images/chef-tracking.png)
-- [Separate distribution](images/stock-distribute.png), [Count adjustment](images/stock-adjust.png), [Master Orders](images/master-orders.png), [Stock History](images/stock-history.png)
+- Compact one-level menus with icons: main labels open pages, separate arrows reveal related actions. Cuisine Heads use the direct Receive Order link.
+- Existing-order editing and duplicate item selection prevention; today's requests for Cuisine Heads and justified backdating for Executive Chefs.
+- Executive Chef batch review, quantity changes, rejection reasons, saved consolidation edits and recall before approval.
+- Approval followed by separate vendor orders, vendor PDFs and the existing manual stock receipt option.
+- Receive stock from Vendor Order shortcut, partial receipts, rejected goods, unit prices and optional vendor invoice comparison.
+- Purchase Orders Received and Stock History defaulting to today's IST dates.
+- Delivery cards per dispatch to a cuisine, Needs attention / Today / History, filters and paging.
+- Per-item receipt issues followed by Accept all remaining for one delivery card; preserved issue outcomes and separately confirmed replacements.
+- Notifications, role/outlet restrictions, stock movement links, opening-stock imports and safe handling of concurrent saves.
 
-## Regenerate the PDFs
+Approval, purchasing, receiving, issuing and confirming receipt are separate steps. Stock increases on usable receiving and decreases on issue; approval and receipt confirmation do not repeat those movements.
 
-The Markdown files are the content source. Edit them, keep image paths relative to this folder, and run:
+## Documentation and validation
+
+See [current limitations](implementation-gaps.md) and the [extended local validation report](../EXTENDED_QA_2026-10-22.md). The guides describe version 2.3.0 user actions; the validation report records the pre-release local checks.
+
+The images in `images/`, the older `validation.json`, and `capture-user-guides.cjs` describe the historical screenshot capture. They are retained as reference material, not current navigation instructions. Current PDFs are rebuilt from the revised text guides and do not embed those outdated screenshots. Do not run the old capture script as a current-workflow test without updating its fixtures and selectors.
+
+## Rebuild the PDFs
+
+From the repository root, use Python with the dependencies in `scripts/user-guides-requirements.txt`:
 
 ```powershell
 python scripts/build-user-guides.py --render
 ```
 
-Use Python with `reportlab`, `Pillow` and `pypdf` installed. Poppler's `pdftoppm` must be on PATH for `--render`; omit that flag to generate PDFs only. Generated PDFs go to `output/pdf/`. Preview PNGs go to `tmp/pdfs/` and are not deliverables. The builder checks that every source text line is present in the PDF. Review every rendered page for layout and legibility after changes.
+The Codex bundled Python runtime can be used when system Python lacks these libraries. Poppler's `pdftoppm` must be on PATH for rendering. The builder generates all four role PDFs in `output/pdf/`, checks source text preservation and writes preview pages to `tmp/pdfs/`. Every main section starts on a new page and the contents are linked. Review rendered pages after editing.
 
-The tested Python dependency versions are pinned in `scripts/user-guides-requirements.txt`. Install them in a documentation environment with `python -m pip install -r scripts/user-guides-requirements.txt` if they are not already available. Capture tooling was exercised with bundled Playwright and Chrome; it is optional when rebuilding PDFs from existing images.
-
-Supported source formatting: title, numbered section headings, subsection headings, paragraphs, bold, numbered steps, bullets, blockquote notes, standalone PNG images and captions. Each numbered section starts on a new PDF page. The linked contents and page numbers are generated automatically. Keep PDF revision text in the builder synchronized with the Markdown revision when updating the guides.
-
-## Refresh screenshots and walkthrough checks
-
-1. Build the app with `npm run build`.
-2. Start a fresh disposable server with `node scripts/qa-server.mjs`. It must be the unchanged local QA server on `127.0.0.1:8888`; never point capture tooling at production.
-3. In another terminal run `node scripts/capture-user-guides.cjs`. It requires Playwright and a local Microsoft Edge installation by default. `NCHEF_PLAYWRIGHT_ROOT` can point to the Playwright package directory; `NCHEF_BROWSER_PATH` can point to a Chromium executable instead.
-4. The script requires a fresh database containing only the QA Admin. It creates sample staff, a location, a supplier, an item and transactions, then captures screenshots. Restart the QA server before rerunning it.
-5. Review all images, then rebuild the PDFs and inspect their pages. Stop the QA server afterward; its database is in memory.
-
-The script records successful walkthrough checks in [validation.json](validation.json). Capture uses browser controls for the main flows and real local stock commands for additional stock checks. This is documentation tooling, not a production migration or app feature.
+The Markdown files are the source of truth. Update the revision date in the PDF builder when revising the guides. Supported content includes headings, paragraphs, bold, lists, notes and standalone PNG images. Screenshots added in future must use fictional local QA data and accurately match the current workflow.

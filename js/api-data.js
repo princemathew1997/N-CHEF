@@ -16,7 +16,7 @@ const copyData = value => JSON.parse(JSON.stringify(value));
 async function apiRequest(path, method = 'GET', value) {
     const res = await fetch('/api/' + path, {
         method, credentials: 'same-origin', cache: 'no-store',
-        headers: { ...(value ? { 'Content-Type': 'application/json' } : {}), ...(window.NCHEF_RELEASE?.commit ? { 'X-NCHEF-Client-Release': window.NCHEF_RELEASE.commit } : {}) },
+        headers: { 'X-NCHEF-Workspace':'paged',...(value ? { 'Content-Type': 'application/json' } : {}), ...(window.NCHEF_RELEASE?.commit ? { 'X-NCHEF-Client-Release': window.NCHEF_RELEASE.commit } : {}) },
         body: value ? JSON.stringify(value) : undefined
     });
     let data;

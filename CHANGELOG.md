@@ -4,6 +4,24 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 2.3.0 - 2026-10-22
+
+- Group cuisine deliveries by dispatch, with Needs attention, Today and History,
+  filters, item details and paging. Accept remaining items within one delivery
+  while preserving reported issues and completed outcomes.
+- Paginate stock history and calculate report totals on the server. Keep daily
+  refresh responses compact while retaining notification counts and issued totals.
+- Shorten Admin/Purchaser navigation with one-level groups, working primary links,
+  independent expand arrows, restored icons and aggregated attention badges.
+  Keep Cuisine Head and Executive Chef menus direct.
+- Refresh all four role guides and PDFs, including a new Purchaser guide.
+- Add migration 0009 for dispatch grouping and indexed history without resetting
+  stock, credentials or delivery outcomes. Apply it under maintenance before the
+  matching API/frontend release. Older migration sets are not normal rollback targets.
+- Validate 92 JavaScript/API checks, seven database/migration checks, 49 role-visible
+  browser destinations, end-to-end workflows, negative cases, restart persistence,
+  mobile layouts and 100,000-record delivery/history queries.
+
 ## 2.2.0 - 2026-10-21
 
 - Let Executive Chefs review and revise quantities before approving requests in

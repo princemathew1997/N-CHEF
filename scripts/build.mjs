@@ -18,7 +18,7 @@ for (const name of ['site', 'pages']) {
 mkdirSync('dist/site/js', { recursive: true });
 mkdirSync('dist/pages', { recursive: true });
 for (const path of ['index.html', 'setup.html', 'css', 'assets']) cpSync(path, `dist/site/${path}`, { recursive: true });
-for (const path of ['inventory-tools.js', 'inventory-ui.js', 'api-data.js', 'vendor-orders.js', 'vendor-order-ui.js', 'app.js', 'wizard.js', 'setup.js', 'stock-actions.js', 'operations-ui.js']) cpSync(`js/${path}`, `dist/site/js/${path}`);
+for (const path of ['inventory-tools.js', 'inventory-ui.js', 'api-data.js', 'vendor-orders.js', 'vendor-order-ui.js', 'app.js', 'wizard.js', 'setup.js', 'queue-ui.js','navigation-ui.js','stock-actions.js', 'operations-ui.js']) cpSync(`js/${path}`, `dist/site/js/${path}`);
 writeFileSync('dist/site/_headers', '/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: same-origin\n  X-Frame-Options: DENY\n  Cache-Control: no-cache\n');
 const release=metadata();
 await build({entryPoints:['js/legacy-import-ui.mjs'],outfile:'dist/site/js/legacy-import-ui.js',bundle:true,format:'iife',platform:'browser',target:'es2022'});

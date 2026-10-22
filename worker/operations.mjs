@@ -154,7 +154,7 @@ export function operationCommand(state, actor, input, action, transact) {
     if(!indent || indent.status!=='Approved')fail('Choose an approved consolidated order.',409);
     outlet(indent.outletId);
     const requests=state.requests.filter(r=>r.indentId===indent.id && r.status==='Approved');
-    const remaining=r=>Math.max(0,(r.approvedQuantity ?? r.revisedQty ?? r.qty)-(r.legacyIssuedQuantity || 0)-(state.operationRecords || []).filter(d=>d.kind==='delivery' && d.requestId===r.id && !d.replacementFor).reduce((n,d)=>n+d.quantity,0));
+    const remaining=r=>Math.max(0,(r.approvedQuantity ?? r.revisedQty ?? r.qty)-(r.legacyIssuedQuantity || 0)-(state.issuedByRequest?.[r.id] ?? (state.operationRecords || []).filter(d=>d.kind==='delivery' && d.requestId===r.id && !d.replacementFor).reduce((n,d)=>n+d.quantity,0)));
     const open=requests.filter(r=>remaining(r)>1e-8),seen=new Set(),decisions=[];
     if(!Array.isArray(input.lines) || !input.lines.length || input.lines.length!==open.length)fail('Include each outstanding cuisine request in this order.');
     for(const line of input.lines){
@@ -201,12 +201,17 @@ export function operationCommand(state, actor, input, action, transact) {
   } else if(action==='deliveries/accept-all') {
     if(actor.role!=='cuisine_head')fail('Cuisine Head permission required.',403);
     if(!Array.isArray(input.ids) || !input.ids.length || new Set(input.ids).size!==input.ids.length)fail('Choose the remaining deliveries.');
+    let dispatch=input.dispatchId;
     for(const id of input.ids){
       const delivery=get('delivery',id);outlet(delivery.outletId);
+      const group=delivery.dispatchId || delivery.id;
+      if(!dispatch)dispatch=group;
+      if(group!==dispatch)fail('Accept remaining items from one dispatch only.',409);
       if(!(actor.assignedSections || actor.assignedCuisines || []).includes(delivery.cuisine) || (delivery.recipientId && delivery.recipientId!==actor.id))fail('Delivery access denied.',403);
       if(delivery.status!=='Issued')fail('A delivery has already been handled. Refresh and try again.',409);
       putRecord(next,'delivery',{...delivery,status:'Received',receivedQuantity:delivery.quantity,affectedQuantity:0,reason:'',message:'',confirmedBy:actor.id,confirmedAt:now});
     }
+    if(records().some(r=>r.kind==='delivery' && (r.dispatchId || r.id)===dispatch && r.status==='Issued'))fail('The dispatch changed. Refresh and review its remaining items.',409);
   } else if(action==='deliveries/confirm') {
     const r=get('delivery',input.id);outlet(r.outletId);
     if(actor.role!=='cuisine_head' || !(actor.assignedSections || actor.assignedCuisines || []).includes(r.cuisine) || (r.recipientId && r.recipientId!==actor.id))fail('Delivery access denied.',403);

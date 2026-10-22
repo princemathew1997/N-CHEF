@@ -18,6 +18,7 @@
     const outletSelect = () => OutletSelection.markup();
 
     const reportFilters = {category:'',item:'',from:InventoryTools.day(),to:InventoryTools.day()};
+    let reportSequence=0;
     const overviewFilters = {outlet:'',category:'',item:''};
     const numberText = value => Number(value.toFixed(6)).toLocaleString('en-IN');
     const categories = () => [...new Set(masterItemsData.map(i=>i.category))].sort();
@@ -48,10 +49,12 @@
         }
         const category=filters.querySelector('[name=category]');category.innerHTML=categoryOptions();category.value=reportFilters.category;
         function mountPicker(){const items=masterItemsData.filter(i=>!reportFilters.category || i.category===reportFilters.category);if(!items.some(i=>i.id===reportFilters.item))reportFilters.item='';createItemPicker(filters.querySelector('#masterItemPicker'),items,{optional:true,selected:reportFilters.item,onChange:id=>{reportFilters.item=id;draw();}});}
-        function draw(){
+        async function draw(){
+            const sequence=++reportSequence;
             try {
                 const items=masterItemsData.filter(i=>(!reportFilters.category || i.category===reportFilters.category) && (!reportFilters.item || i.id===reportFilters.item));
-                const result=InventoryTools.report(items,committedState.outletStock,committedState.stockHistory,currentStoreView,reportFilters.from,reportFilters.to);
+                const result=committedState.historyPaged?await apiRequest('stock/report?'+new URLSearchParams({outlet:currentStoreView,from:reportFilters.from,to:reportFilters.to,item:reportFilters.item,category:reportFilters.category})):InventoryTools.report(items,committedState.outletStock,committedState.stockHistory,currentStoreView,reportFilters.from,reportFilters.to);
+                if(sequence!==reportSequence || !tbody.isConnected)return;
                 const headings=['Item','Unit','Opening Stock','Received',...result.cuisines.map(c=>c+' Usage'),'Adjustments','Remaining Stock'];
                 document.getElementById('inventoryTableHeader').innerHTML=headings.map(h=>'<th>'+esc(h)+'</th>').join('');
                 tbody.innerHTML=result.rows.map(r=>'<tr>'+[esc(r.item.name),esc(r.item.unit),numberText(r.opening),numberText(r.received),...result.cuisines.map(c=>numberText(r.usage[c])),numberText(r.adjustments),numberText(r.remaining)].map(v=>'<td>'+v+'</td>').join('')+'</tr>').join('') || `<tr><td colspan="${headings.length}">No stock activity matches these filters.</td></tr>`;
@@ -98,7 +101,7 @@
         if(page==='distribute'){orderDistribution(content);return;}
         if(page==='catalog') {
             const item=editing ? masterItemsData.find(i=>i.id===editing) : null;
-            const locked=item && (committedState.stockHistory.some(m=>m.item_id===item.id) || item.bought>0);
+            const locked=item && ((committedState.itemsWithHistory || []).includes(item.id) || committedState.stockHistory.some(m=>m.item_id===item.id) || item.bought>0);
             content.innerHTML=`<form id="catalogForm" class="inventory-form">
                 <h3>${item?'Edit Item':'Add Catalog Item'}</h3>
                 ${field('Item name',`<input name="name" required maxlength="200" value="${esc(item?.name)}">`)}
@@ -162,8 +165,7 @@
             form.onsubmit=e=>{e.preventDefault();const data=Object.fromEntries(new FormData(form));delete data.requestChoice;data.quantity=Number(data.quantity);if(data.unitPrice!==undefined)data.unitPrice=Number(data.unitPrice);if(page==='assign' && form.elements.unitPrice.value==='')delete data.unitPrice;submit(form,()=>runDatabaseAction('stock/'+(page==='assign'?'opening':page),data));};
         }
         if(page==='history') {
-            content.innerHTML=field('Filter by outlet',OutletSelection.markup('historyOutlet',currentUser.role==='admin'))+ '<div id="historyRows"></div>';
-            const update=()=>{const outlet=content.querySelector('[name=historyOutlet]').value;content.querySelector('#historyRows').innerHTML=table(['Date','Outlet','Item','Action','Change','Balance','Unit','Cuisine','Vendor','Reason','Person'],committedState.stockHistory.filter(m=>!outlet || m.outlet_id===outlet).map(m=>[esc(InventoryTools.timestamp(m.created_at)),esc(outletsData.find(o=>o.id===m.outlet_id)?.name),esc(m.item_name),esc(m.kind),esc(m.delta),esc(m.quantity),esc(m.unit),esc(m.cuisine),esc(m.vendor),esc(m.reason),esc(m.actor_name)]));};content.querySelector('[name=historyOutlet]').onchange=update;update();
+            window.StockHistoryQueues.render(content);
         }
         if(page==='cuisines') {
             content.innerHTML=`<form class="inventory-form"><h3>Add Cuisine Section</h3>${field('Name','<input name="name" required maxlength="200">')}<button class="btn btn-primary">Add Section</button></form>`+table(['Cuisine section'],cuisinesData.map(c=>[esc(c.name)]));
@@ -183,41 +185,22 @@
         if(page==='distribute' && !['admin','purchaser'].includes(currentUser.role)){window.goHome();return true;}
         if(adminPages.includes(page) && currentUser.role!=='admin'){window.switchToView('viewMasterOrders');return true;}
         panel?.classList.remove('hidden');render();
-        const stockLink = document.querySelector(`#navStockSubmenu [data-inventory="${page}"]`);
-        if(page==='catalog')window.expandSidebarGroup('Catalog');
-        if(page==='distribute'){window.expandSidebarGroup('Distribution');document.getElementById('navDistribution')?.classList.add('active');}
-        if(page==='assign'){window.expandSidebarGroup('Legacy');document.getElementById('navLegacy')?.classList.add('active');}
-        if(['overview','receipt','adjust','history'].includes(page)){window.expandSidebarGroup('Overview');document.getElementById('navStock')?.classList.add('active');}
-        if(stockLink && !['distribute','assign','overview','receipt','adjust','history'].includes(page)) {
-            window.expandSidebarGroup('Stock');
-            document.getElementById('navStockSubmenu')?.classList.add('open');
-            document.getElementById('navStock')?.classList.add('active');
-            const chevron = document.getElementById('navStockChevron');
-            if(chevron) chevron.style.transform='rotate(180deg)';
-        }
         document.querySelectorAll('[data-inventory]').forEach(a=>a.classList.toggle('active',a.dataset.inventory===page));
-        document.getElementById('mobileActivePage').textContent=titles[page];
+        document.getElementById('mobileActivePage').textContent=titles[page];window.NavigationGroups?.sync();
         return true;
     };
     document.addEventListener('DOMContentLoaded',()=>{
         panel=document.createElement('div');panel.id='viewInventory';panel.className='hidden';document.getElementById('viewMasterOrders').parentElement.append(panel);
         document.querySelectorAll('[data-inventory]').forEach(a=>a.onclick=e=>{
             e.preventDefault();
-            const group=a.id==='navOverview'?'Overview':a.id==='navCatalog'?'Catalog':null;
-            const wasOpen=group && document.getElementById('nav'+group+'Submenu').classList.contains('open');
             window.switchToView('inventory:'+a.dataset.inventory);
-            if(wasOpen){
-                document.getElementById('nav'+group+'Submenu').classList.remove('open');
-                a.setAttribute('aria-expanded','false');
-                document.getElementById('nav'+group+'Chevron').style.transform='rotate(0deg)';
-            }
         });
         document.addEventListener('click',async e=>{
             const button=e.target.closest('[data-receive-po]');if(!button)return;
             e.preventDefault();
             button.disabled=true;try {window.openVendorOrderReceiving();}catch(e){error(e);}finally{button.disabled=false;}
         });
-        const oldSync=window.onLiveSyncReceived;window.onLiveSyncReceived=()=>{oldSync?.();if(currentView.startsWith('inventory:') && !panel.querySelector('form') && !panel.contains(document.activeElement))render();};
+        const oldSync=window.onLiveSyncReceived;window.onLiveSyncReceived=()=>{oldSync?.();if(currentView==='inventory:history' && !document.activeElement?.closest('.queue-filters'))window.StockHistoryQueues.refresh();if(currentView.startsWith('inventory:') && !panel.querySelector('form') && !panel.contains(document.activeElement))render();};
         window.openAddItemModal=()=>{editing=null;window.switchToView('inventory:catalog');};
     });
 })();

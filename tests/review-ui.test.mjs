@@ -10,23 +10,12 @@ function element(){
     return {hidden:false,disabled:false,style:{},dataset:{},attributes:{},textContent:'',classList:{add:c=>classes.add(c),remove:c=>classes.delete(c),contains:c=>classes.has(c),toggle(c,on){if(on)classes.add(c);else classes.delete(c);}},setAttribute(k,v){this.attributes[k]=v;},removeAttribute(k){delete this.attributes[k];}};
 }
 
-test('sidebar opens the selected nested group and closes its siblings',()=>{
-    const ids=new Map();
-    for(const name of ['Stock','Requests','Catalog','Distribution','Legacy','Overview'])for(const suffix of ['','Submenu','Chevron'])ids.set('nav'+name+suffix,element());
-    const context={window:{},document:{getElementById:id=>ids.get(id),querySelectorAll:()=>[...ids].filter(([id])=>id.endsWith('Submenu')).map(([,el])=>el)}};
-    runInNewContext(app.slice(app.indexOf('window.collapseSidebarGroups ='),app.indexOf('window.switchToView =')),context);
-    context.window.expandSidebarGroup('Overview');
-    assert.ok(ids.get('navStockSubmenu').classList.contains('open'));
-    assert.ok(ids.get('navOverviewSubmenu').classList.contains('open'));
-    context.window.expandSidebarGroup('Legacy');
-    assert.ok(!ids.get('navOverviewSubmenu').classList.contains('open'));
-    assert.equal(ids.get('navOverview').attributes['aria-expanded'],'false');
-    assert.ok(ids.get('navLegacySubmenu').classList.contains('open'));
-    context.window.expandSidebarGroup('Catalog');
-    assert.ok(!ids.get('navStockSubmenu').classList.contains('open'));
-    assert.ok(ids.get('navCatalogSubmenu').classList.contains('open'));
-    context.window.collapseSidebarGroups();
-    assert.ok([...ids].filter(([id])=>id.endsWith('Submenu')).every(([,el])=>!el.classList.contains('open')));
+test('sidebar links are direct destinations without expandable menu parents',()=>{
+    const html=readFileSync('index.html','utf8');
+    const sidebar=html.slice(html.indexOf('<nav class="nav-menu">'),html.indexOf('</nav>'));
+    assert.doesNotMatch(sidebar,/nav-submenu|aria-controls=|chevron-down/);
+    assert.doesNotMatch(sidebar,/id="navStock"|id="navRequests"/);
+    for(const id of ['navOverview','navCuisineDeliveries','navReceiveOrder','navCatalog','navManageRequests'])assert.ok(sidebar.includes(`id="${id}"`));
 });
 
 test('user role switches show only relevant assignments and preserve selections',()=>{
@@ -69,11 +58,11 @@ test('request attention highlights the menu and tab, and deduplicates overlays',
 });
 
 test('login counts only real user notifications and does not announce existing alerts as new',()=>{
- const menu=element();const nodes=new Map([['navRequests',element()],['pendingRequestsBadge',element()]]);
+ const menu=element(),label=element();menu.querySelector=selector=>selector==='[data-notification-label]'?label:null;const nodes=new Map([['navRequests',element()],['pendingRequestsBadge',element()]]);
  const context={window:{},currentUser:{id:'a',role:'admin'},requestsData:[],indentsData:[],committedState:{operationRecords:[{id:'old',kind:'notification',userId:'a',message:'Existing alert',read:false},{id:'internal',kind:'notification',system:true},{id:'other',kind:'notification',userId:'b',message:'Private alert',read:false}]},setTimeout:()=>1,clearTimeout(){},document:{title:'N-CHEF',querySelector:()=>menu,getElementById:id=>nodes.get(id),createElement(){const el=element();el.replaceChildren=()=>{};el.append=()=>{};return el;},body:{append(el){nodes.set(el.id,el);}}}};
  runInNewContext(app.slice(app.indexOf('function getVisibleNotifications()'),app.indexOf('function updateIndentsBadge()')),context);
- context.updateRequestsBadge();assert.equal(menu.textContent,'Notifications (1)');assert.equal(context.document.title,'(1) N-CHEF');assert.equal(nodes.has('requestNoticeOverlay'),false);
- context.committedState.operationRecords[0].read=true;context.updateRequestsBadge();assert.equal(menu.textContent,'Notifications');assert.equal(context.document.title,'N-CHEF');
+ context.updateRequestsBadge();assert.equal(label.textContent,'Notifications (1)');assert.equal(context.document.title,'(1) N-CHEF');assert.equal(nodes.has('requestNoticeOverlay'),false);
+ context.committedState.operationRecords[0].read=true;context.updateRequestsBadge();assert.equal(label.textContent,'Notifications');assert.equal(context.document.title,'N-CHEF');
  context.committedState.operationRecords.push({id:'new',kind:'notification',userId:'a',message:'New alert',read:false});context.updateRequestsBadge();assert.equal(nodes.get('requestNoticeOverlay').hidden,false);
  context.committedState.operationRecords.at(-1).read=true;context.updateRequestsBadge();assert.equal(nodes.get('requestNoticeOverlay').hidden,true);
 });
