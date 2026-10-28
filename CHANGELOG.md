@@ -4,6 +4,10 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 2.3.1 - 2026-10-28
+
+- Fix admin sidebar scrolling on short screens; keep menu items reachable and account controls visible.
+
 ## 2.3.0 - 2026-10-22
 
 - Group cuisine deliveries by dispatch, with Needs attention, Today and History,
