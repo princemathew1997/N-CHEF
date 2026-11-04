@@ -1129,6 +1129,11 @@
                         💡 Switch cuisine section anytime to add items across multiple cuisines in one request.
                     </div>
                 </div>
+                <div class="wizard-item-search">
+                    <label for="wizardItemSearch">Search ingredients</label>
+                    <input id="wizardItemSearch" type="search" placeholder="Search item names across all categories" autocomplete="off" aria-controls="wizardItemsGrid" aria-describedby="wizardSearchStatus">
+                    <small id="wizardSearchStatus" role="status"></small>
+                </div>
                 <div style="display: flex; gap: 12px; margin-top: 16px; overflow-x: auto; padding-bottom: 8px;" id="wizardCategoryTabs">
                     <!-- Categories will be loaded here -->
                 </div>

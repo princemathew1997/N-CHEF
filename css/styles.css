@@ -1403,6 +1403,12 @@ body.database-saving::after {
 }
 
 /* Ingredient cards must fit their grid cells rather than inherit modal sizing. */
+.wizard-item-search { display:flex; flex-direction:column; gap:8px; margin-top:16px; min-width:0; }
+.wizard-item-search label { font-weight:600; }
+.wizard-item-search input { box-sizing:border-box; width:100%; min-width:0; padding:12px; font:inherit; background:var(--dark); color:var(--text-main); border:1px solid var(--border); border-radius:8px; }
+.wizard-item-search input:focus { outline:2px solid var(--primary); outline-offset:2px; }
+.wizard-item-search small, .wizard-no-items { color:var(--text-muted); }
+.wizard-no-items { grid-column:1 / -1; }
 #wizardItemsGrid { grid-template-columns:repeat(auto-fill,minmax(min(200px,100%),1fr)) !important; }
 #wizardItemsGrid > .panel { min-width:0; width:auto; max-width:100%; overflow-wrap:anywhere; }
 

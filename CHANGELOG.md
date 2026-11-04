@@ -4,6 +4,14 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 2.5.1 - 2026-11-04
+
+- Add a visible ingredient search field to the purchase request form for
+  Cuisine Heads and Executive Chefs. Search item names across all categories,
+  retain selected items, and preserve existing-order duplicate protection.
+- Verify desktop and phone layouts, selection review, and search reset when
+  reopening the form. No database migrations.
+
 ## 2.5.0 - 2026-11-04
 
 - Move price editing to Stock → Edit Stock Prices for Admins and Purchasers
