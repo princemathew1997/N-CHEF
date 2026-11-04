@@ -5,6 +5,20 @@ Production releases are manual. The first managed version is **v1.0.0**;
 a PR runs validation but does not publish production. A version badge in the
 sidebar, `/release.json`, and `/api/health` identify the deployed application.
 
+## Version 2.4.0 price history and corrections
+
+Version 2.4.0 requires migrations `0010_price_history.sql` and
+`0011_price_corrections.sql` before the paired API/frontend deployment. Rehearse
+both against a private production database copy, then use the maintenance fence
+and recovery bookmark procedure below. Verify exactly these migrations are
+pending, apply them using the pinned Wrangler from committed source, and compare
+stock/history and credential summaries plus foreign keys before releasing.
+Migration 0011 permits only audited unit/line cost corrections; quantities and
+other original movement facts remain immutable. Verify matching v2.4.0 frontend
+and API health, then remove the maintenance fence. Do not create test receipts
+or copy local dummy data into production. The epoch remains `operations-v2`;
+normal rollback targets must include the same applied migrations.
+
 ## Version 2.3.0 dispatch queues
 
 Version 2.3.0 requires additive migration `0009_dispatch_queues.sql` before the

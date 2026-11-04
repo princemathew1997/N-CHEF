@@ -490,3 +490,72 @@ test('consolidated distribution enforces notes, shared stock, request links and 
  const retry=await ok(request('operations/distribution/issue','POST',input,purchaserCookie));assert.equal(retry.revision,issued.revision);
  assert.equal((await cmd('operations/distribution/issue',{indentId:id,lines},chefCookie)).status,403);
 });
+
+test('price history routes restrict roles and use receipt records for both purchase flows',async()=>{
+ const pagedResponse=await mf.dispatchFetch(origin+'/api/prices?from=2020-01-01&to=2099-12-31',{headers:{Cookie:adminCookie,'X-NCHEF-Workspace':'paged'}});
+ assert.equal(pagedResponse.status,200);
+ const pagedReport=await pagedResponse.json();assert.ok(pagedReport.items.every(i=>Number.isInteger(i.receiptCount)));
+ assert.equal(pagedReport.from,'2020-01-01');assert.equal(pagedReport.historyPaged,undefined);
+ assert.equal((await request('prices','GET',undefined,chefCookie)).status,403);
+ assert.equal((await request('prices/item?item=item_01','GET',undefined,supervisorCookie)).status,403);
+ assert.equal((await request('prices?outlet=cafe','GET',undefined,purchaserCookie)).status,403);
+ const query='from=2020-01-01&to=2099-12-31';
+ const overview=await request('prices?'+query,'GET',undefined,purchaserCookie);
+ assert.equal(overview.status,200,JSON.stringify(overview.data));
+ const item=overview.data.items.find(i=>i.receiptCount>0);assert.ok(item);
+ const detail=await request('prices/item?'+query+'&item='+item.id,'GET',undefined,purchaserCookie);
+ assert.equal(detail.status,200,JSON.stringify(detail.data));assert.equal(detail.data.item.receiptCount,item.receiptCount);
+ const expected=await db.prepare("SELECT count(*) n FROM outlet_stock_history WHERE item_id=? AND outlet_id='brigade' AND kind='receipt' AND delta>0 AND unit_cost_minor IS NOT NULL").bind(item.id).first();
+ assert.equal(item.receiptCount,expected.n);
+ assert.equal((await request('prices/item?'+query+'&item=missing')).status,404);
+});
+
+test('admin and purchaser correct entered prices with audit, scope, validation and retry protection',async()=>{
+ const state=(await request('state')).data,item=state.items.find(i=>i.active!==false);
+ const cmd=async(path,input,cookie=adminCookie)=>request(path,'POST',{...input,operationId:crypto.randomUUID(),revision:(await request('state')).data.revision},cookie);
+ const receive=async(unitPrice,outletId='brigade',kind='receipt')=>{
+   const result=await cmd('stock/'+kind,{itemId:item.id,outletId,vendor:item.vendor,quantity:2.5,unitPrice});
+   assert.equal(result.status,200,JSON.stringify(result.data));
+   return result.data.stockHistory.find(m=>m.item_id===item.id && m.outlet_id===outletId && m.unit_cost_minor===unitPrice*100 && m.kind===kind);
+ };
+ const old=await receive(10),latest=await receive(20),other=await receive(30,'cafe');
+ const correction={historyId:latest.id,unitPrice:21.25,expectedUnitCostMinor:2000,reason:'Invoice price correction'};
+ for(const cookie of [chefCookie,supervisorCookie])assert.equal((await cmd('stock/price',correction,cookie)).status,403);
+ assert.equal((await cmd('stock/price',{...correction,historyId:other.id,expectedUnitCostMinor:3000},purchaserCookie)).status,403);
+ for(const invalid of [{unitPrice:-1},{unitPrice:1.234},{unitPrice:'12'},{reason:''},{expectedUnitCostMinor:999}]) {
+   const result=await cmd('stock/price',{...correction,...invalid},purchaserCookie);
+   assert.equal(result.status,invalid.expectedUnitCostMinor?409:400,JSON.stringify(result.data));
+ }
+ const before=(await request('state')).data;
+ const input={...correction,revision:before.revision,operationId:crypto.randomUUID()};
+ const result=await request('stock/price','POST',input,purchaserCookie);
+ assert.equal(result.status,200,JSON.stringify(result.data));
+ const edited=result.data.stockHistory.find(m=>m.id===latest.id);
+ assert.equal(edited.unit_cost_minor,2125);assert.equal(edited.total_cost_minor,5313);
+ assert.equal(edited.delta,latest.delta);assert.equal(edited.created_at,latest.created_at);
+ const balance=s=>s.outletStock.find(b=>b.item_id===item.id && b.outlet_id==='brigade');
+ assert.equal(balance(result.data).unit_cost_minor,2125);assert.equal(balance(result.data).quantity,balance(before).quantity);
+ assert.equal((await request('state')).data.stockHistory.length,before.stockHistory.length);
+ const audit=await db.prepare("SELECT * FROM audit_events WHERE action='price_correction' AND entity_id=?").bind(latest.id).first();
+ assert.ok(audit);assert.equal(audit.actor_id,state.users.find(u=>u.username==='purchaser_test').id);
+ const details=JSON.parse(audit.details_json);assert.equal(details.previousUnitCostMinor,2000);assert.equal(details.unitCostMinor,2125);assert.equal(details.reason,correction.reason);
+ const retry=await request('stock/price','POST',input,purchaserCookie);assert.equal(retry.status,200);assert.equal(retry.data.revision,result.data.revision);
+ assert.equal((await request('stock/price','POST',{...input,operationId:crypto.randomUUID()})).status,409);
+ const older=await cmd('stock/price',{...correction,historyId:old.id,expectedUnitCostMinor:1000,unitPrice:0});
+ assert.equal(older.status,200,JSON.stringify(older.data));assert.equal(balance(older.data).unit_cost_minor,2125);
+ assert.equal(older.data.stockHistory.find(m=>m.id===old.id).total_cost_minor,0);
+ const report=await request('prices/item?from=2020-01-01&to=2099-12-31&outlet=brigade&item='+item.id);
+ assert.equal(report.status,200);assert.equal(report.data.rows.find(m=>m.id===latest.id).unit_cost_minor,2125);
+ const opening=await receive(5,'cafe','opening');
+ const correctedOpening=await cmd('stock/price',{...correction,historyId:opening.id,expectedUnitCostMinor:500,unitPrice:6});
+ assert.equal(correctedOpening.status,200);assert.equal(correctedOpening.data.outletStock.find(b=>b.item_id===item.id && b.outlet_id==='cafe').unit_cost_minor,3000);
+ await assert.rejects(()=>db.prepare('UPDATE outlet_stock_history SET delta=99 WHERE id=?').bind(latest.id).run(),/History is append only/);
+ await assert.rejects(()=>db.prepare('DELETE FROM outlet_stock_history WHERE id=?').bind(latest.id).run(),/History is append only/);
+ await assert.rejects(()=>db.prepare('UPDATE outlet_stock_history SET unit_cost_minor=1,total_cost_minor=3 WHERE id=?').bind(latest.id).run(),/audited command/);
+ const unused=state.items.find(i=>i.active!==false && !before.stockHistory.some(m=>m.item_id===i.id && ['receipt','opening'].includes(m.kind) && m.unit_cost_minor!==null));
+ assert.ok(unused);
+ const added=await cmd('stock/opening',{itemId:unused.id,outletId:'brigade',quantity:3,unitPrice:7});assert.equal(added.status,200);
+ const first=added.data.stockHistory.find(m=>m.item_id===unused.id && m.kind==='opening');
+ const initial=await cmd('stock/price',{...correction,historyId:first.id,unitPrice:8,expectedUnitCostMinor:700},purchaserCookie);
+ assert.equal(initial.status,200);assert.equal(initial.data.outletStock.find(b=>b.item_id===unused.id && b.outlet_id==='brigade').unit_cost_minor,800);
+});

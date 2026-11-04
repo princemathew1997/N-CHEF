@@ -2,6 +2,7 @@
 (() => {
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const titles = { overview:'Stock Overview', catalog:'Item Catalog', receipt:'Receive Stock', distribute:'Distribute to Cuisine', adjust:'Stock Adjustments', history:'Stock History', assign:'Add Legacy Stock', cuisines:'Cuisine Sections' };
+    titles.prices='Price History';
     const adminPages = ['catalog','cuisines'];
     const allowedOutlets = () => OutletSelection.allowed();
     const options = (rows, value, label) => rows.map(r => `<option value="${esc(value(r))}">${esc(label(r))}</option>`).join('');
@@ -97,6 +98,7 @@
         if (adminPages.includes(page) && currentUser.role !== 'admin') { window.switchToView('viewMasterOrders'); return; }
         panel.innerHTML = `<header class="dash-header"><div><h1>${titles[page]}</h1><p>${page==='catalog'?'Manage item details here. Receive quantities through Stock.':'Stock is held by outlet. Cuisine distributions deduct stock immediately.'}</p></div></header><div class="panel inventory-workspace" id="inventoryContent"></div>`;
         const content=panel.querySelector('#inventoryContent');
+        if(page==='prices'){panel.querySelector('.dash-header p').textContent='Review recorded purchase prices and trends over time.';window.PriceHistory.render(content);return;}
         if(page==='overview') overview(content);
         if(page==='distribute'){orderDistribution(content);return;}
         if(page==='catalog') {
@@ -182,7 +184,7 @@
         if(!view.startsWith('inventory:')) return false;
         if(!currentUser || currentUser.role==='cuisine_head') {window.switchToView('viewChefPortal');return true;}
         page=view.slice(10);if(!titles[page])page='overview';
-        if(page==='distribute' && !['admin','purchaser'].includes(currentUser.role)){window.goHome();return true;}
+        if(['distribute','prices'].includes(page) && !['admin','purchaser'].includes(currentUser.role)){window.goHome();return true;}
         if(adminPages.includes(page) && currentUser.role!=='admin'){window.switchToView('viewMasterOrders');return true;}
         panel?.classList.remove('hidden');render();
         document.querySelectorAll('[data-inventory]').forEach(a=>a.classList.toggle('active',a.dataset.inventory===page));

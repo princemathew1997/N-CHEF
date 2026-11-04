@@ -6,6 +6,30 @@
     const outletName=id=>outletsData.find(o=>o.id===id)?.name || id;
     const person=id=>usersData.find(u=>u.id===id)?.name || 'Earlier account';
     const today=()=>InventoryTools.day();
+    const money=value=>value==null?'—':(value/100).toLocaleString('en-IN',{style:'currency',currency:'INR'});
+    const canEditPrice=()=>['admin','purchaser'].includes(currentUser?.role);
+    window.StockPriceEditor={open(movement,onSaved){
+        if(!canEditPrice())return;
+        const dialog=document.createElement('dialog');
+        dialog.className='panel';
+        dialog.setAttribute('aria-labelledby','stockPriceEditTitle');
+        dialog.innerHTML=`<form class="inventory-form"><h2 id="stockPriceEditTitle">Edit price</h2><p>${esc(movement.item_name)} · ${esc(outletName(movement.outlet_id))} · ${esc(movement.delta)} ${esc(movement.unit)}</p><label>Unit price (INR / ${esc(movement.unit)})<input name="unitPrice" type="number" min="0" max="1000000000" step="0.01" value="${movement.unit_cost_minor==null?'':(movement.unit_cost_minor/100).toFixed(2)}" required></label><label>Reason for correction<input name="reason" maxlength="500" required></label><p>Updates this entry’s line total and price history. If this entry sets the current stock cost, the remaining stock value also updates.</p><p role="alert" data-price-error></p><button type="submit" class="btn btn-primary">Save price</button><button type="button" class="btn btn-outline" data-price-cancel>Cancel</button></form>`;
+        document.body.append(dialog);
+        const form=dialog.querySelector('form');let saving=false;
+        dialog.onclose=()=>dialog.remove();
+        dialog.oncancel=event=>{if(saving)event.preventDefault();};
+        dialog.querySelector('[data-price-cancel]').onclick=()=>dialog.close();
+        form.onsubmit=async event=>{
+            event.preventDefault();if(saving || !form.reportValidity())return;
+            saving=true;form.querySelectorAll('button').forEach(b=>b.disabled=true);
+            try{
+                await runDatabaseAction('stock/price',{historyId:movement.id,unitPrice:Number(form.elements.unitPrice.value),reason:form.elements.reason.value.trim(),expectedUnitCostMinor:movement.unit_cost_minor});
+                dialog.close();await onSaved?.();window.renderOutletDashboard?.();window.showToast?.('Price updated','success');
+            }catch(error){dialog.querySelector('[data-price-error]').textContent=error.message;}
+            finally{saving=false;form.querySelectorAll('button').forEach(b=>b.disabled=false);}
+        };
+        dialog.showModal();form.elements.unitPrice.focus();
+    }};
     const rows=new Map();
     let owner=null,deliveryFilters,historyFilters,deliveryRender=0,historyRender=0;
     let refreshDeliveries,refreshHistory;
@@ -98,7 +122,8 @@
         createItemPicker(form.querySelector('[data-history-item]'),masterItemsData,{optional:true,selected:filters.item,onChange:value=>filters.item=value});
         async function load(){const token=++generation;target.textContent='Loading stock movements…';try{
             const result=await apiRequest('stock/history?'+query(filters,cursor));if(token!==generation || renderId!==historyRender || !content.isConnected)return;
-            target.innerHTML=table(['Date','Outlet','Item','Movement','Change','Balance','Unit','Cuisine','Vendor','Reason','Person'],result.rows.map(m=>[esc(InventoryTools.timestamp(m.created_at)),esc(outletName(m.outlet_id)),esc(m.item_name),esc(m.kind),esc(m.delta),esc(m.quantity),esc(m.unit),esc(m.cuisine),esc(m.vendor),esc(m.reason),esc(m.actor_name)]));
+            target.innerHTML=table(['Date','Outlet','Item','Movement','Change','Balance','Unit','Cuisine','Vendor','Reason','Person','Unit price','Line total',...(canEditPrice()?['Action']:[])],result.rows.map(m=>[esc(InventoryTools.timestamp(m.created_at)),esc(outletName(m.outlet_id)),esc(m.item_name),esc(m.kind),esc(m.delta),esc(m.quantity),esc(m.unit),esc(m.cuisine),esc(m.vendor),esc(m.reason),esc(m.actor_name),money(m.unit_cost_minor),money(m.total_cost_minor),...(canEditPrice()?[['receipt','opening'].includes(m.kind) && m.delta>0?`<button type="button" class="btn btn-outline" data-edit-price="${esc(m.id)}">Edit price</button>`:'']:[])]));
+            target.querySelectorAll('[data-edit-price]').forEach(button=>button.onclick=()=>window.StockPriceEditor.open(result.rows.find(m=>m.id===button.dataset.editPrice),load));
             pager(content.querySelector('.queue-pager'),previous.length,result.nextCursor,()=>{cursor=previous.pop();load();},()=>{previous.push(cursor);cursor=result.nextCursor;load();});
         }catch(error){if(token===generation)target.textContent=error.message;}}
         form.onsubmit=event=>{event.preventDefault();filterValues(form,filters);filters.allDates='1';delete filters.delivery;cursor=null;previous=[];content.querySelector('.queue-filter-panel').open=false;load();};
