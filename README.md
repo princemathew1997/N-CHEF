@@ -9,14 +9,20 @@ Merging to main validates changes; it does not publish a production release.
 
 ## User guides
 
-Admins and Purchasers (Supervisors) can use **Edit price** in **Stock History**
-for received and opening stock, or on individual receipts in **Price History**.
-Enter the corrected INR unit price and a reason. Corrections preserve quantities,
-update line totals and price reports, and update remaining stock valuation when
-the corrected entry determines the current cost. Previous prices, new prices,
-the actor and reason are retained in the audit log. Supervisors can edit only
-their assigned outlets. Apply `0011_price_corrections.sql` through the coordinated
-release process before deploying this feature with its matching frontend/API.
+Admins and Purchasers (Supervisors) can open **Stock → Edit Stock Prices** to
+set the current INR unit price for items with positive available stock, including
+imported and adjusted stock. Filter by outlet, category or item and enter a price
+with a reason. Quantities and prior receipt prices stay unchanged; remaining
+stock value updates. Each change creates a zero-quantity **Price update** entry
+in Stock History and an audit event with the previous/new price, stock quantity,
+actor and reason. Supervisors can edit only their assigned outlets.
+
+This is a removable utility: set the API Worker variable
+`NCHEF_STOCK_PRICE_EDITING=disabled` to hide its menu and disable price-writing
+endpoints. Omit the variable or set it to `enabled` to restore the utility.
+Clients pick up the switch on their next workspace refresh. Saved prices,
+stock quantities and audit records remain intact. No new database migration
+is needed beyond the v2.4.0 migrations (0010 and 0011).
 
 Admins and purchasers can open **Stock Overview → Price History** to compare
 recorded purchase prices over the last 90 days or a custom IST date range.

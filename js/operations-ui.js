@@ -203,7 +203,7 @@
         document.querySelectorAll('[data-inventory]').forEach(a=>{
             const p=a.dataset.inventory;
             const visible=currentUser.role==='admin' || (currentUser.role==='purchaser' && !['catalog','cuisines'].includes(p)) || (currentUser.role==='executive_chef' && ['overview','history'].includes(p));
-            a.classList.toggle('hidden',!visible);
+            a.classList.toggle('hidden',!visible || (p==='stock-prices' && !window.CurrentStockPrices?.enabled()));
         });
         window.NavigationGroups?.configure();
     };

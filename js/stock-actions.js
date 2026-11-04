@@ -3,6 +3,7 @@
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const titles = { overview:'Stock Overview', catalog:'Item Catalog', receipt:'Receive Stock', distribute:'Distribute to Cuisine', adjust:'Stock Adjustments', history:'Stock History', assign:'Add Legacy Stock', cuisines:'Cuisine Sections' };
     titles.prices='Price History';
+    titles['stock-prices']='Edit Stock Prices';
     const adminPages = ['catalog','cuisines'];
     const allowedOutlets = () => OutletSelection.allowed();
     const options = (rows, value, label) => rows.map(r => `<option value="${esc(value(r))}">${esc(label(r))}</option>`).join('');
@@ -33,7 +34,7 @@
         const draw=()=>{
             overviewFilters.outlet=outlet.value;overviewFilters.category=category.value;
             const rows=allowedOutlets().filter(o=>!outlet.value || o.id===outlet.value).flatMap(o=>masterItemsData.filter(i=>(i.active!==false || quantity(i.id,o.id)>0) && (!category.value || i.category===category.value) && (!overviewFilters.item || i.id===overviewFilters.item)).map(i=>[esc(o.name),esc(i.name),esc(i.category),numberText(quantity(i.id,o.id)),esc(i.unit),price(cost(i.id,o.id)),price(cost(i.id,o.id)==null?null:Math.round(quantity(i.id,o.id)*cost(i.id,o.id)))]));
-            content.querySelector('#overviewRows').innerHTML=table(['Outlet','Item','Category','Available','Unit','Latest unit cost','Remaining value'],rows);
+            content.querySelector('#overviewRows').innerHTML=table(['Outlet','Item','Category','Available','Unit','Current unit cost','Remaining value'],rows);
         };
         const mountPicker=()=>{const items=masterItemsData.filter(i=>!category.value || i.category===category.value);if(!items.some(i=>i.id===overviewFilters.item))overviewFilters.item='';picker=createItemPicker(content.querySelector('#overviewItemPicker'),items,{optional:true,selected:overviewFilters.item,onChange:id=>{overviewFilters.item=id;draw();}});};
         category.onchange=()=>{mountPicker();draw();};outlet.onchange=draw;mountPicker();draw();
@@ -98,6 +99,7 @@
         if (adminPages.includes(page) && currentUser.role !== 'admin') { window.switchToView('viewMasterOrders'); return; }
         panel.innerHTML = `<header class="dash-header"><div><h1>${titles[page]}</h1><p>${page==='catalog'?'Manage item details here. Receive quantities through Stock.':'Stock is held by outlet. Cuisine distributions deduct stock immediately.'}</p></div></header><div class="panel inventory-workspace" id="inventoryContent"></div>`;
         const content=panel.querySelector('#inventoryContent');
+        if(page==='stock-prices'){panel.querySelector('.dash-header p').textContent='Update unit prices for available outlet stock.';window.CurrentStockPrices.render(content);return;}
         if(page==='prices'){panel.querySelector('.dash-header p').textContent='Review recorded purchase prices and trends over time.';window.PriceHistory.render(content);return;}
         if(page==='overview') overview(content);
         if(page==='distribute'){orderDistribution(content);return;}
@@ -184,7 +186,8 @@
         if(!view.startsWith('inventory:')) return false;
         if(!currentUser || currentUser.role==='cuisine_head') {window.switchToView('viewChefPortal');return true;}
         page=view.slice(10);if(!titles[page])page='overview';
-        if(['distribute','prices'].includes(page) && !['admin','purchaser'].includes(currentUser.role)){window.goHome();return true;}
+        if(['distribute','prices','stock-prices'].includes(page) && !['admin','purchaser'].includes(currentUser.role)){window.goHome();return true;}
+        if(page==='stock-prices' && !window.CurrentStockPrices?.enabled()){window.goHome();return true;}
         if(adminPages.includes(page) && currentUser.role!=='admin'){window.switchToView('viewMasterOrders');return true;}
         panel?.classList.remove('hidden');render();
         document.querySelectorAll('[data-inventory]').forEach(a=>a.classList.toggle('active',a.dataset.inventory===page));
@@ -202,7 +205,7 @@
             e.preventDefault();
             button.disabled=true;try {window.openVendorOrderReceiving();}catch(e){error(e);}finally{button.disabled=false;}
         });
-        const oldSync=window.onLiveSyncReceived;window.onLiveSyncReceived=()=>{oldSync?.();if(currentView==='inventory:history' && !document.activeElement?.closest('.queue-filters'))window.StockHistoryQueues.refresh();if(currentView.startsWith('inventory:') && !panel.querySelector('form') && !panel.contains(document.activeElement))render();};
+        const oldSync=window.onLiveSyncReceived;window.onLiveSyncReceived=()=>{oldSync?.();if(currentView==='inventory:stock-prices'){window.CurrentStockPrices.refresh();return;}if(currentView==='inventory:history' && !document.activeElement?.closest('.queue-filters'))window.StockHistoryQueues.refresh();if(currentView.startsWith('inventory:') && !panel.querySelector('form') && !panel.contains(document.activeElement))render();};
         window.openAddItemModal=()=>{editing=null;window.switchToView('inventory:catalog');};
     });
 })();

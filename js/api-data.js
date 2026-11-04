@@ -35,6 +35,7 @@ function applyServerState(state) {
         target.push(...copyData(state[entity] || []));
     }
     committedState = copyData(state);
+    window.CurrentStockPrices?.syncAvailability();
     window.liveCatalogReference = null;
     if(typeof currentUser!=='undefined' && currentUser){
         if(typeof updateRequestsBadge==='function')updateRequestsBadge();

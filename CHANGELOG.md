@@ -4,6 +4,22 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 2.5.0 - 2026-11-04
+
+- Move price editing to Stock → Edit Stock Prices for Admins and Purchasers
+  (Supervisors). Show positive available balances, including imported and
+  adjusted stock, with outlet/category/item filters and current stock values.
+- Save current unit prices with a reason and stale-stock checks, preserving
+  quantities and existing receipt prices. Record each change as a zero-quantity
+  Price update in Stock History plus an audit of old/new prices and stock value.
+- Allow the utility to be removed later with the Worker variable
+  NCHEF_STOCK_PRICE_EDITING=disabled. Hide the menu and disable price mutations
+  while retaining saved prices, balances and audit history.
+- Preserve manually set prices when correcting older receipts; subsequent new
+  receipts continue to set the current unit cost. No new database migrations.
+- Validate 103 app/API tests, seven database tests, build, and the local browser
+  flow for editing prices on adjustment-only stock.
+
 ## 2.4.0 - 2026-11-04
 
 - Let Admins and Purchasers (Supervisors) correct received and opening stock
