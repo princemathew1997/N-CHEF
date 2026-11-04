@@ -69,6 +69,7 @@ function initRequestWizard() {
     function openRequestWizard() {
         wizardSelectedItems = {};
         wizardNewOrderStarted=false;
+        document.getElementById('wizardItemSearch').value='';
         document.getElementById('wizardRequestDate').value=InventoryTools.day();
         document.getElementById('wizardBackdateJustification').value='';
         document.getElementById('wizardBackdateJustification').setCustomValidity('');
@@ -149,6 +150,7 @@ function initRequestWizard() {
         modal.classList.remove('hidden');
     }
     window.openRequestWizard = openRequestWizard;
+    document.getElementById('wizardItemSearch').oninput=renderWizardItems;
     document.getElementById('wizardRequestDate').onchange=()=>{wizardNewOrderStarted=false;refreshWizardDateContext();};
     document.getElementById('wizardOutlet').onchange=()=>{wizardNewOrderStarted=false;refreshWizardDateContext();};
     document.getElementById('wizardPlaceNewOrder').onclick=()=>{wizardNewOrderStarted=true;document.getElementById('wizardExistingRequests').hidden=true;document.getElementById('wizardStep1').classList.remove('hidden');document.getElementById('wizardStep2').classList.add('hidden');};
@@ -315,7 +317,11 @@ window.updateWizardSelectedCount = updateWizardSelectedCount;
 function renderWizardItems() {
     const grid = document.getElementById('wizardItemsGrid');
     if(!grid) return;
-    const items = masterItemsData.filter(i => i.active !== false && i.category === currentWizardCat);
+    const query = document.getElementById('wizardItemSearch')?.value.trim() || '';
+    const available = masterItemsData.filter(i => i.active !== false && (query || i.category === currentWizardCat));
+    const items = InventoryTools.matchItems(available, query);
+    const status = document.getElementById('wizardSearchStatus');
+    if (status) status.textContent = query ? `${items.length} matching ingredient(s) across all categories. Clear search to browse the selected category.` : '';
     grid.innerHTML = items.map(item => {
         const alreadyRequested = wizardHasExistingItem(item.id);
         const selData = wizardSelectedItems[item.id];
@@ -333,7 +339,7 @@ function renderWizardItems() {
                 <i data-lucide="check" style="width:13px; height:13px; color:${isSelected ? '#000' : 'transparent'};"></i>
             </div>
         </div>`;
-    }).join('');
+    }).join('') || '<p class="wizard-no-items">No matching ingredients. Try another item name or clear the search.</p>';
     if(window.lucide) window.lucide.createIcons();
 }
 
