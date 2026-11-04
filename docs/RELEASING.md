@@ -5,6 +5,18 @@ Production releases are manual. The first managed version is **v1.0.0**;
 a PR runs validation but does not publish production. A version badge in the
 sidebar, `/release.json`, and `/api/health` identify the deployed application.
 
+## Version 2.5.0 available-stock price menu
+
+Version 2.5.0 uses the same migrations 0001–0011 and `operations-v2` epoch as
+v2.4.0. No database migration or maintenance fence is needed. Publish the matching
+API/frontend pair through the existing workflow after validation. Verify the
+new Edit Stock Prices menu and assets without creating test stock in production.
+The utility is enabled by default. Set the API Worker variable
+`NCHEF_STOCK_PRICE_EDITING=disabled` to remove its menu and block both current
+and historical price mutation endpoints. Existing prices and audit records stay
+intact; clients pick up the switch on the next workspace refresh. Use the same
+coordinated release process for code changes; do not add a frontend-only deploy.
+
 ## Version 2.4.0 price history and corrections
 
 Version 2.4.0 requires migrations `0010_price_history.sql` and

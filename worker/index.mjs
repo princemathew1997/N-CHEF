@@ -8,6 +8,7 @@ import { clone, fail, hasOutlet, id, number, project, safeText, validateChanges 
 import { persistChanges as persistDatabaseChanges, readState,readClientState,markAllNotifications } from './database.mjs';
 import {dispatchList,dispatchItems,stockHistoryPage,stockReport} from './queues.mjs';
 import {priceHistory,correctStockPrice} from './prices.mjs';
+import {setAvailableStockPrice,stockPriceEditingEnabled} from './stock-prices.mjs';
 
 function response(body, status = 200, extra = {}) {
   return Response.json(body, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...extra } });
@@ -52,6 +53,9 @@ export default {
     const send=async(data,status=200,extra={})=>{
       if(paged && data?.state?.items && !data.state.historyPaged && data.user)data={...data,state:await readClientState(env.DB,data.user)};
       else if(paged && data?.items && !data.historyPaged && sessionActor)data=await readClientState(env.DB,sessionActor);
+      const features={stockPriceEditing:stockPriceEditingEnabled(env)};
+      if(data?.state?.items)data={...data,state:{...data.state,features}};
+      else if(data?.items && sessionActor)data={...data,features};
       return response(data,status,extra);
     };
     const path = new URL(request.url).pathname;
@@ -239,7 +243,8 @@ export default {
 
         return send(await persistChanges(env.DB, state, next, touched, current, input.operationId));
       }
-      if (['/api/stock/price', '/api/stock/opening', '/api/stock/receipt', '/api/stock/distribute', '/api/stock/adjust', '/api/stock/assign', '/api/stock/reconcile', '/api/purchase-orders/receive', '/api/indents/approve', '/api/indents/approve-all', '/api/requests/approve'].includes(path) && request.method === 'POST') {
+      if (['/api/stock/current-price', '/api/stock/price', '/api/stock/opening', '/api/stock/receipt', '/api/stock/distribute', '/api/stock/adjust', '/api/stock/assign', '/api/stock/reconcile', '/api/purchase-orders/receive', '/api/indents/approve', '/api/indents/approve-all', '/api/requests/approve'].includes(path) && request.method === 'POST') {
+        if(['/api/stock/current-price','/api/stock/price'].includes(path) && !stockPriceEditingEnabled(env))fail('Stock price editing is disabled.',404);
         const input = await body(request);
         id(input.operationId);
         const prior = await env.DB.prepare('SELECT actor_id FROM command_receipts WHERE id = ?').bind(input.operationId).first();
@@ -267,7 +272,9 @@ export default {
           if (!item) fail('Item does not exist.', 404);
           return clone(item);
         };
-        if (path === '/api/stock/price') {
+        if (path === '/api/stock/current-price') {
+          stock=setAvailableStockPrice(state,current,input);
+        } else if (path === '/api/stock/price') {
           stock=await correctStockPrice(env.DB,state,current,input);
         } else if (path.startsWith('/api/stock/')) {
           transact(path.split('/').pop(), input);

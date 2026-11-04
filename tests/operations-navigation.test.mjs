@@ -10,7 +10,7 @@ test('stock navigation restores permissions when roles change in the same browse
         const value={dataset,textContent:'',classList:{add:c=>classes.add(c),toggle:(c,hide)=>hide?classes.add(c):classes.delete(c),contains:c=>classes.has(c)}};
         elements.set(id,value);return value;
     };
-    const pages=['overview','receipt','distribute','adjust','history','catalog','assign','cuisines'];
+    const pages=['overview','receipt','distribute','adjust','history','catalog','assign','cuisines','stock-prices'];
     const links=pages.map(inventory=>element(inventory,{inventory}));
     for(const id of ['userTitle','navAddChef','navGroupRequests'])element(id);
     const context={window:{},InventoryTools:{day:()=>''},currentUser:{role:'executive_chef'},document:{addEventListener(){},getElementById:id=>elements.get(id),querySelectorAll:selector=>selector==='[data-inventory]'?links:[]}};
@@ -21,6 +21,10 @@ test('stock navigation restores permissions when roles change in the same browse
     assert.equal(elements.get('receipt').classList.contains('hidden'),false);
     assert.equal(elements.get('catalog').classList.contains('hidden'),true);
     context.currentUser={role:'admin'};context.window.configureOperationsRole();assert.equal(elements.get('catalog').classList.contains('hidden'),false);
+    assert.equal(elements.get('stock-prices').classList.contains('hidden'),true);
+    context.window.CurrentStockPrices={enabled:()=>true};context.window.configureOperationsRole();assert.equal(elements.get('stock-prices').classList.contains('hidden'),false);
+    context.currentUser={role:'purchaser'};context.window.configureOperationsRole();assert.equal(elements.get('stock-prices').classList.contains('hidden'),false);
+    context.window.CurrentStockPrices={enabled:()=>false};context.window.configureOperationsRole();assert.equal(elements.get('stock-prices').classList.contains('hidden'),true);
     context.currentUser={role:'cuisine_head'};context.window.configureOperationsRole();assert.ok(links.every(a=>a.classList.contains('hidden')));
     let redirected;context.window.switchToView=view=>redirected=view;
     assert.equal(context.window.showOperationsView('operations:users'),true);assert.equal(redirected,'viewChefPortal');

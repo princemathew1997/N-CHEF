@@ -14,10 +14,10 @@ export async function correctStockPrice(db, state, actor, input) {
   if (input.expectedUnitCostMinor!==movement.unit_cost_minor) fail('This price changed. Refresh and try again.',409);
   const totalCostMinor=lineCost(movement.delta,unitCostMinor);
   const outletStock=clone(state.outletStock);
-  // Receipts always set valuation; opening stock only initializes an unknown cost.
+  // Receipts and manual stock prices set valuation; opening stock initializes it.
   const source=await db.prepare(`SELECT id FROM outlet_stock_history WHERE item_id=? AND outlet_id=?
-    AND (kind='receipt' OR (kind='opening' AND (unit_cost_minor IS NOT NULL OR id=?)))
-    ORDER BY CASE WHEN kind='receipt' THEN 0 ELSE 1 END, CASE WHEN kind='receipt' THEN -rowid ELSE rowid END LIMIT 1`)
+    AND (kind IN ('receipt','price') OR (kind='opening' AND (unit_cost_minor IS NOT NULL OR id=?)))
+    ORDER BY CASE WHEN kind IN ('receipt','price') THEN 0 ELSE 1 END, CASE WHEN kind IN ('receipt','price') THEN -rowid ELSE rowid END LIMIT 1`)
     .bind(movement.item_id,movement.outlet_id,movement.id).first();
   if (source?.id===movement.id) {
     const balance=outletStock.find(b=>b.item_id===movement.item_id && b.outlet_id===movement.outlet_id);

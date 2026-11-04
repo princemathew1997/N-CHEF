@@ -562,3 +562,41 @@ test('admin and purchaser correct entered prices with audit, scope, validation a
  const paged=await pagedResponse.json();assert.equal(pagedResponse.status,200,JSON.stringify(paged));assert.equal(paged.historyPaged,true);assert.equal(paged.stockHistory.length,0);
  assert.equal(paged.outletStock.find(b=>b.item_id===unused.id && b.outlet_id==='brigade').unit_cost_minor,900);
 });
+
+test('available-stock price menu updates valuation with zero movement and can be disabled',async()=>{
+ const cmd=async(path,input,cookie=adminCookie)=>request(path,'POST',{...input,operationId:crypto.randomUUID(),revision:(await request('state')).data.revision},cookie);
+ const start=(await request('state')).data,item=start.items.find(i=>i.active!==false);
+ assert.equal(start.features.stockPriceEditing,true);
+ const adjusted=await cmd('stock/adjust',{itemId:item.id,outletId:'brigade',quantity:9.5,reason:'Verify available stock price editing'});assert.equal(adjusted.status,200);
+ const before=(await request('state')).data;
+ const balance=s=>s.outletStock.find(b=>b.item_id===item.id && b.outlet_id==='brigade');
+ const details={itemId:item.id,outletId:'brigade',unitPrice:17.25,reason:'Correct current stock valuation',expectedQuantity:9.5,expectedUnitCostMinor:balance(before).unit_cost_minor};
+ for(const cookie of [chefCookie,supervisorCookie])assert.equal((await cmd('stock/current-price',details,cookie)).status,403);
+ assert.equal((await cmd('stock/current-price',{...details,outletId:'cafe'},purchaserCookie)).status,403);
+ const input={...details,operationId:crypto.randomUUID(),revision:before.revision};
+ const saved=await request('stock/current-price','POST',input,purchaserCookie);assert.equal(saved.status,200,JSON.stringify(saved.data));
+ assert.equal(balance(saved.data).quantity,9.5);assert.equal(balance(saved.data).unit_cost_minor,1725);
+ const after=(await request('state')).data;
+ const movement=after.stockHistory.find(m=>m.operation_id===input.operationId);
+ assert.equal(movement.kind,'price');assert.equal(movement.delta,0);assert.equal(movement.quantity,9.5);assert.equal(movement.total_cost_minor,0);
+ assert.deepEqual(after.stockHistory.filter(m=>m.id!==movement.id),before.stockHistory);
+ const audit=await db.prepare("SELECT details_json,actor_id FROM audit_events WHERE action='stock_price_update' AND entity_id=? ORDER BY rowid DESC LIMIT 1").bind(item.id).first();
+ assert.equal(audit.actor_id,start.users.find(u=>u.username==='purchaser_test').id);
+ const changes=JSON.parse(audit.details_json);assert.equal(changes.previousUnitCostMinor,details.expectedUnitCostMinor);assert.equal(changes.unitCostMinor,1725);assert.equal(changes.stockValueMinor,16388);
+ const retry=await request('stock/current-price','POST',input,purchaserCookie);assert.equal(retry.status,200);assert.equal(retry.data.revision,saved.data.revision);
+ assert.equal((await cmd('stock/current-price',{...details,expectedUnitCostMinor:1725,expectedQuantity:9})).status,409);
+ const old=after.stockHistory.find(m=>m.item_id===item.id && m.outlet_id==='brigade' && m.kind==='receipt' && m.delta>0);
+ assert.ok(old);
+ const historical=await cmd('stock/price',{historyId:old.id,unitPrice:12,reason:'Correct historical invoice',expectedUnitCostMinor:old.unit_cost_minor});assert.equal(historical.status,200);assert.equal(balance(historical.data).unit_cost_minor,1725);
+ const received=await cmd('stock/receipt',{itemId:item.id,outletId:'brigade',quantity:1,vendor:item.vendor,unitPrice:25});assert.equal(received.status,200);assert.equal(balance(received.data).unit_cost_minor,2500);
+ const current=(await request('state')).data;
+ const worker=(await import('../worker/index.mjs')).default;
+ const disabledEnv={DB:db,NCHEF_STOCK_PRICE_EDITING:'disabled',NCHEF_RELEASE_COMMIT:testReleaseCommit};
+ const disabledState=await worker.fetch(new Request(origin+'/api/state',{headers:{Cookie:adminCookie,'X-NCHEF-Workspace':'paged'}}),disabledEnv);
+ assert.equal(disabledState.status,200);assert.equal((await disabledState.json()).features.stockPriceEditing,false);
+ for(const path of ['stock/current-price','stock/price']){
+  const response=await worker.fetch(new Request(origin+'/api/'+path,{method:'POST',headers:{Origin:origin,Cookie:adminCookie,'Content-Type':'application/json','X-NCHEF-Client-Release':testReleaseCommit},body:JSON.stringify({...details,operationId:crypto.randomUUID(),revision:current.revision})}),disabledEnv);
+  assert.equal(response.status,404);
+ }
+ const final=(await request('state')).data;assert.equal(final.revision,current.revision);assert.deepEqual(final.outletStock,current.outletStock);
+});
