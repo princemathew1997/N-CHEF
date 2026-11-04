@@ -18,6 +18,10 @@ Release's deployment records identify the actual Cloudflare rollback targets.
   API/frontend pair. Keep history facts protected and require an audited command
   for price corrections. No stock reset or demo data is part of this release.
 
+## 2.3.1 - 2026-10-28
+
+- Fix admin sidebar scrolling on short screens; keep menu items reachable and account controls visible.
+
 ## 2.3.0 - 2026-10-22
 
 - Group cuisine deliveries by dispatch, with Needs attention, Today and History,
