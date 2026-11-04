@@ -9,6 +9,24 @@ Merging to main validates changes; it does not publish a production release.
 
 ## User guides
 
+Admins and Purchasers (Supervisors) can use **Edit price** in **Stock History**
+for received and opening stock, or on individual receipts in **Price History**.
+Enter the corrected INR unit price and a reason. Corrections preserve quantities,
+update line totals and price reports, and update remaining stock valuation when
+the corrected entry determines the current cost. Previous prices, new prices,
+the actor and reason are retained in the audit log. Supervisors can edit only
+their assigned outlets. Apply `0011_price_corrections.sql` through the coordinated
+release process before deploying this feature with its matching frontend/API.
+
+Admins and purchasers can open **Stock Overview → Price History** to compare
+recorded purchase prices over the last 90 days or a custom IST date range.
+Filter by outlet, vendor, category, or item, then open an item for daily trends
+and paginated receipts. Averages are quantity-weighted; latest and previous
+prices refer to the last two priced receipts within the selected filters.
+Opening stock, legacy imports, and adjustments are excluded. Existing priced
+receipts appear automatically. Apply migration `0010_price_history.sql` through
+the normal release migration workflow before deploying this version.
+
 See the [role-based user wiki](docs/user-guides/README.md) for current Admin,
 Executive Chef, Purchaser (Supervisor) and Cuisine Head instructions and shareable PDFs. The wiki also records
 [current gaps and limitations](docs/user-guides/implementation-gaps.md).

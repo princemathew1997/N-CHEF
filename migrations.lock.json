@@ -34,5 +34,13 @@
   {
     "name": "0009_dispatch_queues.sql",
     "sha256": "0b49836bfe5eb7581aac8c9128e7d1bfa23e5433897b6e9c10f0aa8baca0da4b"
+  },
+  {
+    "name": "0010_price_history.sql",
+    "sha256": "f6503dd7701e00007f19dc047b288f032d4c29e925054d348b75af20e4222e58"
+  },
+  {
+    "name": "0011_price_corrections.sql",
+    "sha256": "4ef9443f1086c6945b368d8b04bea80ff2bec035dbef3f7b558cbb8c4d94951c"
   }
 ]

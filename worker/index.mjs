@@ -7,6 +7,7 @@ import { digest, equalSecret, getSessionToken, hashPassword, randomToken, sessio
 import { clone, fail, hasOutlet, id, number, project, safeText, validateChanges } from './model.mjs';
 import { persistChanges as persistDatabaseChanges, readState,readClientState,markAllNotifications } from './database.mjs';
 import {dispatchList,dispatchItems,stockHistoryPage,stockReport} from './queues.mjs';
+import {priceHistory,correctStockPrice} from './prices.mjs';
 
 function response(body, status = 200, extra = {}) {
   return Response.json(body, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...extra } });
@@ -121,6 +122,9 @@ export default {
       requireCurrentClient(request, env, path);
       if(request.method==='GET'){
         const query=new URL(request.url).searchParams;
+        // Report objects also contain `items`; do not treat them as workspace state.
+        if(path==='/api/prices')return response(await priceHistory(env.DB,actor,query));
+        if(path==='/api/prices/item')return response(await priceHistory(env.DB,actor,query,true));
         if(path==='/api/dispatches')return send(await dispatchList(env.DB,actor,query));
         if(path==='/api/dispatches/items')return send(await dispatchItems(env.DB,actor,query));
         if(path==='/api/stock/history')return send(await stockHistoryPage(env.DB,actor,query));
@@ -235,7 +239,7 @@ export default {
 
         return send(await persistChanges(env.DB, state, next, touched, current, input.operationId));
       }
-      if (['/api/stock/opening', '/api/stock/receipt', '/api/stock/distribute', '/api/stock/adjust', '/api/stock/assign', '/api/stock/reconcile', '/api/purchase-orders/receive', '/api/indents/approve', '/api/indents/approve-all', '/api/requests/approve'].includes(path) && request.method === 'POST') {
+      if (['/api/stock/price', '/api/stock/opening', '/api/stock/receipt', '/api/stock/distribute', '/api/stock/adjust', '/api/stock/assign', '/api/stock/reconcile', '/api/purchase-orders/receive', '/api/indents/approve', '/api/indents/approve-all', '/api/requests/approve'].includes(path) && request.method === 'POST') {
         const input = await body(request);
         id(input.operationId);
         const prior = await env.DB.prepare('SELECT actor_id FROM command_receipts WHERE id = ?').bind(input.operationId).first();
@@ -263,7 +267,9 @@ export default {
           if (!item) fail('Item does not exist.', 404);
           return clone(item);
         };
-        if (path.startsWith('/api/stock/')) {
+        if (path === '/api/stock/price') {
+          stock=await correctStockPrice(env.DB,state,current,input);
+        } else if (path.startsWith('/api/stock/')) {
           transact(path.split('/').pop(), input);
         } else if (path === '/api/purchase-orders/receive') {
           const planned=planVendorReceipt(state,current,input);

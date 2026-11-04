@@ -4,6 +4,20 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 2.4.0 - 2026-11-04
+
+- Let Admins and Purchasers (Supervisors) correct received and opening stock
+  prices from Stock History, and receipt prices from Price History. Require a
+  reason, restrict supervisors to assigned outlets, and retain audited old/new
+  costs without changing quantities or original movement details.
+- Recalculate corrected line totals and price reports. Update remaining stock
+  valuation only when the corrected entry determines the current unit cost.
+- Add filtered purchase price history, daily quantity-weighted charts, paginated
+  receipts and INR price comparisons for Admins and Purchasers.
+- Apply migrations 0010 and 0011 under maintenance before publishing the matching
+  API/frontend pair. Keep history facts protected and require an audited command
+  for price corrections. No stock reset or demo data is part of this release.
+
 ## 2.3.1 - 2026-10-28
 
 - Fix admin sidebar scrolling on short screens; keep menu items reachable and account controls visible.
