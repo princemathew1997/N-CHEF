@@ -558,4 +558,7 @@ test('admin and purchaser correct entered prices with audit, scope, validation a
  const first=added.data.stockHistory.find(m=>m.item_id===unused.id && m.kind==='opening');
  const initial=await cmd('stock/price',{...correction,historyId:first.id,unitPrice:8,expectedUnitCostMinor:700},purchaserCookie);
  assert.equal(initial.status,200);assert.equal(initial.data.outletStock.find(b=>b.item_id===unused.id && b.outlet_id==='brigade').unit_cost_minor,800);
+ const pagedResponse=await mf.dispatchFetch(origin+'/api/stock/price',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',Cookie:purchaserCookie,'X-NCHEF-Workspace':'paged','X-NCHEF-Client-Release':testReleaseCommit},body:JSON.stringify({...correction,historyId:first.id,unitPrice:9,expectedUnitCostMinor:800,revision:initial.data.revision,operationId:crypto.randomUUID()})});
+ const paged=await pagedResponse.json();assert.equal(pagedResponse.status,200,JSON.stringify(paged));assert.equal(paged.historyPaged,true);assert.equal(paged.stockHistory.length,0);
+ assert.equal(paged.outletStock.find(b=>b.item_id===unused.id && b.outlet_id==='brigade').unit_cost_minor,900);
 });
