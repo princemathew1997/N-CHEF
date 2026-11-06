@@ -209,7 +209,7 @@ export default {
           const reqRecord = (state.operationRecords || []).find(r => r.id === input.requestId && r.kind === 'notification' && r.eventType === 'bulk_receipt_request');
           if (!reqRecord) fail('Bulk receipt request not found.', 404);
           if (reqRecord.status !== 'Pending') fail('Bulk receipt request has already been resolved.', 409);
-          if (input.revision !== state.revision) fail('Data changed. Refresh and try again.', 409);
+          if (input.revision && input.revision !== state.revision) fail('Data changed. Refresh and try again.', 409);
 
           const next = clone(state);
           const nowIso = new Date().toISOString();

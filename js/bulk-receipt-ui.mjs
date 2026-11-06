@@ -237,6 +237,7 @@ window.renderBulkReceipt = content => {
                   const state = await apiRequest('stock/bulk-receipt/resolve', 'POST', {
                     requestId: reqId,
                     approve: true,
+                    revision: committedState?.revision,
                     operationId: crypto.randomUUID()
                   });
                   applyServerState(state);
