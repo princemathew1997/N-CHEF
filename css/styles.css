@@ -159,9 +159,19 @@ input[type="date"] {
     cursor: pointer;
 }
 
+/* Keep native popup menus in the same dark scheme as their closed control. */
+select {
+    color-scheme: dark;
+}
+
 select option {
     background: var(--dark);
     color: var(--text-main);
+}
+
+select option:checked {
+    background-color: Highlight;
+    color: HighlightText;
 }
 
 /* Custom Date Picker (Centered on Screen) */
