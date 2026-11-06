@@ -1912,6 +1912,7 @@ window.updateSidebarAttention=function(){
     mark(document.querySelector('[data-operations-nav][data-operations=accounts]'),counts.accounts);
     mark(document.getElementById('navDistribution'),counts.deliveries);
     mark(document.getElementById('navReceiveOrder'),counts.deliveries);
+    mark(document.querySelector('[data-inventory="bulk-receipt"]'),counts.bulkReceipts);
     window.NavigationGroups?.updateBadges();
     document.getElementById('navStock')?.classList.toggle('has-pending-requests',counts.deliveries>0);
     document.getElementById('navRequests')?.classList.toggle('has-pending-requests',counts.approvals+counts.manage+counts.consolidate+counts.vendorOrders>0);

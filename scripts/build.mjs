@@ -22,6 +22,7 @@ for (const path of ['inventory-tools.js', 'inventory-ui.js', 'api-data.js', 'ven
 writeFileSync('dist/site/_headers', '/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: same-origin\n  X-Frame-Options: DENY\n  Cache-Control: no-cache\n');
 const release=metadata();
 await build({entryPoints:['js/legacy-import-ui.mjs'],outfile:'dist/site/js/legacy-import-ui.js',bundle:true,format:'iife',platform:'browser',target:'es2022'});
+await build({entryPoints:['js/bulk-receipt-ui.mjs'],outfile:'dist/site/js/bulk-receipt-ui.js',bundle:true,format:'iife',platform:'browser',target:'es2022'});
 writeFileSync('dist/site/release.json',JSON.stringify(release,null,2)+'\n');
 writeFileSync('dist/site/js/release-info.js','window.NCHEF_RELEASE='+JSON.stringify(release)+';\n');
 cpSync('dist/site', 'dist/pages', { recursive: true });

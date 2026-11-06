@@ -12,7 +12,7 @@ export async function readState(db,options={}) {
     (kind='delivery' AND (id IN (${placeholders}) OR delivery_dispatch=?)) OR
     (kind='notification' AND (id IN (${placeholders}) OR json_extract(payload_json,'$.sourceId') IN (${placeholders}) OR id LIKE 'threshold_%' OR (? AND json_extract(payload_json,'$.userId')=?)))`)
     .bind(selected,options.dispatchId || '',selected,selected,options.allNotifications?1:0,options.actor?.id || '');
-  const records=options.compact?db.prepare("SELECT kind,payload_json FROM operation_records WHERE kind NOT IN ('delivery','notification') UNION ALL SELECT kind,payload_json FROM (SELECT kind,payload_json FROM operation_records WHERE kind='notification' AND json_extract(payload_json,'$.userId')=? ORDER BY rowid DESC LIMIT 200)").bind(options.actor.id):options.operational?operationalRecords:db.prepare('SELECT kind,payload_json FROM operation_records');
+  const records=options.compact?db.prepare("SELECT kind,payload_json FROM operation_records WHERE kind NOT IN ('delivery','notification') UNION ALL SELECT kind,payload_json FROM (SELECT kind,payload_json FROM operation_records WHERE kind='notification' AND (json_extract(payload_json,'$.userId')=? OR json_extract(payload_json,'$.eventType')='bulk_receipt_request') ORDER BY rowid DESC LIMIT 200)").bind(options.actor.id):options.operational?operationalRecords:db.prepare('SELECT kind,payload_json FROM operation_records');
   const result = await db.batch([...queries.map(q => db.prepare(q)), db.prepare('SELECT id, name FROM cuisines'), db.prepare('SELECT revision FROM app_revision WHERE id = 1'), db.prepare('SELECT * FROM outlet_stock'), db.prepare('SELECT * FROM legacy_stock'), db.prepare(options.compact || options.operational?'SELECT * FROM outlet_stock_history WHERE 0':'SELECT * FROM outlet_stock_history ORDER BY created_at DESC, rowid DESC'), records]);
   const state = {};
   entities.forEach((entity, i) => {
@@ -123,7 +123,7 @@ export async function persistChanges(db, state, next, touched, actor, operationI
       writes.push(query(db,'INSERT INTO audit_events(id,actor_id,action,entity_type,entity_id,details_json) VALUES (?,?,?,?,?,?)',crypto.randomUUID(),actor.id,'price_correction','stock',correction.id,JSON.stringify({operationId,...correction})));
       writes.push(query(db,'UPDATE outlet_stock_history SET unit_cost_minor=?,total_cost_minor=? WHERE id=?',correction.unitCostMinor,correction.totalCostMinor,correction.id));
     }
-    if(stock.importSummary)writes.push(query(db,'INSERT INTO audit_events(id,actor_id,action,entity_type,entity_id,details_json) VALUES (?,?,?,?,?,?)',crypto.randomUUID(),actor.id,'legacy_import','stock',stock.importSummary.fingerprint,JSON.stringify({operationId,rows:stock.importSummary.rows})));
+    if(stock.importSummary)writes.push(query(db,'INSERT INTO audit_events(id,actor_id,action,entity_type,entity_id,details_json) VALUES (?,?,?,?,?,?)',crypto.randomUUID(),actor.id,stock.importSummary.action || 'legacy_import','stock',stock.importSummary.fingerprint,JSON.stringify({operationId,rows:stock.importSummary.rows})));
     for (const balance of stock.outletStock) {
       const previous = state.outletStock.find(s => s.item_id === balance.item_id && s.outlet_id === balance.outlet_id);
       if (previous?.quantity === balance.quantity && previous?.unit_cost_minor === balance.unit_cost_minor) continue;

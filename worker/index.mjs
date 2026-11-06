@@ -1,14 +1,15 @@
-import { canPurchase, operationCommand, notify, dayIST, editCuisineRequest, recallConsolidatedRequest, reviewChefRequests } from './operations.mjs';
+import { canPurchase, operationCommand, notify, putRecord, dayIST, editCuisineRequest, recallConsolidatedRequest, reviewChefRequests } from './operations.mjs';
 import { validateLegacyCSV } from '../shared/legacy-import.mjs';
+import { validateBulkReceiptCSV } from '../shared/bulk-receipt.mjs';
 import { stockCommand } from './stock.mjs';
 import { releaseInfo, requireCurrentClient } from './release.mjs';
 import { raiseVendorOrders, planVendorReceipt } from './purchase-orders.mjs';
 import { digest, equalSecret, getSessionToken, hashPassword, randomToken, sessionCookie, verifyPassword } from './auth.mjs';
 import { clone, fail, hasOutlet, id, number, project, safeText, validateChanges } from './model.mjs';
-import { persistChanges as persistDatabaseChanges, readState,readClientState,markAllNotifications } from './database.mjs';
-import {dispatchList,dispatchItems,stockHistoryPage,stockReport} from './queues.mjs';
-import {priceHistory,correctStockPrice} from './prices.mjs';
-import {setAvailableStockPrice,stockPriceEditingEnabled} from './stock-prices.mjs';
+import { persistChanges as persistDatabaseChanges, readState, readClientState, markAllNotifications } from './database.mjs';
+import { dispatchList, dispatchItems, stockHistoryPage, stockReport } from './queues.mjs';
+import { priceHistory, correctStockPrice } from './prices.mjs';
+import { setAvailableStockPrice, stockPriceEditingEnabled } from './stock-prices.mjs';
 
 function response(body, status = 200, extra = {}) {
   return Response.json(body, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...extra } });
@@ -46,17 +47,17 @@ async function actorFor(request, db) {
 }
 export default {
   async fetch(request, env) {
-    const paged=request.headers.get('X-NCHEF-Workspace')==='paged';
-    let sessionActor=null;
-    const persistChanges=(db,state,next,touched,actor,operationId,stock=null)=>persistDatabaseChanges(db,state,next,touched,actor,operationId,stock,{compact:paged});
-    const commandState=input=>readState(env.DB,paged?{operational:true,actor:sessionActor,dispatchId:input.dispatchId,allNotifications:path.endsWith('notifications/read-all'),recordIds:[input.id,input.indentId,input.requestId,...(input.ids || []),...(input.lines || []).map(row=>row.id),...(input.changes || []).map(row=>row.key)].filter(Boolean)}:{});
-    const send=async(data,status=200,extra={})=>{
-      if(paged && data?.state?.items && !data.state.historyPaged && data.user)data={...data,state:await readClientState(env.DB,data.user)};
-      else if(paged && data?.items && !data.historyPaged && sessionActor)data=await readClientState(env.DB,sessionActor);
-      const features={stockPriceEditing:stockPriceEditingEnabled(env)};
-      if(data?.state?.items)data={...data,state:{...data.state,features}};
-      else if(data?.items && sessionActor)data={...data,features};
-      return response(data,status,extra);
+    const paged = request.headers.get('X-NCHEF-Workspace') === 'paged';
+    let sessionActor = null;
+    const persistChanges = (db, state, next, touched, actor, operationId, stock = null) => persistDatabaseChanges(db, state, next, touched, actor, operationId, stock, { compact: paged });
+    const commandState = input => readState(env.DB, paged ? { operational: true, actor: sessionActor, dispatchId: input.dispatchId, allNotifications: path.endsWith('notifications/read-all'), recordIds: [input.id, input.indentId, input.requestId, ...(input.ids || []), ...(input.lines || []).map(row => row.id), ...(input.changes || []).map(row => row.key)].filter(Boolean) } : {});
+    const send = async (data, status = 200, extra = {}) => {
+      if (paged && data?.state?.items && !data.state.historyPaged && data.user) data = { ...data, state: await readClientState(env.DB, data.user) };
+      else if (paged && data?.items && !data.historyPaged && sessionActor) data = await readClientState(env.DB, sessionActor);
+      const features = { stockPriceEditing: stockPriceEditingEnabled(env) };
+      if (data?.state?.items) data = { ...data, state: { ...data.state, features } };
+      else if (data?.items && sessionActor) data = { ...data, features };
+      return response(data, status, extra);
     };
     const path = new URL(request.url).pathname;
     if (!path.startsWith('/api/')) return env.ASSETS ? env.ASSETS.fetch(request) : new Response('Not found', { status: 404 });
@@ -73,7 +74,7 @@ export default {
           env.DB.prepare('SELECT kind FROM operation_records LIMIT 0'),
           env.DB.prepare('SELECT delivery_dispatch FROM operation_records LIMIT 0'),
         ]);
-        return send({ ok: true, release:releaseInfo(env) });
+        return send({ ok: true, release: releaseInfo(env) });
       }
       if (path === '/api/setup-status' && request.method === 'GET') {
         const first = await env.DB.prepare('SELECT id FROM setup_lock WHERE id = 1').first();
@@ -117,25 +118,25 @@ export default {
           env.DB.prepare('DELETE FROM login_attempts WHERE key = ?').bind(await digest('user:' + username)),
           env.DB.prepare('INSERT INTO sessions VALUES (?, ?, ?, ?)').bind(await digest(token), user.id, now + 28800, now),
         ]);
-        const state = await readState(env.DB,paged?{compact:true,actor:{id:user.id}}:{});
+        const state = await readState(env.DB, paged ? { compact: true, actor: { id: user.id } } : {});
         const actor = state.users.find(u => u.id === user.id);
         return send({ user: actor, state: project(state, actor) }, 200, { 'Set-Cookie': sessionCookie(request, token) });
       }
       const actor = await actorFor(request, env.DB);
-      sessionActor=actor;
+      sessionActor = actor;
       requireCurrentClient(request, env, path);
-      if(request.method==='GET'){
-        const query=new URL(request.url).searchParams;
+      if (request.method === 'GET') {
+        const query = new URL(request.url).searchParams;
         // Report objects also contain `items`; do not treat them as workspace state.
-        if(path==='/api/prices')return response(await priceHistory(env.DB,actor,query));
-        if(path==='/api/prices/item')return response(await priceHistory(env.DB,actor,query,true));
-        if(path==='/api/dispatches')return send(await dispatchList(env.DB,actor,query));
-        if(path==='/api/dispatches/items')return send(await dispatchItems(env.DB,actor,query));
-        if(path==='/api/stock/history')return send(await stockHistoryPage(env.DB,actor,query));
-        if(path==='/api/stock/report')return send(await stockReport(env.DB,actor,query));
+        if (path === '/api/prices') return response(await priceHistory(env.DB, actor, query));
+        if (path === '/api/prices/item') return response(await priceHistory(env.DB, actor, query, true));
+        if (path === '/api/dispatches') return send(await dispatchList(env.DB, actor, query));
+        if (path === '/api/dispatches/items') return send(await dispatchItems(env.DB, actor, query));
+        if (path === '/api/stock/history') return send(await stockHistoryPage(env.DB, actor, query));
+        if (path === '/api/stock/report') return send(await stockReport(env.DB, actor, query));
       }
       if (['/api/session', '/api/state'].includes(path) && request.method === 'GET') {
-        if(paged){const state=await readClientState(env.DB,actor);return send(path==='/api/session'?{user:actor,state}:state);}
+        if (paged) { const state = await readClientState(env.DB, actor); return send(path === '/api/session' ? { user: actor, state } : state); }
         const state = await readState(env.DB);
         const current = state.users.find(u => u.id === actor.id);
         if (!current) fail('Account is inactive.', 401);
@@ -150,79 +151,191 @@ export default {
         if (actor.role !== 'admin') fail('Administrator permission required.', 403);
         const input = await body(request); id(input.operationId);
         const prior = await env.DB.prepare('SELECT actor_id FROM command_receipts WHERE id=?').bind(input.operationId).first();
-        if (prior) { if (prior.actor_id !== actor.id) fail('Command access denied.',403); return send(project(await commandState(input),actor)); }
+        if (prior) { if (prior.actor_id !== actor.id) fail('Command access denied.', 403); return send(project(await commandState(input), actor)); }
         const state = await commandState(input);
-        if (input.revision !== state.revision) fail('Data changed. Refresh and try again.',409);
+        if (input.revision !== state.revision) fail('Data changed. Refresh and try again.', 409);
         const name = safeText(input.name, 'Cuisine name').trim();
-        if (state.cuisines.some(c => c.name.toLowerCase() === name.toLowerCase())) fail('Cuisine already exists.',409);
-        try { await env.DB.batch([
-          env.DB.prepare('INSERT INTO revision_guards VALUES (?,?)').bind(input.operationId,state.revision),
-          env.DB.prepare('INSERT INTO command_receipts VALUES (?,?,?,?)').bind(input.operationId,actor.id,state.revision,Math.floor(Date.now()/1000)),
-          env.DB.prepare('INSERT INTO cuisines VALUES (?,?)').bind(crypto.randomUUID(),name),
-          env.DB.prepare('INSERT INTO audit_events(id,actor_id,action,entity_type,entity_id) VALUES (?,?,?,?,?)').bind(crypto.randomUUID(),actor.id,'create','cuisines',name),
-          env.DB.prepare('DELETE FROM revision_guards WHERE command_id=?').bind(input.operationId),
-          env.DB.prepare('UPDATE app_revision SET revision=revision+1 WHERE id=1')
-        ]); } catch (e) { if (/STALE_REVISION|UNIQUE constraint/.test(e.message)) fail('Data changed. Refresh and try again.',409); throw e; }
-        return send(project(await commandState(input),actor));
+        if (state.cuisines.some(c => c.name.toLowerCase() === name.toLowerCase())) fail('Cuisine already exists.', 409);
+        try {
+          await env.DB.batch([
+            env.DB.prepare('INSERT INTO revision_guards VALUES (?,?)').bind(input.operationId, state.revision),
+            env.DB.prepare('INSERT INTO command_receipts VALUES (?,?,?,?)').bind(input.operationId, actor.id, state.revision, Math.floor(Date.now() / 1000)),
+            env.DB.prepare('INSERT INTO cuisines VALUES (?,?)').bind(crypto.randomUUID(), name),
+            env.DB.prepare('INSERT INTO audit_events(id,actor_id,action,entity_type,entity_id) VALUES (?,?,?,?,?)').bind(crypto.randomUUID(), actor.id, 'create', 'cuisines', name),
+            env.DB.prepare('DELETE FROM revision_guards WHERE command_id=?').bind(input.operationId),
+            env.DB.prepare('UPDATE app_revision SET revision=revision+1 WHERE id=1')
+          ]);
+        } catch (e) { if (/STALE_REVISION|UNIQUE constraint/.test(e.message)) fail('Data changed. Refresh and try again.', 409); throw e; }
+        return send(project(await commandState(input), actor));
       }
-      if (['/api/stock/legacy-import/validate','/api/stock/legacy-import'].includes(path) && request.method === 'POST') {
-        if(!canPurchase(actor))fail('Only Admin and Purchaser (Supervisor) can import legacy stock.',403);
-        const input=await body(request);
-        if(path==='/api/stock/legacy-import') {
+      if (['/api/stock/legacy-import/validate', '/api/stock/legacy-import'].includes(path) && request.method === 'POST') {
+        if (!canPurchase(actor)) fail('Only Admin and Purchaser (Supervisor) can import legacy stock.', 403);
+        const input = await body(request);
+        if (path === '/api/stock/legacy-import') {
           id(input.operationId);
-          const prior=await env.DB.prepare('SELECT actor_id FROM command_receipts WHERE id=?').bind(input.operationId).first();
-          if(prior){if(prior.actor_id!==actor.id)fail('Command access denied.',403);return send(project(await commandState(input),actor));}
+          const prior = await env.DB.prepare('SELECT actor_id FROM command_receipts WHERE id=?').bind(input.operationId).first();
+          if (prior) { if (prior.actor_id !== actor.id) fail('Command access denied.', 403); return send(project(await commandState(input), actor)); }
+        }
+        const state = await commandState(input);
+        const validation = validateLegacyCSV(input.csv, state, actor);
+        if (validation.errors.length) return send({ error: `Found ${validation.errors.length} errors. No stock has been imported.`, errors: validation.errors }, 422);
+        const fingerprint = await digest(JSON.stringify(validation.rows.map(r => [r.outletId, r.itemId, r.quantity, r.unitCostMinor]).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))));
+        const previous = await env.DB.prepare("SELECT id FROM audit_events WHERE action='legacy_import' AND entity_id=?").bind(fingerprint).first();
+        if (previous) return send({ error: 'This stock sheet has already been imported. No stock has been added.', errors: [{ row: 1, column: 'File', message: 'These item, outlet, quantity and price entries were already imported. Check Stock History before entering new stock.' }] }, 422);
+        if (path.endsWith('/validate')) return send({ ...validation, revision: state.revision });
+        if (input.revision !== state.revision) fail('Data changed since validation. Validate the complete sheet again before importing.', 409);
+        const stock = { outletStock: clone(state.outletStock), legacyStock: clone(state.legacyStock), movements: [], importSummary: { fingerprint, rows: validation.rows.length } };
+        for (const row of validation.rows) {
+          let balance = stock.outletStock.find(b => b.item_id === row.itemId && b.outlet_id === row.outletId);
+          if (!balance) { balance = { item_id: row.itemId, outlet_id: row.outletId, quantity: 0, unit_cost_minor: null }; stock.outletStock.push(balance); }
+          balance.quantity += row.quantity;
+          if (balance.unit_cost_minor == null && row.unitCostMinor !== null) balance.unit_cost_minor = row.unitCostMinor;
+          stock.movements.push({ item_id: row.itemId, outlet_id: row.outletId, delta: row.quantity, quantity: balance.quantity, kind: 'opening', reason: `Bulk legacy stock import: Excel row ${row.row}`, cuisine: '', vendor: 'Legacy Stock', item_name: row.itemName, unit: row.unit, unit_cost_minor: row.unitCostMinor, total_cost_minor: row.unitCostMinor === null ? null : Math.round(row.quantity * row.unitCostMinor) });
+        }
+        return send(await persistChanges(env.DB, state, clone(state), [], actor, input.operationId, stock));
+      }
+      if (['/api/stock/bulk-receipt/validate', '/api/stock/bulk-receipt', '/api/stock/bulk-receipt/request', '/api/stock/bulk-receipt/resolve'].includes(path) && request.method === 'POST') {
+        if (!canPurchase(actor)) fail('Only Admin and Supervisor (Purchaser) can receive bulk stock.', 403);
+        const input = await body(request);
+        if (['/api/stock/bulk-receipt', '/api/stock/bulk-receipt/request', '/api/stock/bulk-receipt/resolve'].includes(path)) {
+          id(input.operationId);
+          const prior = await env.DB.prepare('SELECT actor_id FROM command_receipts WHERE id=?').bind(input.operationId).first();
+          if (prior) { if (prior.actor_id !== actor.id) fail('Command access denied.', 403); return send(project(await commandState(input), actor)); }
         }
         const state=await commandState(input);
-        const validation=validateLegacyCSV(input.csv,state,actor);
-        if(validation.errors.length)return send({error:`Found ${validation.errors.length} errors. No stock has been imported.`,errors:validation.errors},422);
+
+        if (path === '/api/stock/bulk-receipt/resolve') {
+          if (actor.role !== 'admin') fail('Administrator permission required to approve bulk stock receipts.', 403);
+          const reqRecord = (state.operationRecords || []).find(r => r.id === input.requestId && r.kind === 'notification' && r.eventType === 'bulk_receipt_request');
+          if (!reqRecord) fail('Bulk receipt request not found.', 404);
+          if (reqRecord.status !== 'Pending') fail('Bulk receipt request has already been resolved.', 409);
+          if (input.revision && input.revision !== state.revision) fail('Data changed. Refresh and try again.', 409);
+
+          const next = clone(state);
+          const nowIso = new Date().toISOString();
+          if (input.approve === false) {
+            const reason = typeof input.reason === 'string' && input.reason.trim() ? input.reason.trim() : 'Rejected by Admin';
+            putRecord(next, 'notification', { ...reqRecord, status: 'Rejected', reason, resolvedAt: nowIso, resolvedBy: actor.id, resolvedByName: actor.name });
+            putRecord(next, 'notification', { id: crypto.randomUUID(), userId: reqRecord.requestedBy, outletId: reqRecord.outletId, message: `Bulk stock receipt batch ${reqRecord.batchId} was rejected by Admin: ${reason}`, sourceId: reqRecord.id, read: false, createdAt: nowIso });
+            const savedState = await persistChanges(env.DB, state, next, [], actor, input.operationId);
+            return send(savedState);
+          }
+
+          // Approved: validate rows again to ensure no concurrency conflict
+          const validation = validateBulkReceiptCSV(reqRecord.csv, state, { ...actor, id: reqRecord.requestedBy, name: reqRecord.supervisorName, role: 'purchaser' });
+          if (validation.errors.length) return send({ error: `Validation error upon approval: ${validation.errors[0].message}`, errors: validation.errors }, 422);
+
+          const batchId = reqRecord.batchId;
+          const stock = { outletStock: clone(state.outletStock), legacyStock: clone(state.legacyStock), movements: [], importSummary: { fingerprint: reqRecord.fingerprint, rows: validation.rows.length, action: 'bulk_receipt', batchId, receivedBy: reqRecord.supervisorName, receivedById: reqRecord.requestedBy, approvedBy: actor.name, receivedAt: nowIso } };
+          for (const row of validation.rows) {
+            let balance = stock.outletStock.find(b => b.item_id === row.itemId && b.outlet_id === row.outletId);
+            if (!balance) { balance = { item_id: row.itemId, outlet_id: row.outletId, quantity: 0, unit_cost_minor: null }; stock.outletStock.push(balance); }
+            balance.quantity += row.quantity;
+            if (row.unitCostMinor !== null) balance.unit_cost_minor = row.unitCostMinor;
+            const noteDate = row.date ? ` (${row.date})` : '';
+            const noteText = row.notes ? `[${batchId}] ${row.notes}${noteDate}` : `[${batchId}] Bulk Stock Receipt: Row ${row.row}${noteDate}`;
+            stock.movements.push({ item_id: row.itemId, outlet_id: row.outletId, delta: row.quantity, quantity: balance.quantity, kind: 'receipt', reason: noteText, cuisine: '', vendor: 'Direct Delivery', item_name: row.itemName, unit: row.unit, unit_cost_minor: row.unitCostMinor, total_cost_minor: row.unitCostMinor === null ? null : Math.round(row.quantity * row.unitCostMinor) });
+          }
+
+          putRecord(next, 'notification', { ...reqRecord, status: 'Approved', resolvedAt: nowIso, resolvedBy: actor.id, resolvedByName: actor.name });
+          putRecord(next, 'notification', { id: crypto.randomUUID(), userId: reqRecord.requestedBy, outletId: reqRecord.outletId, message: `Bulk stock receipt batch ${batchId} was approved by Admin. Stock added to inventory.`, sourceId: reqRecord.id, read: false, createdAt: nowIso });
+          const savedState = await persistChanges(env.DB, state, next, [], actor, input.operationId, stock);
+          return send({ ...savedState, batchSummary: { batchId, rowsCount: validation.rows.length, receivedBy: reqRecord.supervisorName, receivedAt: nowIso } });
+        }
+
+        const validation=validateBulkReceiptCSV(input.csv,state,actor);
+        if(validation.errors.length)return send({error:`Found ${validation.errors.length} errors. No stock has been received.`,errors:validation.errors,unrecognizedItems:validation.unrecognizedItems,dateAuditFlags:validation.dateAuditFlags},422);
         const fingerprint=await digest(JSON.stringify(validation.rows.map(r=>[r.outletId,r.itemId,r.quantity,r.unitCostMinor]).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)))));
-        const previous=await env.DB.prepare("SELECT id FROM audit_events WHERE action='legacy_import' AND entity_id=?").bind(fingerprint).first();
-        if(previous)return send({error:'This stock sheet has already been imported. No stock has been added.',errors:[{row:1,column:'File',message:'These item, outlet, quantity and price entries were already imported. Check Stock History before entering new stock.'}]},422);
+        const previous=await env.DB.prepare("SELECT id FROM audit_events WHERE action='bulk_receipt' AND entity_id=?").bind(fingerprint).first();
+        if(previous)return send({error:'This stock sheet has already been received. No duplicate stock has been added.',errors:[{row:1,column:'File',message:'These item, outlet, quantity and price entries were already received. Check Stock History before submitting again.'}],unrecognizedItems:[]},422);
+        
+        // Also check if there is an active pending bulk receipt request with this exact fingerprint
+        const pendingRequest = (state.operationRecords || []).find(r => r.kind === 'notification' && r.eventType === 'bulk_receipt_request' && r.status === 'Pending' && r.fingerprint === fingerprint);
+        if (pendingRequest) return send({ error: 'This stock sheet is already awaiting Admin approval.', errors: [{ row: 1, column: 'File', message: `This bulk sheet has already been submitted for Admin approval (Batch ID: ${pendingRequest.batchId}).` }], unrecognizedItems: [] }, 422);
+
         if(path.endsWith('/validate'))return send({...validation,revision:state.revision});
-        if(input.revision!==state.revision)fail('Data changed since validation. Validate the complete sheet again before importing.',409);
-        const stock={outletStock:clone(state.outletStock),legacyStock:clone(state.legacyStock),movements:[],importSummary:{fingerprint,rows:validation.rows.length}};
+        if(input.revision!==state.revision)fail('Data changed since validation. Validate the complete sheet again before receiving.',409);
+        const batchId = 'BR-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+
+        if (path === '/api/stock/bulk-receipt/request') {
+          // Supervisor sending to admin for approval
+          const next = clone(state);
+          const nowIso = new Date().toISOString();
+          const outletNames = [...new Set(validation.rows.map(r => r.outletName))].join(', ');
+          const totalCostMinor = validation.rows.reduce((sum, r) => sum + (r.unitCostMinor ? r.quantity * r.unitCostMinor : 0), 0);
+          const reqId = crypto.randomUUID();
+          const reqRecord = {
+            id: reqId,
+            kind: 'notification',
+            eventType: 'bulk_receipt_request',
+            system: true,
+            batchId,
+            fingerprint,
+            requestedBy: actor.id,
+            supervisorName: actor.name,
+            supervisorRole: actor.role,
+            outletId: validation.rows[0]?.outletId || '',
+            outletNames,
+            rowCount: validation.rows.length,
+            totalCostMinor,
+            csv: input.csv,
+            itemsPreview: validation.rows.slice(0, 10).map(r => ({ row: r.row, outlet: r.outletName, date: r.date, item: r.itemName, unit: r.unit, qty: r.quantity, price: r.unitCostMinor ? (r.unitCostMinor / 100).toFixed(2) : '0.00', notes: r.notes || '' })),
+            status: 'Pending',
+            createdAt: nowIso
+          };
+          putRecord(next, 'notification', reqRecord);
+          // Notify admins
+          notify(next, ['admin'], '', `Supervisor ${actor.name} submitted bulk stock receipt (${validation.rows.length} rows, Batch ${batchId}) for your approval.`, reqId);
+          const savedState = await persistChanges(env.DB, state, next, [], actor, input.operationId);
+          return send({ ...savedState, batchSummary: { batchId, rowsCount: validation.rows.length, supervisorName: actor.name, submittedAt: nowIso, status: 'Pending Approval' } });
+        }
+
+        // Direct receive (Admin or direct flow)
+        const stock={outletStock:clone(state.outletStock),legacyStock:clone(state.legacyStock),movements:[],importSummary:{fingerprint,rows:validation.rows.length,action:'bulk_receipt',batchId,receivedBy:actor.name,receivedById:actor.id,receivedAt:new Date().toISOString()}};
         for(const row of validation.rows) {
           let balance=stock.outletStock.find(b=>b.item_id===row.itemId && b.outlet_id===row.outletId);
           if(!balance){balance={item_id:row.itemId,outlet_id:row.outletId,quantity:0,unit_cost_minor:null};stock.outletStock.push(balance);}
           balance.quantity+=row.quantity;
-          if(balance.unit_cost_minor==null && row.unitCostMinor!==null)balance.unit_cost_minor=row.unitCostMinor;
-          stock.movements.push({item_id:row.itemId,outlet_id:row.outletId,delta:row.quantity,quantity:balance.quantity,kind:'opening',reason:`Bulk legacy stock import: Excel row ${row.row}`,cuisine:'',vendor:'Legacy Stock',item_name:row.itemName,unit:row.unit,unit_cost_minor:row.unitCostMinor,total_cost_minor:row.unitCostMinor===null?null:Math.round(row.quantity*row.unitCostMinor)});
+          if(row.unitCostMinor!==null)balance.unit_cost_minor=row.unitCostMinor;
+          const noteDate = row.date ? ` (${row.date})` : '';
+          const noteText = row.notes ? `[${batchId}] ${row.notes}${noteDate}` : `[${batchId}] Bulk Stock Receipt: Row ${row.row}${noteDate}`;
+          stock.movements.push({item_id:row.itemId,outlet_id:row.outletId,delta:row.quantity,quantity:balance.quantity,kind:'receipt',reason:noteText,cuisine:'',vendor:'Direct Delivery',item_name:row.itemName,unit:row.unit,unit_cost_minor:row.unitCostMinor,total_cost_minor:row.unitCostMinor===null?null:Math.round(row.quantity*row.unitCostMinor)});
         }
-        return send(await persistChanges(env.DB,state,clone(state),[],actor,input.operationId,stock));
+        const savedState = await persistChanges(env.DB,state,clone(state),[],actor,input.operationId,stock);
+        return send({ ...savedState, batchSummary: { batchId, rowsCount: validation.rows.length, receivedBy: actor.name, receivedAt: new Date().toISOString() } });
       }
       if (path.startsWith('/api/operations/') && request.method === 'POST') {
-        const input=await body(request);id(input.operationId);
-        if(path==='/api/operations/notifications/read-all')return send(await markAllNotifications(env.DB,actor,input,paged));
-        const prior=await env.DB.prepare('SELECT actor_id FROM command_receipts WHERE id=?').bind(input.operationId).first();
-        const state=await commandState(input);
-        if(prior){if(prior.actor_id!==actor.id)fail('Command access denied.',403);return send(project(state,actor));}
-        if(input.revision!==state.revision)fail('Data changed. Refresh and try again.',409);
-        let stock={outletStock:clone(state.outletStock),legacyStock:clone(state.legacyStock),movements:[],deliveries:[]};
-        const transact=(kind,data)=>{const result=stockCommand({...state,...stock},actor,data,kind,true);stock={...result,movements:[...stock.movements,...result.movements],deliveries:[...stock.deliveries,...(result.deliveries || [])]};};
-        const reviewingChefRequests=path==='/api/operations/requests/review';
-        const editingCuisineRequest=path==='/api/operations/requests/edit';
-        const recallingIndent=path==='/api/operations/indents/recall';
-        const derived=reviewingChefRequests?reviewChefRequests(state,actor,input):recallingIndent?recallConsolidatedRequest(state,actor,input):editingCuisineRequest?editCuisineRequest(state,actor,input):operationCommand(state,actor,input,path.slice('/api/operations/'.length),transact);
-        let next=derived.next,touched=[];
-        if(derived.changes.length){const privileged=editingCuisineRequest || recallingIndent || reviewingChefRequests;const validated=validateChanges(next,derived.changes,privileged?{...actor,role:'admin'}:actor,privileged);next=validated.next;touched=validated.touched;}
-        return send(await persistChanges(env.DB,state,next,touched,actor,input.operationId,stock));
+        const input = await body(request); id(input.operationId);
+        if (path === '/api/operations/notifications/read-all') return send(await markAllNotifications(env.DB, actor, input, paged));
+        const prior = await env.DB.prepare('SELECT actor_id FROM command_receipts WHERE id=?').bind(input.operationId).first();
+        const state = await commandState(input);
+        if (prior) { if (prior.actor_id !== actor.id) fail('Command access denied.', 403); return send(project(state, actor)); }
+        if (input.revision !== state.revision) fail('Data changed. Refresh and try again.', 409);
+        let stock = { outletStock: clone(state.outletStock), legacyStock: clone(state.legacyStock), movements: [], deliveries: [] };
+        const transact = (kind, data) => { const result = stockCommand({ ...state, ...stock }, actor, data, kind, true); stock = { ...result, movements: [...stock.movements, ...result.movements], deliveries: [...stock.deliveries, ...(result.deliveries || [])] }; };
+        const reviewingChefRequests = path === '/api/operations/requests/review';
+        const editingCuisineRequest = path === '/api/operations/requests/edit';
+        const recallingIndent = path === '/api/operations/indents/recall';
+        const derived = reviewingChefRequests ? reviewChefRequests(state, actor, input) : recallingIndent ? recallConsolidatedRequest(state, actor, input) : editingCuisineRequest ? editCuisineRequest(state, actor, input) : operationCommand(state, actor, input, path.slice('/api/operations/'.length), transact);
+        let next = derived.next, touched = [];
+        if (derived.changes.length) { const privileged = editingCuisineRequest || recallingIndent || reviewingChefRequests; const validated = validateChanges(next, derived.changes, privileged ? { ...actor, role: 'admin' } : actor, privileged); next = validated.next; touched = validated.touched; }
+        return send(await persistChanges(env.DB, state, next, touched, actor, input.operationId, stock));
       }
       if (path === '/api/purchase-orders/raise' && request.method === 'POST') {
         const input = await body(request);
         id(input.operationId);
         const prior = await env.DB.prepare('SELECT actor_id FROM command_receipts WHERE id = ?').bind(input.operationId).first();
         if (prior) {
-          if (prior.actor_id !== actor.id) fail('Command access denied.',403);
-          return send(project(await commandState(input),actor));
+          if (prior.actor_id !== actor.id) fail('Command access denied.', 403);
+          return send(project(await commandState(input), actor));
         }
         const state = await commandState(input);
-        if (!Number.isSafeInteger(input.revision) || input.revision !== state.revision) fail('Data changed. Refresh and try again.',409);
-        const current = state.users.find(u=>u.id===actor.id);
-        if (!current) fail('Account is inactive.',401);
-        const changes = raiseVendorOrders(state,current,input);
-        const {next,touched} = validateChanges(state,changes,{...current,role:'admin'},true);
-        return send(await persistChanges(env.DB,state,next,touched,current,input.operationId));
+        if (!Number.isSafeInteger(input.revision) || input.revision !== state.revision) fail('Data changed. Refresh and try again.', 409);
+        const current = state.users.find(u => u.id === actor.id);
+        if (!current) fail('Account is inactive.', 401);
+        const changes = raiseVendorOrders(state, current, input);
+        const { next, touched } = validateChanges(state, changes, { ...current, role: 'admin' }, true);
+        return send(await persistChanges(env.DB, state, next, touched, current, input.operationId));
       }
       if (path === '/api/changes' && request.method === 'POST') {
         const input = await body(request);
@@ -237,14 +350,14 @@ export default {
         const current = state.users.find(u => u.id === actor.id);
         if (!current) fail('Account is inactive.', 401);
         const { next, touched } = validateChanges(state, input.changes, current);
-        const backdated=touched.filter(t=>t.entity==='requests' && !t.old && t.data && t.data.date<dayIST());
-        const higher={cuisine_head:['executive_chef','purchaser','admin'],executive_chef:['purchaser','admin'],purchaser:['admin'],admin:[]}[current.role] || [];
-        for(const row of backdated)notify(next,higher,row.data.outletId,`${current.name} submitted a backdated request for ${row.data.itemName || 'an item'} dated ${row.data.date}. Justification: ${row.data.backdateJustification}`,row.key);
+        const backdated = touched.filter(t => t.entity === 'requests' && !t.old && t.data && t.data.date < dayIST());
+        const higher = { cuisine_head: ['executive_chef', 'purchaser', 'admin'], executive_chef: ['purchaser', 'admin'], purchaser: ['admin'], admin: [] }[current.role] || [];
+        for (const row of backdated) notify(next, higher, row.data.outletId, `${current.name} submitted a backdated request for ${row.data.itemName || 'an item'} dated ${row.data.date}. Justification: ${row.data.backdateJustification}`, row.key);
 
         return send(await persistChanges(env.DB, state, next, touched, current, input.operationId));
       }
       if (['/api/stock/current-price', '/api/stock/price', '/api/stock/opening', '/api/stock/receipt', '/api/stock/distribute', '/api/stock/adjust', '/api/stock/assign', '/api/stock/reconcile', '/api/purchase-orders/receive', '/api/indents/approve', '/api/indents/approve-all', '/api/requests/approve'].includes(path) && request.method === 'POST') {
-        if(['/api/stock/current-price','/api/stock/price'].includes(path) && !stockPriceEditingEnabled(env))fail('Stock price editing is disabled.',404);
+        if (['/api/stock/current-price', '/api/stock/price'].includes(path) && !stockPriceEditingEnabled(env)) fail('Stock price editing is disabled.', 404);
         const input = await body(request);
         id(input.operationId);
         const prior = await env.DB.prepare('SELECT actor_id FROM command_receipts WHERE id = ?').bind(input.operationId).first();
@@ -259,7 +372,7 @@ export default {
         let stock = { outletStock: clone(state.outletStock), legacyStock: clone(state.legacyStock), movements: [] };
         const transact = (kind, input) => {
           const result = stockCommand({ ...state, ...stock }, current, input, kind);
-          stock = { ...result, movements: [...stock.movements, ...result.movements], deliveries:[...(stock.deliveries || []),...(result.deliveries || [])] };
+          stock = { ...result, movements: [...stock.movements, ...result.movements], deliveries: [...(stock.deliveries || []), ...(result.deliveries || [])] };
         };
         const changes = [];
         const modify = (entity, data) => {
@@ -273,26 +386,26 @@ export default {
           return clone(item);
         };
         if (path === '/api/stock/current-price') {
-          stock=setAvailableStockPrice(state,current,input);
+          stock = setAvailableStockPrice(state, current, input);
         } else if (path === '/api/stock/price') {
-          stock=await correctStockPrice(env.DB,state,current,input);
+          stock = await correctStockPrice(env.DB, state, current, input);
         } else if (path.startsWith('/api/stock/')) {
           transact(path.split('/').pop(), input);
         } else if (path === '/api/purchase-orders/receive') {
-          const planned=planVendorReceipt(state,current,input);
-          for(const receipt of planned.receipts)transact('receipt',receipt);
-          modify('purchase_orders',planned.po);
+          const planned = planVendorReceipt(state, current, input);
+          for (const receipt of planned.receipts) transact('receipt', receipt);
+          modify('purchase_orders', planned.po);
         } else if (path === '/api/indents/approve-all') {
           if (!canPurchase(current)) fail('Purchaser permission required.', 403);
           const selected = r => hasOutlet(current, r.outletId) && (input.outletId === 'all' || r.outletId === input.outletId);
           for (const original of state.indents.filter(i => (i.status === 'Pending Approval' || i.status.startsWith('PO Raised')) && selected(i))) {
             const indent = clone(original); indent.status = 'Approved';
             modify('indents', indent);
-            for (const req of state.requests.filter(r => r.indentId === indent.id)) {const line=indent.items.find(i=>i.itemId===req.itemId);const total=state.requests.filter(r=>r.indentId===indent.id && r.itemId===req.itemId).reduce((s,r)=>s+(r.revisedQty ?? r.qty),0);modify('requests', { ...req, status: 'Approved',approvedQuantity:total?line.revisedQty*(req.revisedQty ?? req.qty)/total:0 });}
+            for (const req of state.requests.filter(r => r.indentId === indent.id)) { const line = indent.items.find(i => i.itemId === req.itemId); const total = state.requests.filter(r => r.indentId === indent.id && r.itemId === req.itemId).reduce((s, r) => s + (r.revisedQty ?? r.qty), 0); modify('requests', { ...req, status: 'Approved', approvedQuantity: total ? line.revisedQty * (req.revisedQty ?? req.qty) / total : 0 }); }
           }
           for (const req of state.requests.filter(r => !r.indentId && ['Sent to Admin', 'PO Raised'].includes(r.status) && selected(r))) {
             const item = itemFor(req.itemId);
-            modify('requests', { ...req, status: 'Approved',approvedQuantity:req.revisedQty ?? req.qty });
+            modify('requests', { ...req, status: 'Approved', approvedQuantity: req.revisedQty ?? req.qty });
           }
           if (!changes.length) fail('No pending requests or indents to approve.', 409);
         } else {
@@ -303,7 +416,7 @@ export default {
             if (!hasOutlet(current, indent.outletId)) fail('Outlet access denied.', 403);
             indent.status = 'Approved';
             modify('indents', indent);
-            for (const req of state.requests.filter(r => r.indentId === indent.id)) {const line=indent.items.find(i=>i.itemId===req.itemId);const total=state.requests.filter(r=>r.indentId===indent.id && r.itemId===req.itemId).reduce((s,r)=>s+(r.revisedQty ?? r.qty),0);modify('requests', { ...req, status: 'Approved',approvedQuantity:total?line.revisedQty*(req.revisedQty ?? req.qty)/total:0 });}
+            for (const req of state.requests.filter(r => r.indentId === indent.id)) { const line = indent.items.find(i => i.itemId === req.itemId); const total = state.requests.filter(r => r.indentId === indent.id && r.itemId === req.itemId).reduce((s, r) => s + (r.revisedQty ?? r.qty), 0); modify('requests', { ...req, status: 'Approved', approvedQuantity: total ? line.revisedQty * (req.revisedQty ?? req.qty) / total : 0 }); }
           } else {
             const req = clone(state.requests.find(r => r.id === input.requestId) || null);
             if (!req || !['Sent to Admin', 'PO Raised'].includes(req.status) || req.indentId) fail('Request is not awaiting individual approval.', 409);
@@ -317,9 +430,9 @@ export default {
         }
         // All changes above are derived on the server after explicit action permissions.
         const { next, touched } = changes.length ? validateChanges(state, changes, { ...current, role: 'admin' }, true) : { next: clone(state), touched: [] };
-        if(path==='/api/purchase-orders/receive'){
-          const po=next.purchase_orders.find(p=>p.id===input.poId);
-          for(const line of po.receiptEvents.at(-1).lines.filter(r=>r.rejectedQuantity>0))notify(next,['admin','executive_chef','purchaser'],po.outletId,`${po.vendorName} / ${po.poNumber}: rejected ${line.rejectedQuantity} of ${line.itemName} (${line.reason}). ${line.message}`,po.id);
+        if (path === '/api/purchase-orders/receive') {
+          const po = next.purchase_orders.find(p => p.id === input.poId);
+          for (const line of po.receiptEvents.at(-1).lines.filter(r => r.rejectedQuantity > 0)) notify(next, ['admin', 'executive_chef', 'purchaser'], po.outletId, `${po.vendorName} / ${po.poNumber}: rejected ${line.rejectedQuantity} of ${line.itemName} (${line.reason}). ${line.message}`, po.id);
         }
         return send(await persistChanges(env.DB, state, next, touched, current, input.operationId, stock));
       }

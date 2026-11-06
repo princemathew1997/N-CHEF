@@ -25,6 +25,8 @@ async function apiRequest(path, method = 'GET', value) {
         const error = new Error(data.error || 'Database request failed.');
         error.status = res.status;
         error.details = data.errors;
+        error.unrecognizedItems = data.unrecognizedItems;
+        error.data = data;
         throw error;
     }
     return data;

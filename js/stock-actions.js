@@ -1,7 +1,7 @@
 // Catalog metadata and outlet stock use separate server commands.
 (() => {
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    const titles = { overview:'Stock Overview', catalog:'Item Catalog', receipt:'Receive Stock', distribute:'Distribute to Cuisine', adjust:'Stock Adjustments', history:'Stock History', assign:'Add Legacy Stock', cuisines:'Cuisine Sections' };
+    const titles = { overview:'Stock Overview', 'bulk-receipt':'Receive Bulk Stock', catalog:'Item Catalog', receipt:'Receive Stock', distribute:'Distribute to Cuisine', adjust:'Stock Adjustments', history:'Stock History', assign:'Add Legacy Stock', cuisines:'Cuisine Sections' };
     titles.prices='Price History';
     titles['stock-prices']='Edit Stock Prices';
     const adminPages = ['cuisines'];
@@ -173,6 +173,9 @@
             form.oninput=update;form.onchange=()=>{OutletSelection.choose(form.elements.outletId.value);update();};createItemPicker(content.querySelector('#stockItemPicker'),items,{onChange:update});update();
             form.onsubmit=e=>{e.preventDefault();const data=Object.fromEntries(new FormData(form));delete data.requestChoice;data.quantity=Number(data.quantity);if(data.unitPrice!==undefined)data.unitPrice=Number(data.unitPrice);if(page==='assign' && form.elements.unitPrice.value==='')delete data.unitPrice;submit(form,()=>runDatabaseAction('stock/'+(page==='assign'?'opening':page),data));};
         }
+        if(page==='bulk-receipt') {
+            window.renderBulkReceipt?.(content);
+        }
         if(page==='history') {
             window.StockHistoryQueues.render(content);
         }
@@ -191,7 +194,7 @@
         if(!view.startsWith('inventory:')) return false;
         if(!currentUser || currentUser.role==='cuisine_head') {window.switchToView('viewChefPortal');return true;}
         page=view.slice(10);if(!titles[page])page='overview';
-        if(['distribute','prices','stock-prices'].includes(page) && !['admin','purchaser'].includes(currentUser.role)){window.goHome();return true;}
+        if(['distribute','prices','stock-prices','bulk-receipt'].includes(page) && !['admin','purchaser'].includes(currentUser.role)){window.goHome();return true;}
         if(page==='stock-prices' && !window.CurrentStockPrices?.enabled()){window.goHome();return true;}
         if(page==='catalog' && !canOpenCatalog()){window.switchToView('viewMasterOrders');return true;}
         if(adminPages.includes(page) && currentUser.role!=='admin'){window.switchToView('viewMasterOrders');return true;}

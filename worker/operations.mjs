@@ -34,7 +34,7 @@ export function clearHandledNotifications(previous,next,actor){
   }
   for(const row of next.operationRecords || []){
     const old=(previous.operationRecords || []).find(r=>r.id===row.id);
-    if(old && old.status!==row.status && ((row.kind==='account_request' && ['Approved','Rejected'].includes(row.status)) || (row.kind==='delivery' && ['Received','Resolved'].includes(row.status))))closed.add(row.id);
+    if(old && old.status!==row.status && ((row.kind==='account_request' && ['Approved','Rejected'].includes(row.status)) || (row.kind==='notification' && row.eventType==='bulk_receipt_request' && ['Approved','Rejected'].includes(row.status)) || (row.kind==='delivery' && ['Received','Resolved'].includes(row.status))))closed.add(row.id);
   }
   for(const notification of next.operationRecords || [])if(notification.kind==='notification' && !notification.read && closed.has(notification.sourceId) && (previous.operationRecords || []).some(r=>r.id===notification.id)){
     notification.read=true;notification.handledAt=new Date().toISOString();notification.handledBy=actor.id;
