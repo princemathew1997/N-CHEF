@@ -4,7 +4,8 @@
     const titles = { overview:'Stock Overview', catalog:'Item Catalog', receipt:'Receive Stock', distribute:'Distribute to Cuisine', adjust:'Stock Adjustments', history:'Stock History', assign:'Add Legacy Stock', cuisines:'Cuisine Sections' };
     titles.prices='Price History';
     titles['stock-prices']='Edit Stock Prices';
-    const adminPages = ['catalog','cuisines'];
+    const adminPages = ['cuisines'];
+    const canOpenCatalog = () => ['admin','purchaser'].includes(currentUser?.role);
     const allowedOutlets = () => OutletSelection.allowed();
     const options = (rows, value, label) => rows.map(r => `<option value="${esc(value(r))}">${esc(label(r))}</option>`).join('');
     const table = (headers, rows) => `<div class="table-container"><table><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.length ? rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${headers.length}">No records yet.</td></tr>`}</tbody></table></div>`;
@@ -96,6 +97,7 @@
     function render() {
         if (!panel || !currentUser) return;
         if(currentUser.role==='executive_chef' && !['overview','history'].includes(page)){window.switchToView('operations:dashboard');return;}
+        if(page==='catalog' && !canOpenCatalog()){window.switchToView('viewMasterOrders');return;}
         if (adminPages.includes(page) && currentUser.role !== 'admin') { window.switchToView('viewMasterOrders'); return; }
         panel.innerHTML = `<header class="dash-header"><div><h1>${titles[page]}</h1><p>${page==='catalog'?'Manage item details here. Receive quantities through Stock.':'Stock is held by outlet. Cuisine distributions deduct stock immediately.'}</p></div></header><div class="panel inventory-workspace" id="inventoryContent"></div>`;
         const content=panel.querySelector('#inventoryContent');
@@ -104,7 +106,8 @@
         if(page==='overview') overview(content);
         if(page==='distribute'){orderDistribution(content);return;}
         if(page==='catalog') {
-            const item=editing ? masterItemsData.find(i=>i.id===editing) : null;
+            const canEdit=currentUser.role==='admin';
+            const item=canEdit && editing ? masterItemsData.find(i=>i.id===editing) : null;
             const locked=item && ((committedState.itemsWithHistory || []).includes(item.id) || committedState.stockHistory.some(m=>m.item_id===item.id) || item.bought>0);
             content.innerHTML=`<form id="catalogForm" class="inventory-form">
                 <h3>${item?'Edit Item':'Add Catalog Item'}</h3>
@@ -113,7 +116,7 @@
                 ${field('Unit',select('unit',options((committedState.operationRecords || []).filter(r=>r.kind==='unit' && (!locked || r.name===item.unit)),r=>r.name,r=>r.name)))}
                 <div class="threshold-setting"><label class="threshold-toggle"><span>Low-stock alerts for this item</span><span class="threshold-switch"><input type="checkbox" role="switch" name="thresholdEnabled" ${item?.thresholdEnabled===true?'checked':''}><span class="threshold-track" aria-hidden="true"></span></span><span id="thresholdToggleStatus">${item?.thresholdEnabled===true?'On':'Off'}</span></label></div>
                 ${field('Threshold per outlet',`<input type="number" min="0" step="any" name="threshold" value="${esc(item?.threshold || 0)}" required>`)}
-                <p><a href="#" onclick="switchToView('operations:category');return false">Manage categories</a> · <a href="#" onclick="switchToView('operations:unit');return false">Manage units</a></p>
+                ${canEdit?'<p><a href="#" onclick="switchToView(\'operations:category\');return false">Manage categories</a> · <a href="#" onclick="switchToView(\'operations:unit\');return false">Manage units</a></p>':''}
                 ${field('Preferred vendor',select('vendor', options(vendorsData,v=>v.name,v=>v.name)))}
                 ${field('Cuisine label',select('cuisine',options(cuisinesData,c=>c.name,c=>c.name)))}
                 ${field('Status','<select name="active"><option value="true">Active</option><option value="false">Inactive</option></select>')}
@@ -124,7 +127,7 @@
             if(item){form.elements.category.value=item.category;form.elements.unit.value=item.unit;form.elements.vendor.value=item.vendor;form.elements.cuisine.value=item.cuisine || cuisinesData[0]?.name;form.elements.active.value=String(item.active!==false);}
             const renderRows=()=>{
                 const matches=masterItemsData.filter(i=>(i.name+' '+i.category).toLowerCase().includes(search.toLowerCase()));
-                content.querySelector('#catalogRows').innerHTML=table(['Item','Category','Unit','Vendor','Cuisine','Low-stock alerts','Status','Action'],matches.map(i=>[esc(i.name)+(masterItemsData.some(other=>other.id!==i.id && other.name.trim().toLowerCase()===i.name.trim().toLowerCase())?' <small>Duplicate name — review</small>':''),esc(i.category),esc(i.unit),esc(i.vendor),esc(i.cuisine),i.thresholdEnabled===true?'On · '+esc(i.threshold ?? 0)+' '+esc(i.unit)+' per outlet':'Off',i.active===false?'Inactive':'Active',`<button class="btn btn-outline" data-edit="${esc(i.id)}">Edit</button>`]));
+                content.querySelector('#catalogRows').innerHTML=table(['Item','Category','Unit','Vendor','Cuisine','Low-stock alerts','Status',...(canEdit?['Action']:[])],matches.map(i=>[esc(i.name)+(masterItemsData.some(other=>other.id!==i.id && other.name.trim().toLowerCase()===i.name.trim().toLowerCase())?' <small>Duplicate name — review</small>':''),esc(i.category),esc(i.unit),esc(i.vendor),esc(i.cuisine),i.thresholdEnabled===true?'On · '+esc(i.threshold ?? 0)+' '+esc(i.unit)+' per outlet':'Off',i.active===false?'Inactive':'Active',...(canEdit?[`<button class="btn btn-outline" data-edit="${esc(i.id)}">Edit</button>`]:[])]));
                 content.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{editing=b.dataset.edit;render();});
             };renderRows();
             content.querySelector('#catalogSearch').oninput=e=>{search=e.target.value;renderRows();};
@@ -188,6 +191,7 @@
         page=view.slice(10);if(!titles[page])page='overview';
         if(['distribute','prices','stock-prices'].includes(page) && !['admin','purchaser'].includes(currentUser.role)){window.goHome();return true;}
         if(page==='stock-prices' && !window.CurrentStockPrices?.enabled()){window.goHome();return true;}
+        if(page==='catalog' && !canOpenCatalog()){window.switchToView('viewMasterOrders');return true;}
         if(adminPages.includes(page) && currentUser.role!=='admin'){window.switchToView('viewMasterOrders');return true;}
         panel?.classList.remove('hidden');render();
         document.querySelectorAll('[data-inventory]').forEach(a=>a.classList.toggle('active',a.dataset.inventory===page));

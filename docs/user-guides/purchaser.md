@@ -1,6 +1,6 @@
 # N-CHEF | Purchaser (Supervisor) guide
 
-Revision: 22 October 2026 | N-CHEF 2.3.0
+Revision: 6 November 2026 | N-CHEF 2.6.0
 
 Admin creates Purchaser accounts and assigns their outlets. Existing accounts formerly called Supervisor now use Executive Chef; they do not automatically become Purchasers.
 
@@ -8,7 +8,11 @@ Admin creates Purchaser accounts and assigns their outlets. Existing accounts fo
 
 Sign-in opens Approvals. Select the N-CHEF logo to return there. Main sidebar labels open their pages; the separate arrow reveals related actions one level below. Icons identify each action and badges remain visible on collapsed groups. On mobile, use the menu button.
 
-Stock Overview contains Receive Stock, Stock Adjustments and Stock History. Distribute to Cuisine contains Cuisine Deliveries. Add Legacy Stock contains Bulk Legacy Stock. Approvals contains Generate Vendor Orders and Manage Request. Users provides the permitted staff directory and related Account Requests. You cannot maintain catalog, locations, cuisines, units, categories or vendors.
+Stock Overview contains Receive Stock, Stock Adjustments and Stock History. Distribute to Cuisine contains Cuisine Deliveries. Add Legacy Stock contains Bulk Legacy Stock. Approvals contains Generate Vendor Orders and Manage Request. Users provides the permitted staff directory and related Account Requests. Item Catalog lets you add new items using existing categories, units, vendors and cuisines. Admin maintains existing catalog items, locations, cuisines, units, categories and vendors.
+
+## Add a catalog item
+
+Open Item Catalog, enter the item name, choose its category and unit, select a preferred vendor and cuisine, then select Add to Catalog. Search the catalog first to avoid duplicate names. Adding an item creates no stock; receive quantities separately through Stock. Existing items are listed for reference, and only Admin can edit or deactivate them.
 
 ## Approve and generate vendor orders
 

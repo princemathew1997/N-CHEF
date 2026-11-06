@@ -19,7 +19,8 @@ test('stock navigation restores permissions when roles change in the same browse
     context.window.configureOperationsRole();assert.equal(elements.get('receipt').classList.contains('hidden'),true);
     context.currentUser={role:'purchaser'};context.window.configureOperationsRole();
     assert.equal(elements.get('receipt').classList.contains('hidden'),false);
-    assert.equal(elements.get('catalog').classList.contains('hidden'),true);
+    assert.equal(elements.get('catalog').classList.contains('hidden'),false);
+    assert.equal(elements.get('cuisines').classList.contains('hidden'),true);
     context.currentUser={role:'admin'};context.window.configureOperationsRole();assert.equal(elements.get('catalog').classList.contains('hidden'),false);
     assert.equal(elements.get('stock-prices').classList.contains('hidden'),true);
     context.window.CurrentStockPrices={enabled:()=>true};context.window.configureOperationsRole();assert.equal(elements.get('stock-prices').classList.contains('hidden'),false);

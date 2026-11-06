@@ -133,8 +133,10 @@ ISC
 
 ## Item catalog and outlet stock
 
-Administration → Item Catalog manages item metadata and active status. Only admins
-can create or edit catalog items. Catalog creation never adds stock. Units become
+Administration → Item Catalog manages item metadata and active status. Admins can
+create and edit catalog items. Purchasers (Supervisors) can add new items using
+existing categories, units, vendors and cuisines; existing item edits remain admin-only.
+Catalog creation never adds stock. Units become
 read-only after stock history exists; existing duplicate names are flagged for
 review, while new duplicates are rejected.
 

@@ -97,7 +97,7 @@ export function validateChanges(state, changes, actor, stockAction = false) {
     }
     if (entity === 'items') {
       if (!data) fail('Deactivate catalog items instead of deleting them.');
-      if (actor.role !== 'admin') fail('Only admins can manage catalog items.', 403);
+      if (actor.role !== 'admin' && !(actor.role === 'purchaser' && !old)) fail('Only admins can edit catalog items. Supervisors may add new items.', 403);
       for (const field of ['bought', 'allocations', 'consumed']) {
         const expected = old?.[field] ?? (field === 'bought' ? 0 : {});
         if (!same(data[field] ?? expected, expected)) fail('Use stock transactions to change quantities.');
@@ -121,7 +121,7 @@ export function validateChanges(state, changes, actor, stockAction = false) {
       if (ids.some(itemId => next.items.find(i => i.id === itemId)?.active === false)) fail('Choose active catalog items.');
     }
     if (actor.role !== 'admin') {
-      if(actor.role==='purchaser') {
+      if(actor.role==='purchaser' && entity!=='items') {
         if(!['requests','indents'].includes(entity) || !old || !data || !hasOutlet(actor,old.outletId))fail('Purchaser may only edit forwarded orders.',403);
         if(!['Pending Approval','Consolidated','Sent to Admin'].includes(old.status) || old.status!==data.status)fail('Use an explicit approval action.',403);
         const fields=entity==='indents'?['items']:['qty','revisedQty','supervisorNote'];
