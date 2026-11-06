@@ -141,11 +141,24 @@ window.renderBulkReceipt = content => {
         if (!pending.length) {
           adminList.innerHTML = '<p style="color: var(--text-muted); margin: 6px 0;">No incoming bulk stock requests awaiting approval.</p>';
         } else {
-          adminList.innerHTML = pending.map(req => `
+          // Count fingerprints to identify duplicates among pending or past requests
+          const fingerprintCounts = {};
+          bulkRequests.forEach(r => {
+            if (r.fingerprint) {
+              fingerprintCounts[r.fingerprint] = (fingerprintCounts[r.fingerprint] || 0) + 1;
+            }
+          });
+
+          adminList.innerHTML = pending.map(req => {
+            const isDuplicate = req.fingerprint && fingerprintCounts[req.fingerprint] > 1;
+            return `
             <div class="operations-card" style="margin-bottom: 14px; padding: 14px; border: 1px solid var(--border); border-radius: 8px; background: #141416;" data-request-id="${escapeHTML(req.id)}">
               <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap;">
                 <div>
-                  <div style="font-size: 0.8rem; color: var(--text-muted);">Batch ID: <strong style="color: var(--primary, #FFBE0B);">${escapeHTML(req.batchId)}</strong></div>
+                  <div style="font-size: 0.8rem; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
+                    <span>Batch ID: <strong style="color: var(--primary, #FFBE0B);">${escapeHTML(req.batchId)}</strong></span>
+                    ${isDuplicate ? '<span style="background: rgba(239, 68, 68, 0.18); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.5); padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">⚠️ Duplicate Order</span>' : ''}
+                  </div>
                   <h4 style="margin: 4px 0 6px 0; font-size: 1.05rem; color: #fff;">
                     Supervisor: <span style="color: #60a5fa;">${escapeHTML(req.supervisorName)}</span> · Outlets: <strong>${escapeHTML(req.outletNames || 'All')}</strong>
                   </h4>
@@ -160,7 +173,8 @@ window.renderBulkReceipt = content => {
                 </div>
               </div>
             </div>
-          `).join('');
+          `;
+          }).join('');
 
           // Bind admin action buttons
           adminList.querySelectorAll('[data-admin-action]').forEach(btn => {
@@ -268,18 +282,29 @@ window.renderBulkReceipt = content => {
       if (!filteredHistory.length) {
         historySection.innerHTML = '<p style="color: var(--text-muted); font-size: 0.9rem;">No past bulk stock submissions found.</p>';
       } else {
+        const fingerprintCounts = {};
+        bulkRequests.forEach(r => {
+          if (r.fingerprint) {
+            fingerprintCounts[r.fingerprint] = (fingerprintCounts[r.fingerprint] || 0) + 1;
+          }
+        });
+
         const historyTable = table(
           ['Submitted (IST)', 'Batch ID', 'Supervisor', 'Outlets', 'Rows', 'Total Value', 'Status', 'Admin Note / Resolution'],
-          filteredHistory.map(r => [
-            formatIST(r.createdAt),
-            r.batchId,
-            r.supervisorName || 'Supervisor',
-            r.outletNames || 'All',
-            r.rowCount,
-            formatCost(r.totalCostMinor || 0),
-            `<span class="approval-request-status ${r.status === 'Approved' ? 'approved' : r.status === 'Rejected' ? 'rejected' : 'awaiting'}">${escapeHTML(r.status)}</span>`,
-            r.status === 'Approved' ? `Approved by ${escapeHTML(r.resolvedByName || 'Admin')} on ${escapeHTML(formatIST(r.resolvedAt))}` : r.status === 'Rejected' ? `Rejected: ${escapeHTML(r.reason || 'No note')}` : 'Awaiting Admin review'
-          ]),
+          filteredHistory.map(r => {
+            const isDuplicate = r.fingerprint && fingerprintCounts[r.fingerprint] > 1;
+            const duplicateBadge = isDuplicate ? ' <span style="background: rgba(239, 68, 68, 0.18); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.5); padding: 1px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; margin-left: 4px;">DUPLICATE</span>' : '';
+            return [
+              formatIST(r.createdAt),
+              r.batchId + duplicateBadge,
+              r.supervisorName || 'Supervisor',
+              r.outletNames || 'All',
+              r.rowCount,
+              formatCost(r.totalCostMinor || 0),
+              `<span class="approval-request-status ${r.status === 'Approved' ? 'approved' : r.status === 'Rejected' ? 'rejected' : 'awaiting'}">${escapeHTML(r.status)}</span>`,
+              r.status === 'Approved' ? `Approved by ${escapeHTML(r.resolvedByName || 'Admin')} on ${escapeHTML(formatIST(r.resolvedAt))}` : r.status === 'Rejected' ? `Rejected: ${escapeHTML(r.reason || 'No note')}` : 'Awaiting Admin review'
+            ];
+          }),
           true
         );
         historySection.innerHTML = historyTable;
