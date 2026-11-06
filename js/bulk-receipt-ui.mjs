@@ -216,6 +216,7 @@ window.renderBulkReceipt = content => {
                     requestId: reqId,
                     approve: false,
                     reason,
+                    revision: committedState?.revision,
                     operationId: crypto.randomUUID()
                   });
                   applyServerState(state);
