@@ -123,7 +123,7 @@ export async function persistChanges(db, state, next, touched, actor, operationI
       writes.push(query(db,'INSERT INTO audit_events(id,actor_id,action,entity_type,entity_id,details_json) VALUES (?,?,?,?,?,?)',crypto.randomUUID(),actor.id,'price_correction','stock',correction.id,JSON.stringify({operationId,...correction})));
       writes.push(query(db,'UPDATE outlet_stock_history SET unit_cost_minor=?,total_cost_minor=? WHERE id=?',correction.unitCostMinor,correction.totalCostMinor,correction.id));
     }
-    if(stock.importSummary)writes.push(query(db,'INSERT INTO audit_events(id,actor_id,action,entity_type,entity_id,details_json) VALUES (?,?,?,?,?,?)',crypto.randomUUID(),actor.id,'legacy_import','stock',stock.importSummary.fingerprint,JSON.stringify({operationId,rows:stock.importSummary.rows})));
+    if(stock.importSummary)writes.push(query(db,'INSERT INTO audit_events(id,actor_id,action,entity_type,entity_id,details_json) VALUES (?,?,?,?,?,?)',crypto.randomUUID(),actor.id,stock.importSummary.action || 'legacy_import','stock',stock.importSummary.fingerprint,JSON.stringify({operationId,rows:stock.importSummary.rows})));
     for (const balance of stock.outletStock) {
       const previous = state.outletStock.find(s => s.item_id === balance.item_id && s.outlet_id === balance.outlet_id);
       if (previous?.quantity === balance.quantity && previous?.unit_cost_minor === balance.unit_cost_minor) continue;
