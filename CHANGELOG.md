@@ -4,6 +4,15 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 2.6.0 - 2026-11-06
+
+- Allow Purchasers (Supervisors) to add catalog items using existing categories,
+  units, vendors and cuisines. Keep existing item edits and deactivation admin-only.
+- Show Item Catalog and its add form to supervisors. Continue rejecting duplicate
+  names and stock changes through catalog metadata. No database migrations.
+- Verify all 106 application/API tests, seven database tests, build and the local
+  supervisor browser flow for creating a catalog item.
+
 ## 2.5.1 - 2026-11-04
 
 - Add a visible ingredient search field to the purchase request form for

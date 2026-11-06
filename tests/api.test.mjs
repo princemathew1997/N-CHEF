@@ -108,7 +108,17 @@ test('secure setup, login, permissions, atomic approval and conflicts', async ()
     assert.equal(await balance(),5);
     const catalog={...item,id:'new_catalog',name:'New ingredient',active:true};
     assert.equal((await save([{entity:'items',key:catalog.id,value:catalog}],supervisorCookie)).status,403);
-    assert.equal((await save([{entity:'items',key:catalog.id,value:catalog}])).status,200);
+    assert.equal((await save([{entity:'items',key:catalog.id,value:catalog}],chefCookie)).status,403);
+    assert.equal((await save([{entity:'items',key:'forged_stock',value:{...catalog,id:'forged_stock',bought:100}}],purchaserCookie)).status,400);
+    const purchaserCreated=await save([{entity:'items',key:catalog.id,value:catalog}],purchaserCookie);
+    assert.equal(purchaserCreated.status,200,JSON.stringify(purchaserCreated.data));
+    const added=purchaserCreated.data.items.find(i=>i.id===catalog.id);
+    assert.equal(added.bought,0);
+    assert.deepEqual(added.allocations,{});
+    assert.equal((await save([{entity:'items',key:catalog.id,value:{...added,name:'Supervisor edit'}}],purchaserCookie)).status,403);
+    assert.equal((await save([{entity:'items',key:catalog.id,value:{...added,active:false}}],purchaserCookie)).status,403);
+    assert.equal((await save([{entity:'items',key:catalog.id,value:null}],purchaserCookie)).status,400);
+    assert.equal((await save([{entity:'items',key:'purchaser_duplicate',value:{...catalog,id:'purchaser_duplicate',name:' NEW INGREDIENT '}}],purchaserCookie)).status,409);
     assert.equal((await save([{entity:'items',key:'duplicate',value:{...catalog,id:'duplicate',name:' NEW INGREDIENT '}}])).status,409);
     assert.equal((await save([{entity:'items',key:item.id,value:{...item,unit:'litres'}}])).status,400);
     const deactivate={...catalog,active:false};
