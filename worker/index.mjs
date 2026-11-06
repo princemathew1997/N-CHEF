@@ -1,4 +1,4 @@
-import { canPurchase, operationCommand, notify, dayIST, editCuisineRequest, recallConsolidatedRequest, reviewChefRequests } from './operations.mjs';
+import { canPurchase, operationCommand, notify, putRecord, dayIST, editCuisineRequest, recallConsolidatedRequest, reviewChefRequests } from './operations.mjs';
 import { validateLegacyCSV } from '../shared/legacy-import.mjs';
 import { validateBulkReceiptCSV } from '../shared/bulk-receipt.mjs';
 import { stockCommand } from './stock.mjs';
