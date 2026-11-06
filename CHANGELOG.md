@@ -4,6 +4,16 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 2.7.0 - 2026-11-07
+
+- Add Receive Bulk Stock spreadsheet import feature with master catalog validation,
+  Indian date formatting (`DD-MM-YYYY`), 1-week backdated policy check, and tracking
+  batch ID (`BR-XXXXX`) ledger tags.
+- Add Supervisor bulk receipt submission workflow for Admin approval with real-time
+  notifications, pending attention badges, distinct yellow-bordered review cards,
+  and automatic duplicate order detection.
+- No database migrations required.
+
 ## 2.6.2 - 2026-11-06
 
 - Replace the native Approved consolidated order dropdown with an in-page,
