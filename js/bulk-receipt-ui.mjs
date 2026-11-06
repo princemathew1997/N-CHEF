@@ -34,53 +34,59 @@ window.renderBulkReceipt = content => {
     </div>
 
     <!-- Admin: Incoming Requests Awaiting Approval -->
-    <div id="adminBulkRequestsSection" class="${isAdmin ? '' : 'hidden'}" style="margin: 20px 0; padding: 18px; border: 1px solid rgba(255, 190, 11, 0.4); border-radius: 10px; background: rgba(255, 190, 11, 0.04);">
-      <h3 style="margin: 0 0 12px 0; color: var(--primary, #FFBE0B); font-size: 1.15rem; display: flex; align-items: center; justify-content: space-between;">
+    <div id="adminBulkRequestsSection" class="${isAdmin ? '' : 'hidden'}" style="margin: 24px 0 28px 0; padding: 20px; border: 1.5px solid var(--primary, #FFBE0B); border-radius: 12px; background: rgba(255, 190, 11, 0.04); box-shadow: 0 4px 18px rgba(0,0,0,0.35);">
+      <h3 style="margin: 0 0 14px 0; color: var(--primary, #FFBE0B); font-size: 1.15rem; display: flex; align-items: center; justify-content: space-between;">
         <span><i data-lucide="inbox" style="width: 18px; height: 18px; vertical-align: middle; margin-right: 6px;"></i>Incoming Supervisor Bulk Stock Requests</span>
         <span id="adminPendingBadge" class="approval-request-status awaiting" style="font-size: 0.8rem; font-weight: 500;">0 Pending</span>
       </h3>
       <div id="adminPendingRequestsList"></div>
     </div>
 
-    <form class="inventory-form" id="bulkReceiptUploadForm">
-      <label>Excel-saved CSV (.csv)
-        <input id="bulkReceiptFile" type="file" accept=".csv,text/csv" required>
-      </label>
-      <div>
-        <button class="btn btn-primary" id="bulkReceiptValidate" type="submit">Validate entire file</button>
+    <!-- Upload Stock Section with Distinct Yellow Border -->
+    <div id="bulkUploadSection" style="margin: 24px 0; padding: 20px; border: 1.5px solid var(--primary, #FFBE0B); border-radius: 12px; background: #141416; box-shadow: 0 4px 18px rgba(0,0,0,0.35);">
+      <h3 style="margin: 0 0 14px 0; color: var(--primary, #FFBE0B); font-size: 1.15rem; display: flex; align-items: center; gap: 8px;">
+        <i data-lucide="file-up" style="width: 18px; height: 18px;"></i> Upload Bulk Stock Spreadsheet
+      </h3>
+      <form class="inventory-form" id="bulkReceiptUploadForm" style="margin: 0;">
+        <label style="margin-bottom: 12px;">Excel-saved CSV (.csv)
+          <input id="bulkReceiptFile" type="file" accept=".csv,text/csv" required>
+        </label>
+        <div>
+          <button class="btn btn-primary" id="bulkReceiptValidate" type="submit">Validate entire file</button>
+        </div>
+      </form>
+
+      <div id="unrecognizedAlert" class="hidden" style="margin-top: 16px; padding: 16px; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 8px;">
+        <h3 style="margin: 0 0 8px 0; color: #f87171; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="alert-triangle" style="width: 18px; height: 18px;"></i> Items Not in Catalog / Not in Stock
+        </h3>
+        <p style="margin: 0 0 12px 0; color: var(--text-muted); font-size: 0.95rem;">
+          The following items entered in your CSV do not exist in the master catalog. Please get in touch with Admin to create them before receiving:
+        </p>
+        <div id="unrecognizedTableContainer"></div>
       </div>
-    </form>
 
-    <div id="unrecognizedAlert" class="hidden" style="margin-top: 16px; padding: 16px; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 8px;">
-      <h3 style="margin: 0 0 8px 0; color: #f87171; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
-        <i data-lucide="alert-triangle" style="width: 18px; height: 18px;"></i> Items Not in Catalog / Not in Stock
-      </h3>
-      <p style="margin: 0 0 12px 0; color: var(--text-muted); font-size: 0.95rem;">
-        The following items entered in your CSV do not exist in the master catalog. Please get in touch with Admin to create them before receiving:
-      </p>
-      <div id="unrecognizedTableContainer"></div>
-    </div>
+      <div id="dateMalpracticeAlert" class="hidden" style="margin-top: 16px; padding: 16px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 8px;">
+        <h3 style="margin: 0 0 8px 0; color: #fbbf24; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="shield-alert" style="width: 18px; height: 18px;"></i> Date Validation & Malpractice Audit Notice
+        </h3>
+        <p style="margin: 0 0 12px 0; color: var(--text-muted); font-size: 0.95rem;">
+          Entries must be dated within 1 week from today. The following entries violate date policy (future date or backdated beyond 7 days) and cannot be processed:
+        </p>
+        <div id="dateMalpracticeTableContainer"></div>
+      </div>
 
-    <div id="dateMalpracticeAlert" class="hidden" style="margin-top: 16px; padding: 16px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 8px;">
-      <h3 style="margin: 0 0 8px 0; color: #fbbf24; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
-        <i data-lucide="shield-alert" style="width: 18px; height: 18px;"></i> Date Validation & Malpractice Audit Notice
-      </h3>
-      <p style="margin: 0 0 12px 0; color: var(--text-muted); font-size: 0.95rem;">
-        Entries must be dated within 1 week from today. The following entries violate date policy (future date or backdated beyond 7 days) and cannot be processed:
-      </p>
-      <div id="dateMalpracticeTableContainer"></div>
-    </div>
+      <p id="bulkReceiptStatus" role="status" aria-live="polite" style="margin: 14px 0; font-weight: 500;"></p>
+      <div id="bulkReceiptSummaryBox" class="hidden" style="margin: 16px 0; padding: 16px; background: rgba(52, 211, 153, 0.12); border: 1px solid rgba(52, 211, 153, 0.35); border-radius: 8px;"></div>
+      <div id="bulkReceiptResults"></div>
 
-    <p id="bulkReceiptStatus" role="status" aria-live="polite" style="margin: 14px 0; font-weight: 500;"></p>
-    <div id="bulkReceiptSummaryBox" class="hidden" style="margin: 16px 0; padding: 16px; background: rgba(52, 211, 153, 0.12); border: 1px solid rgba(52, 211, 153, 0.35); border-radius: 8px;"></div>
-    <div id="bulkReceiptResults"></div>
-
-    <div style="margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap;">
-      <button type="button" class="btn btn-outline hidden" id="bulkReceiptErrors">Download error report</button>
-      <button type="button" class="btn btn-primary hidden" id="bulkReceiptSendApproval">
-        <i data-lucide="send" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;"></i>Send for Admin Approval
-      </button>
-      <button type="button" class="btn btn-primary hidden" id="bulkReceiptConfirm">Receive all validated stock</button>
+      <div style="margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap;">
+        <button type="button" class="btn btn-outline hidden" id="bulkReceiptErrors">Download error report</button>
+        <button type="button" class="btn btn-primary hidden" id="bulkReceiptSendApproval">
+          <i data-lucide="send" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;"></i>Send for Admin Approval
+        </button>
+        <button type="button" class="btn btn-primary hidden" id="bulkReceiptConfirm">Receive all validated stock</button>
+      </div>
     </div>
 
     <!-- Supervisor's Bulk Request History -->
@@ -108,6 +114,14 @@ window.renderBulkReceipt = content => {
   // Format helper for IST currency
   const formatCost = minor => (minor / 100).toLocaleString('en-IN', { style: 'currency', currency: 'INR' });
   const formatIST = iso => iso ? new Date(iso).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' }) : '—';
+
+  const table = (headers, rows, isRaw = false) => `
+    <div class="table-container">
+      <table>
+        <thead><tr>${headers.map(h => `<th>${escapeHTML(h)}</th>`).join('')}</tr></thead>
+        <tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${isRaw ? cell : escapeHTML(cell)}</td>`).join('')}</tr>`).join('')}</tbody>
+      </table>
+    </div>`;
 
   // Render Admin Incoming Requests & Supervisor History
   const renderRequestsAndHistory = () => {
@@ -292,14 +306,6 @@ window.renderBulkReceipt = content => {
       ...outletsData.map(o => ['Outlet', o.name, 'ID: ' + o.id, '', 'Active'])
     ]);
   };
-
-  const table = (headers, rows, isRaw = false) => `
-    <div class="table-container">
-      <table>
-        <thead><tr>${headers.map(h => `<th>${escapeHTML(h)}</th>`).join('')}</tr></thead>
-        <tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${isRaw ? cell : escapeHTML(cell)}</td>`).join('')}</tr>`).join('')}</tbody>
-      </table>
-    </div>`;
 
   const showErrors = (list, unrec = [], dateFlags = [], message = '') => {
     validation = null;
