@@ -72,9 +72,11 @@
     function orderDistribution(content){
         const orders=indentsData.filter(i=>i.status==='Approved' && allowedOutlets().some(o=>o.id===i.outletId) && InventoryTools.consolidatedDistributionRows(committedState,i.id).length);
         if(!orders.some(i=>i.id===distributionOrder))distributionOrder=orders[0]?.id || '';
-        content.innerHTML=field('Approved consolidated order',`<select id="distributionOrder"><option value="">Choose an order</option>${options(orders,i=>i.id,i=>`${i.indentNumber} · ${outletsData.find(o=>o.id===i.outletId)?.name || i.outletId}`)}</select>`)+'<div id="orderDistributionLines"></div>';
-        const picker=content.querySelector('#distributionOrder');picker.value=distributionOrder;
-        picker.onchange=()=>{distributionOrder=picker.value;orderDistribution(content);};
+        content.innerHTML=field('Approved consolidated order','<div id="distributionOrder"></div>')+'<div id="orderDistributionLines"></div>';
+        createItemPicker(content.querySelector('#distributionOrder'),orders.map(i=>({id:i.id,name:`${i.indentNumber} · ${outletsData.find(o=>o.id===i.outletId)?.name || i.outletId}`})),{
+            name:'distributionOrder',label:'Approved consolidated order',placeholder:'Search order number or outlet',selected:distributionOrder,liveCatalog:false,showAllOnFocus:true,formatOption:order=>order.name,
+            onChange:id=>{if(!id)return;distributionOrder=id;orderDistribution(content);}
+        });
         const target=content.querySelector('#orderDistributionLines');
         if(!distributionOrder){target.innerHTML='<p>No approved consolidated orders have outstanding cuisine quantities.</p>';return;}
         const rows=InventoryTools.consolidatedDistributionRows(committedState,distributionOrder),allocations=InventoryTools.defaultDistributionAllocations(rows);
@@ -92,7 +94,7 @@
             });
         };
         form.oninput=validate;form.onchange=validate;validate();
-        form.onsubmit=e=>{e.preventDefault();validate();if(!form.reportValidity())return;submit(form,()=>runDatabaseAction('operations/distribution/issue',{indentId:distributionOrder,lines:rows.map((r,index)=>({requestId:r.id,quantity:Number(form.elements['quantity_'+index].value),comment:form.elements['comment_'+index].value.trim()}))}));};
+        form.onsubmit=e=>{e.preventDefault();if(content.querySelector('[name=distributionOrder]').value!==distributionOrder){content.querySelector('#distributionOrder [role=combobox]').reportValidity();return;}validate();if(!form.reportValidity())return;submit(form,()=>runDatabaseAction('operations/distribution/issue',{indentId:distributionOrder,lines:rows.map((r,index)=>({requestId:r.id,quantity:Number(form.elements['quantity_'+index].value),comment:form.elements['comment_'+index].value.trim()}))}));};
     }
     function render() {
         if (!panel || !currentUser) return;
