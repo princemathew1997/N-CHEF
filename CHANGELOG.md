@@ -4,6 +4,13 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 2.6.2 - 2026-11-06
+
+- Replace the native Approved consolidated order dropdown with an in-page,
+  searchable picker so order labels and selection highlights stay readable in
+  Windows browsers. Show order numbers and outlets, with mouse and keyboard
+  selection. No database changes.
+
 ## 2.6.1 - 2026-11-06
 
 - Keep native dropdown menus in the app's dark color scheme, including Approved
