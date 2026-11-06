@@ -112,7 +112,7 @@ window.renderBulkReceipt = content => {
   // Render Admin Incoming Requests & Supervisor History
   const renderRequestsAndHistory = () => {
     const allRecords = committedState?.operationRecords || [];
-    const bulkRequests = allRecords.filter(r => r.kind === 'bulk_receipt_request');
+    const bulkRequests = allRecords.filter(r => (r.kind === 'notification' && r.eventType === 'bulk_receipt_request') || r.kind === 'bulk_receipt_request');
 
     // Admin pending list
     if (isAdmin) {

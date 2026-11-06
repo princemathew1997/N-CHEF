@@ -53,10 +53,12 @@ export function project(state, user) {
   result.stockHistory = (result.stockHistory || []).filter(s => s.outlet_id ? hasOutlet(user, s.outlet_id) : ['admin','purchaser'].includes(user.role));
   if (!['admin','purchaser'].includes(user.role)) result.legacyStock = [];
   result.operationRecords=(result.operationRecords || []).filter(r=>{
-    if(r.kind==='notification')return r.userId===user.id;
+    if(r.kind==='notification'){
+      if(r.eventType==='bulk_receipt_request')return user.role==='admin' || r.requestedBy===user.id;
+      return r.userId===user.id;
+    }
     if(['category','unit'].includes(r.kind))return true;
     if(r.kind==='account_request')return user.role==='admin' || r.requestedBy===user.id;
-    if(r.kind==='bulk_receipt_request')return user.role==='admin' || r.requestedBy===user.id;
     if(!hasOutlet(user,r.outletId))return false;
     if(user.role==='cuisine_head')return r.kind==='delivery' && (user.assignedSections || user.assignedCuisines || []).includes(r.cuisine) && (!r.recipientId || r.recipientId===user.id);
     return ['admin','purchaser','executive_chef'].includes(user.role);

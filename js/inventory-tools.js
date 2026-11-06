@@ -84,7 +84,7 @@
         const purchasing=['admin','purchaser'].includes(user.role),executive=user.role==='executive_chef';
         const requests=state.requests || [],indents=state.indents || [],records=state.operationRecords || [];
         const deliveries=state.deliveryCounts?(user.role==='cuisine_head'?state.deliveryCounts.awaiting:purchasing?state.deliveryCounts.issues:0):records.filter(r=>r.kind==='delivery' && (user.role==='cuisine_head'?r.status==='Issued':purchasing?r.status==='Issue reported':false)).length;
-        const bulkReceipts=user.role==='admin'?records.filter(r=>r.kind==='bulk_receipt_request' && r.status==='Pending').length:0;
+        const bulkReceipts=user.role==='admin'?records.filter(r=>r.kind==='notification' && r.eventType==='bulk_receipt_request' && r.status==='Pending').length:0;
         return {approvals:purchasing?indents.filter(i=>i.status==='Pending Approval').length+requests.filter(r=>!r.indentId && r.status==='Sent to Admin').length:0,
             manage:executive?requests.filter(r=>r.status==='Pending').length:0,
             consolidate:executive?requests.filter(r=>r.status==='Accepted' && !r.indentId).length:0,
