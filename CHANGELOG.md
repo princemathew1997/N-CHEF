@@ -4,6 +4,12 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 2.6.1 - 2026-11-06
+
+- Keep native dropdown menus in the app's dark color scheme, including Approved
+  consolidated order. Use paired system highlight/text colors so selected options
+  remain readable in Windows browsers. No database changes.
+
 ## 2.6.0 - 2026-11-06
 
 - Allow Purchasers (Supervisors) to add catalog items using existing categories,
