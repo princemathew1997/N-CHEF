@@ -194,23 +194,101 @@ export default {
         }
         return send(await persistChanges(env.DB, state, clone(state), [], actor, input.operationId, stock));
       }
-      if (['/api/stock/bulk-receipt/validate', '/api/stock/bulk-receipt'].includes(path) && request.method === 'POST') {
+      if (['/api/stock/bulk-receipt/validate', '/api/stock/bulk-receipt', '/api/stock/bulk-receipt/request', '/api/stock/bulk-receipt/resolve'].includes(path) && request.method === 'POST') {
         if (!canPurchase(actor)) fail('Only Admin and Supervisor (Purchaser) can receive bulk stock.', 403);
         const input = await body(request);
-        if (path === '/api/stock/bulk-receipt') {
+        if (['/api/stock/bulk-receipt', '/api/stock/bulk-receipt/request', '/api/stock/bulk-receipt/resolve'].includes(path)) {
           id(input.operationId);
           const prior = await env.DB.prepare('SELECT actor_id FROM command_receipts WHERE id=?').bind(input.operationId).first();
           if (prior) { if (prior.actor_id !== actor.id) fail('Command access denied.', 403); return send(project(await commandState(input), actor)); }
         }
         const state=await commandState(input);
+
+        if (path === '/api/stock/bulk-receipt/resolve') {
+          if (actor.role !== 'admin') fail('Administrator permission required to approve bulk stock receipts.', 403);
+          const reqRecord = (state.operationRecords || []).find(r => r.id === input.requestId && r.kind === 'bulk_receipt_request');
+          if (!reqRecord) fail('Bulk receipt request not found.', 404);
+          if (reqRecord.status !== 'Pending') fail('Bulk receipt request has already been resolved.', 409);
+          if (input.revision !== state.revision) fail('Data changed. Refresh and try again.', 409);
+
+          const next = clone(state);
+          const nowIso = new Date().toISOString();
+          if (input.approve === false) {
+            const reason = typeof input.reason === 'string' && input.reason.trim() ? input.reason.trim() : 'Rejected by Admin';
+            putRecord(next, 'bulk_receipt_request', { ...reqRecord, status: 'Rejected', reason, resolvedAt: nowIso, resolvedBy: actor.id, resolvedByName: actor.name });
+            putRecord(next, 'notification', { id: crypto.randomUUID(), userId: reqRecord.requestedBy, outletId: reqRecord.outletId, message: `Bulk stock receipt batch ${reqRecord.batchId} was rejected by Admin: ${reason}`, sourceId: reqRecord.id, read: false, createdAt: nowIso });
+            const savedState = await persistChanges(env.DB, state, next, [], actor, input.operationId);
+            return send(savedState);
+          }
+
+          // Approved: validate rows again to ensure no concurrency conflict
+          const validation = validateBulkReceiptCSV(reqRecord.csv, state, { ...actor, id: reqRecord.requestedBy, name: reqRecord.supervisorName, role: 'purchaser' });
+          if (validation.errors.length) return send({ error: `Validation error upon approval: ${validation.errors[0].message}`, errors: validation.errors }, 422);
+
+          const batchId = reqRecord.batchId;
+          const stock = { outletStock: clone(state.outletStock), legacyStock: clone(state.legacyStock), movements: [], importSummary: { fingerprint: reqRecord.fingerprint, rows: validation.rows.length, action: 'bulk_receipt', batchId, receivedBy: reqRecord.supervisorName, receivedById: reqRecord.requestedBy, approvedBy: actor.name, receivedAt: nowIso } };
+          for (const row of validation.rows) {
+            let balance = stock.outletStock.find(b => b.item_id === row.itemId && b.outlet_id === row.outletId);
+            if (!balance) { balance = { item_id: row.itemId, outlet_id: row.outletId, quantity: 0, unit_cost_minor: null }; stock.outletStock.push(balance); }
+            balance.quantity += row.quantity;
+            if (row.unitCostMinor !== null) balance.unit_cost_minor = row.unitCostMinor;
+            const noteDate = row.date ? ` (${row.date})` : '';
+            const noteText = row.notes ? `[${batchId}] ${row.notes}${noteDate}` : `[${batchId}] Bulk Stock Receipt: Row ${row.row}${noteDate}`;
+            stock.movements.push({ item_id: row.itemId, outlet_id: row.outletId, delta: row.quantity, quantity: balance.quantity, kind: 'receipt', reason: noteText, cuisine: '', vendor: 'Direct Delivery', item_name: row.itemName, unit: row.unit, unit_cost_minor: row.unitCostMinor, total_cost_minor: row.unitCostMinor === null ? null : Math.round(row.quantity * row.unitCostMinor) });
+          }
+
+          putRecord(next, 'bulk_receipt_request', { ...reqRecord, status: 'Approved', resolvedAt: nowIso, resolvedBy: actor.id, resolvedByName: actor.name });
+          putRecord(next, 'notification', { id: crypto.randomUUID(), userId: reqRecord.requestedBy, outletId: reqRecord.outletId, message: `Bulk stock receipt batch ${batchId} was approved by Admin. Stock added to inventory.`, sourceId: reqRecord.id, read: false, createdAt: nowIso });
+          const savedState = await persistChanges(env.DB, state, next, [], actor, input.operationId, stock);
+          return send({ ...savedState, batchSummary: { batchId, rowsCount: validation.rows.length, receivedBy: reqRecord.supervisorName, receivedAt: nowIso } });
+        }
+
         const validation=validateBulkReceiptCSV(input.csv,state,actor);
         if(validation.errors.length)return send({error:`Found ${validation.errors.length} errors. No stock has been received.`,errors:validation.errors,unrecognizedItems:validation.unrecognizedItems,dateAuditFlags:validation.dateAuditFlags},422);
         const fingerprint=await digest(JSON.stringify(validation.rows.map(r=>[r.outletId,r.itemId,r.quantity,r.unitCostMinor]).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)))));
         const previous=await env.DB.prepare("SELECT id FROM audit_events WHERE action='bulk_receipt' AND entity_id=?").bind(fingerprint).first();
         if(previous)return send({error:'This stock sheet has already been received. No duplicate stock has been added.',errors:[{row:1,column:'File',message:'These item, outlet, quantity and price entries were already received. Check Stock History before submitting again.'}],unrecognizedItems:[]},422);
+        
+        // Also check if there is an active pending bulk receipt request with this exact fingerprint
+        const pendingRequest = (state.operationRecords || []).find(r => r.kind === 'bulk_receipt_request' && r.status === 'Pending' && r.fingerprint === fingerprint);
+        if (pendingRequest) return send({ error: 'This stock sheet is already awaiting Admin approval.', errors: [{ row: 1, column: 'File', message: `This bulk sheet has already been submitted for Admin approval (Batch ID: ${pendingRequest.batchId}).` }], unrecognizedItems: [] }, 422);
+
         if(path.endsWith('/validate'))return send({...validation,revision:state.revision});
         if(input.revision!==state.revision)fail('Data changed since validation. Validate the complete sheet again before receiving.',409);
         const batchId = 'BR-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+
+        if (path === '/api/stock/bulk-receipt/request') {
+          // Supervisor sending to admin for approval
+          const next = clone(state);
+          const nowIso = new Date().toISOString();
+          const outletNames = [...new Set(validation.rows.map(r => r.outletName))].join(', ');
+          const totalCostMinor = validation.rows.reduce((sum, r) => sum + (r.unitCostMinor ? r.quantity * r.unitCostMinor : 0), 0);
+          const reqId = crypto.randomUUID();
+          const reqRecord = {
+            id: reqId,
+            kind: 'bulk_receipt_request',
+            batchId,
+            fingerprint,
+            requestedBy: actor.id,
+            supervisorName: actor.name,
+            supervisorRole: actor.role,
+            outletId: validation.rows[0]?.outletId || '',
+            outletNames,
+            rowCount: validation.rows.length,
+            totalCostMinor,
+            csv: input.csv,
+            itemsPreview: validation.rows.slice(0, 10).map(r => ({ row: r.row, outlet: r.outletName, date: r.date, item: r.itemName, unit: r.unit, qty: r.quantity, price: r.unitCostMinor ? (r.unitCostMinor / 100).toFixed(2) : '0.00', notes: r.notes || '' })),
+            status: 'Pending',
+            createdAt: nowIso
+          };
+          putRecord(next, 'bulk_receipt_request', reqRecord);
+          // Notify admins
+          notify(next, ['admin'], '', `Supervisor ${actor.name} submitted bulk stock receipt (${validation.rows.length} rows, Batch ${batchId}) for your approval.`, reqId);
+          const savedState = await persistChanges(env.DB, state, next, [], actor, input.operationId);
+          return send({ ...savedState, batchSummary: { batchId, rowsCount: validation.rows.length, supervisorName: actor.name, submittedAt: nowIso, status: 'Pending Approval' } });
+        }
+
+        // Direct receive (Admin or direct flow)
         const stock={outletStock:clone(state.outletStock),legacyStock:clone(state.legacyStock),movements:[],importSummary:{fingerprint,rows:validation.rows.length,action:'bulk_receipt',batchId,receivedBy:actor.name,receivedById:actor.id,receivedAt:new Date().toISOString()}};
         for(const row of validation.rows) {
           let balance=stock.outletStock.find(b=>b.item_id===row.itemId && b.outlet_id===row.outletId);

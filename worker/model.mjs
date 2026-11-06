@@ -56,6 +56,7 @@ export function project(state, user) {
     if(r.kind==='notification')return r.userId===user.id;
     if(['category','unit'].includes(r.kind))return true;
     if(r.kind==='account_request')return user.role==='admin' || r.requestedBy===user.id;
+    if(r.kind==='bulk_receipt_request')return user.role==='admin' || r.requestedBy===user.id;
     if(!hasOutlet(user,r.outletId))return false;
     if(user.role==='cuisine_head')return r.kind==='delivery' && (user.assignedSections || user.assignedCuisines || []).includes(r.cuisine) && (!r.recipientId || r.recipientId===user.id);
     return ['admin','purchaser','executive_chef'].includes(user.role);
