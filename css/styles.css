@@ -1382,7 +1382,20 @@ body.database-saving::after {
 .item-picker-option, .outlet-menu-option { display:block; width:100%; text-align:left; border:0; padding:9px 10px; border-radius:5px; background:transparent; color:var(--text-main); cursor:pointer; }
 .item-picker-option:hover, .item-picker-option[aria-selected=true], .outlet-menu-option:hover { background:rgba(255,190,11,.16); color:var(--primary); }
 .item-picker-options small { display:block; padding:6px; color:var(--text-muted); }
-.fixed-outlet { display:block; padding:10px; border:1px solid var(--border-gold); border-radius:8px; color:var(--primary); }
+.fixed-outlet {
+    display: inline-flex;
+    align-items: center;
+    padding: 10px 14px;
+    background: rgba(255, 190, 11, 0.08);
+    border: 1px solid rgba(255, 190, 11, 0.35);
+    border-radius: 8px;
+    color: var(--primary, #FFBE0B);
+    font-weight: 700;
+    font-size: 0.95rem;
+    letter-spacing: 0.04em;
+    min-height: 42px;
+    box-sizing: border-box;
+}
 #storeViewTrigger:disabled { cursor:default; opacity:1; }
 #reportError { color:var(--danger); width:100%; }
 .master-stock-panel { min-width:0; overflow:visible; }

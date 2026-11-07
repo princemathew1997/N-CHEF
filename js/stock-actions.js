@@ -146,24 +146,26 @@
             
             content.innerHTML=`
             ${isReceipt && ['admin','purchaser'].includes(currentUser.role)?`
-            <div style="margin-bottom:16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-                <button type="button" class="btn btn-outline" data-receive-po>Receive stock from Vendor Order</button>
-                <button type="button" class="btn btn-outline ${bulkReceiptMode ? '' : 'hidden'}" id="btnToggleCsvUpload" style="display: inline-flex; align-items: center; gap: 6px; border-color: rgba(255, 190, 11, 0.4);">
-                    <i data-lucide="file-up" style="width: 15px; height: 15px;"></i> Upload CSV Spreadsheet
-                </button>
-            </div>`:''}
-            ${canBulk ? `
-            <div style="margin-bottom: 20px; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px;">
-                <label class="threshold-toggle" style="margin: 0; cursor: pointer;">
-                    <span style="font-size: 0.9rem; font-weight: 600; color: #fff;">Bulk Stock Mode</span>
-                    <span class="threshold-switch">
-                        <input type="checkbox" role="switch" id="bulkReceiptModeToggle" ${bulkReceiptMode ? 'checked' : ''}>
-                        <span class="threshold-track" aria-hidden="true"></span>
-                    </span>
-                    <span id="bulkReceiptModeStatus" style="font-weight: 700; color: var(--primary, #FFBE0B); min-width: 28px;">${bulkReceiptMode ? 'On' : 'Off'}</span>
-                </label>
+            <div style="margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+                <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                    <button type="button" class="btn btn-outline" data-receive-po>Receive stock from Vendor Order</button>
+                    <button type="button" class="btn btn-outline ${bulkReceiptMode ? '' : 'hidden'}" id="btnToggleCsvUpload" style="display: inline-flex; align-items: center; gap: 6px; border-color: rgba(255, 190, 11, 0.4);">
+                        <i data-lucide="file-up" style="width: 15px; height: 15px;"></i> Upload CSV Spreadsheet
+                    </button>
+                </div>
+                ${canBulk ? `
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label class="threshold-toggle" style="margin: 0; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 0.9rem; font-weight: 600; color: #fff;">Bulk Stock Mode</span>
+                        <span class="threshold-switch">
+                            <input type="checkbox" role="switch" id="bulkReceiptModeToggle" ${bulkReceiptMode ? 'checked' : ''}>
+                            <span class="threshold-track" aria-hidden="true"></span>
+                        </span>
+                        <span id="bulkReceiptModeStatus" style="font-weight: 700; color: var(--primary, #FFBE0B); min-width: 28px;">${bulkReceiptMode ? 'On' : 'Off'}</span>
+                    </label>
+                </div>` : ''}
             </div>
-
+            ${canBulk ? `
             <!-- CSV Upload Dropdown/Modal Area -->
             <div id="bulkCsvUploadArea" class="hidden" style="margin-bottom: 24px; padding: 20px; border: 1.5px solid var(--primary, #FFBE0B); border-radius: 12px; background: #141416; box-shadow: 0 4px 18px rgba(0,0,0,0.35);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -173,8 +175,7 @@
                     <button type="button" class="btn btn-outline" id="btnCloseCsvUpload" style="padding: 4px 10px; font-size: 0.8rem;">Close</button>
                 </div>
                 <div id="bulkCsvUploadContent"></div>
-            </div>
-            ` : ''}
+            </div>` : ''}`:''}
             <form id="outletStockForm" class="inventory-form">
             ${field('Outlet',outletSelect())}
             ${canBulk?`<div id="bulkReceiptDateField" class="${bulkReceiptMode?'':'hidden'}">${field('Receipt Date (IST)',`<input name="receiptDate" type="date" value="${InventoryTools.day()}" max="${InventoryTools.day()}">`)}</div>`:''}
