@@ -225,7 +225,7 @@
             <div id="legacyDetails"></div>`;
 
             const form=content.querySelector('form');
-            const itemPicker = createItemPicker(content.querySelector('#stockItemPicker'),items,{onChange:()=>update()});
+            const itemPicker = createItemPicker(content.querySelector('#stockItemPicker'),items,{onChange:()=>update(),activeOnly:page==='receipt' || page==='assign'});
 
             // Bulk Mode toggle handling
             if (canBulk) {
