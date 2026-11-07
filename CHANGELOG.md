@@ -4,6 +4,14 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 2.9.0 - 2026-11-07
+
+- Add Bulk Order / Request Mode toggle to Distribute to Cuisine, allowing Supervisors (purchaser) and Admins to request bulk ingredients across categories and cuisines.
+- Group supervisor bulk requests into consolidated indents for Admin review in Approvals.
+- Support Admin quantity editing, approval for order, and rejection with reason prompting.
+- Display Bulk Cuisine Request History & Status table for supervisors to track order status and rejection notes.
+- No database migrations required.
+
 ## 2.8.0 - 2026-11-07
 
 - Consolidate bulk stock operations into Receive Stock with toggle switch, batch queue, manual entry, and CSV upload.
