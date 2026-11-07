@@ -43,7 +43,7 @@
             children.forEach(child=>{child.classList.remove('nav-item');child.classList.add('nav-subitem');submenu.append(child);});wrapper.append(toggle,submenu);
             toggle.onclick=()=>{const open=!submenu.classList.contains('open');closeOthers(wrapper);setOpen(wrapper,open);};
         }
-        group('#navOverview',['[data-inventory=bulk-receipt]','[data-inventory=receipt]','[data-inventory=adjust]','[data-inventory=history]','[data-inventory=prices]','[data-inventory=stock-prices]']);
+        group('#navOverview',['[data-inventory=receipt]','[data-inventory=adjust]','[data-inventory=history]','[data-inventory=prices]','[data-inventory=stock-prices]']);
         group('[data-inventory=distribute]',['#navCuisineDeliveries']);
         group('[data-inventory=assign]',['[data-operations=legacy]']);
         group('[data-operations=approvals]',['[data-operations=vendor-orders]','#navManageRequests']);

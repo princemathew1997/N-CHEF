@@ -155,8 +155,17 @@ export function validateBulkReceiptCSV(csv, state, actor) {
       }
     }
 
-    if (notesText.length > 500) {
-      add(row, 'Notes', 'Notes must be 500 characters or less.', notesText);
+    // Extract vendor if formatted as "[Vendor: <name>] <note>"
+    let parsedVendor = '';
+    let parsedNoteOnly = notesText;
+    const vendorMatch = notesText.match(/^\[Vendor:\s*([^\]]+)\]\s*(.*)$/i);
+    if (vendorMatch) {
+      parsedVendor = vendorMatch[1].trim();
+      parsedNoteOnly = vendorMatch[2].trim();
+    }
+
+    if (parsedNoteOnly.length > 500) {
+      add(row, 'Notes', 'Notes must be 500 characters or less.', parsedNoteOnly);
     }
 
     if (item && outlet && Number.isFinite(quantity) && quantity > 0 && unitCostMinor !== null) {
@@ -164,13 +173,13 @@ export function validateBulkReceiptCSV(csv, state, actor) {
       if (balance + quantity > 1e9) {
         add(row, 'Quantity', 'Resulting outlet stock would exceed 1,000,000,000.', quantityText);
       }
-      const pair = item.id + '\0' + outlet.id;
+      const pair = item.id + '\0' + outlet.id + '\0' + dateText + '\0' + unitCostMinor;
       if (seenPairs.has(pair)) {
         const prior = seenPairs.get(pair);
         if (!errors.some(e => e.row === prior && e.column === 'Duplicate')) {
-          add(prior, 'Duplicate', `The same item and outlet also appears on row ${row}. Combine into one row.`);
+          add(prior, 'Duplicate', `The same item, outlet, date and unit price also appears on row ${row}. Combine into one row.`);
         }
-        add(row, 'Duplicate', `The same item and outlet already appears on row ${prior}. Combine into one row.`);
+        add(row, 'Duplicate', `The same item, outlet, date and unit price already appears on row ${prior}. Combine into one row.`);
       } else {
         seenPairs.set(pair, row);
       }
@@ -188,7 +197,9 @@ export function validateBulkReceiptCSV(csv, state, actor) {
         unitCostMinor,
         currentQuantity: balance,
         resultingQuantity: balance + quantity,
-        notes: notesText || 'Bulk Stock Receipt'
+        notes: notesText || 'Bulk Stock Receipt',
+        vendor: parsedVendor || '',
+        noteOnly: parsedNoteOnly || ''
       });
     }
   }
