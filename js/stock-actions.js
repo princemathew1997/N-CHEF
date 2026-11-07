@@ -174,12 +174,41 @@
             
             ${isReceipt ? `
             <div id="bulkBatchSection" class="${bulkReceiptMode ? '' : 'hidden'}" style="margin: 28px 0 20px 0; padding: 20px; border: 1.5px solid var(--primary, #FFBE0B); border-radius: 12px; background: #141416; box-shadow: 0 4px 18px rgba(0,0,0,0.35);">
+                <!-- Bulk Entry Method Sub-tabs (Manual vs CSV Upload) -->
+                <div style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255, 190, 11, 0.25); padding-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <span style="font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 600;">Bulk Entry Option</span>
+                        <div style="margin-top: 4px; display: flex; gap: 8px;">
+                            <button type="button" class="btn btn-primary" id="btnBulkMethodManual" style="padding: 6px 14px; font-size: 0.85rem;">
+                                <i data-lucide="edit-3" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;"></i>Manual Entry
+                            </button>
+                            <button type="button" class="btn btn-outline" id="btnBulkMethodCSV" style="padding: 6px 14px; font-size: 0.85rem;">
+                                <i data-lucide="file-up" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;"></i>Upload CSV File
+                            </button>
+                        </div>
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--text-muted);">
+                        Use either manual input above or CSV upload to append stock rows.
+                    </div>
+                </div>
+
+                <!-- CSV Upload Option Container -->
+                <div id="bulkCsvUploadArea" class="hidden" style="margin-bottom: 24px; padding: 16px; background: rgba(0,0,0,0.3); border: 1px dashed var(--border-gold, #FFBE0B); border-radius: 8px;">
+                    <h4 style="margin: 0 0 10px 0; color: var(--primary, #FFBE0B); font-size: 1rem; display: flex; align-items: center; gap: 6px;">
+                        <i data-lucide="file-spreadsheet" style="width: 16px; height: 16px;"></i> Import Bulk Stock Spreadsheet
+                    </h4>
+                    <p style="margin: 0 0 12px 0; font-size: 0.85rem; color: var(--text-muted);">
+                        Download the template, enter your stock rows, and upload. Validated rows are appended directly to the batch list below.
+                    </p>
+                    <div id="bulkCsvUploadContent"></div>
+                </div>
+
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
                     <div>
                         <h3 style="margin: 0; color: var(--primary, #FFBE0B); font-size: 1.15rem; display: flex; align-items: center; gap: 8px;">
                             <i data-lucide="layers" style="width: 18px; height: 18px;"></i> Current Bulk Stock Items List
                         </h3>
-                        <p style="margin: 4px 0 0 0; color: var(--text-muted); font-size: 0.85rem;">Items added using the form above will accumulate here. Review and submit the entire batch.</p>
+                        <p style="margin: 4px 0 0 0; color: var(--text-muted); font-size: 0.85rem;">Items added manually or from CSV will accumulate here. Review and submit the entire batch.</p>
                     </div>
                     <div style="font-size: 0.95rem;">
                         <span style="color: var(--text-muted);">Total Items:</span> <strong id="bulkBatchCount" style="color: #fff;">${bulkReceiptItems.length}</strong> · 
@@ -272,6 +301,45 @@
                 };
 
                 renderBatchTable();
+
+                // Setup Manual vs CSV Option Switcher
+                const btnManual = content.querySelector('#btnBulkMethodManual');
+                const btnCSV = content.querySelector('#btnBulkMethodCSV');
+                const csvArea = content.querySelector('#bulkCsvUploadArea');
+                const csvContent = content.querySelector('#bulkCsvUploadContent');
+                const manualForm = content.querySelector('#outletStockForm');
+
+                if (btnManual && btnCSV && csvArea) {
+                    btnManual.onclick = () => {
+                        btnManual.className = 'btn btn-primary';
+                        btnCSV.className = 'btn btn-outline';
+                        csvArea.classList.add('hidden');
+                        manualForm.classList.remove('hidden');
+                    };
+                    btnCSV.onclick = () => {
+                        btnCSV.className = 'btn btn-primary';
+                        btnManual.className = 'btn btn-outline';
+                        csvArea.classList.remove('hidden');
+                        manualForm.classList.add('hidden');
+                        if (csvContent && !csvContent.dataset.rendered) {
+                            csvContent.dataset.rendered = 'true';
+                            window.renderBulkReceiptCSVUpload?.(csvContent, (newRows) => {
+                                for (const row of newRows) {
+                                    const exIdx = bulkReceiptItems.findIndex(r => r.itemId === row.itemId && r.outletId === row.outletId);
+                                    if (exIdx >= 0) {
+                                        bulkReceiptItems[exIdx].quantity += row.quantity;
+                                        bulkReceiptItems[exIdx].unitPrice = row.unitPrice;
+                                        if (row.note) bulkReceiptItems[exIdx].note = row.note;
+                                    } else {
+                                        bulkReceiptItems.push(row);
+                                    }
+                                }
+                                renderBatchTable();
+                                window.showToast?.(`Added ${newRows.length} items from CSV to batch list`, 'success');
+                            });
+                        }
+                    };
+                }
 
                 const clearBtn = content.querySelector('#bulkBatchClearBtn');
                 if (clearBtn) {
