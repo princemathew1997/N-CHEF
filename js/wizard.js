@@ -7,6 +7,7 @@ let allCategories = [];
 let wizardNewOrderStarted=false;
 
 function wizardHasExistingItem(itemId) {
+    if (currentUser?.role === 'purchaser') return false;
     const date = document.getElementById('wizardRequestDate').value;
     const outlet = document.getElementById('wizardOutlet').value;
     return requestsData.some(request => request.ownerId === currentUser.id
@@ -43,7 +44,7 @@ function refreshWizardDateContext(){
     const tbody=table.createTBody();
     rows.forEach(r=>{const line=tbody.insertRow();line.insertCell().textContent=r.itemName;line.insertCell().textContent=`${r.qty} ${r.unit || ''}`;const action=line.insertCell();if(currentUser.role==='cuisine_head' && r.status==='Pending' && !r.indentId){const button=document.createElement('button');button.type='button';button.className='btn btn-outline';button.textContent='Edit quantity';button.onclick=async()=>{await window.editChefPlacedRequest(r.id);refreshWizardDateContext();};action.append(button);}else action.textContent=r.status;});
     body.append(table);
-    const showExisting=rows.length>0 && !wizardNewOrderStarted;
+    const showExisting=rows.length>0 && !wizardNewOrderStarted && currentUser.role==='cuisine_head';
     section.hidden=!showExisting;
     if(showExisting){document.getElementById('wizardStep1').classList.add('hidden');document.getElementById('wizardStep2').classList.add('hidden');}
     else if(document.getElementById('wizardStep2').classList.contains('hidden'))document.getElementById('wizardStep1').classList.remove('hidden');
@@ -247,6 +248,10 @@ function initRequestWizard() {
         const backdateJustification=dateStr<InventoryTools.day()?document.getElementById('wizardBackdateJustification').value.trim():'';
         const chefName = (currentUser && currentUser.name) ? currentUser.name : 'Chef Prince';
 
+        const isPurchaser = currentUser && currentUser.role === 'purchaser';
+        const indentId = isPurchaser ? ('ind_' + Date.now()) : null;
+        const indentNumber = isPurchaser ? ('REQ-' + InventoryTools.day().replace(/-/g, '') + '-' + Math.floor(100 + Math.random() * 900)) : null;
+
         for (const it of items) {
             const masterItem = masterItemsData.find(i => i.id === it.itemId);
             const selData = wizardSelectedItems[it.itemId];
@@ -261,13 +266,48 @@ function initRequestWizard() {
                 outletId: outletId,
                 outletName: outletName,
                 qty: it.qty,
+                revisedQty: it.qty,
                 cuisine: itemCuisine,
                 chefName: chefName,
                 requestedBy: chefName,
-                status: 'Pending',
+                status: isPurchaser ? 'Consolidated' : 'Pending',
+                indentId: indentId,
                 timestamp: now,
                 date: dateStr,
                 backdateJustification
+            });
+        }
+
+        if (isPurchaser) {
+            indentsData.unshift({
+                id: indentId,
+                indentNumber: indentNumber,
+                date: dateStr,
+                outletId: outletId,
+                outletName: outletName,
+                supervisorName: chefName,
+                status: 'Pending Approval',
+                items: items.map(it => {
+                    const masterItem = masterItemsData.find(i => i.id === it.itemId);
+                    const selData = wizardSelectedItems[it.itemId];
+                    const storedCuisine = (typeof selData === 'object' && selData?.cuisine) ? selData.cuisine : null;
+                    const itemCuisine = document.getElementById('wizardCuisine_' + it.itemId)?.value || storedCuisine || defaultCuisine || 'Indian';
+                    return {
+                        itemId: it.itemId,
+                        itemName: masterItem?.name || 'Item',
+                        category: masterItem?.category || '',
+                        unit: masterItem?.unit || 'kg',
+                        originalQty: it.qty,
+                        revisedQty: it.qty,
+                        comment: 'Supervisor Bulk Request for Cuisine',
+                        cuisineBreakdown: [{
+                            cuisine: itemCuisine,
+                            chef: chefName,
+                            qty: it.qty
+                        }]
+                    };
+                }),
+                createdAt: now
             });
         }
 
@@ -276,12 +316,12 @@ function initRequestWizard() {
         if (typeof showUiModal === 'function') {
             showUiModal({
                 title: 'Requests Submitted',
-                message: currentUser.role === 'executive_chef' ? 'Your requests are saved and ready in Consolidate Request.' : 'Ingredient requests submitted successfully to supervisor!',
+                message: currentUser.role === 'executive_chef' ? 'Your requests are saved and ready in Consolidate Request.' : (currentUser.role === 'purchaser' ? 'Ingredient requests submitted successfully for approval!' : 'Ingredient requests submitted successfully to supervisor!'),
                 type: 'success',
                 btnText: 'Done'
             });
         } else {
-            alert('Ingredient requests submitted successfully to supervisor!');
+            alert(currentUser.role === 'purchaser' ? 'Ingredient requests submitted successfully for approval!' : 'Ingredient requests submitted successfully to supervisor!');
         }
         if (typeof updateRequestsBadge === 'function') updateRequestsBadge();
         if (typeof updateIndentsBadge === 'function') updateIndentsBadge();
