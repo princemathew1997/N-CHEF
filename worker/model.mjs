@@ -125,14 +125,17 @@ export function validateChanges(state, changes, actor, stockAction = false) {
     }
     if (actor.role !== 'admin') {
       if(actor.role==='purchaser' && entity!=='items') {
-        if(!['requests','indents'].includes(entity) || !old || !data || !hasOutlet(actor,old.outletId))fail('Purchaser may only edit forwarded orders.',403);
-        if(!['Pending Approval','Consolidated','Sent to Admin'].includes(old.status) || old.status!==data.status)fail('Use an explicit approval action.',403);
+        if(!['requests','indents'].includes(entity) || !data || (old && !hasOutlet(actor,old.outletId)) || (!old && !hasOutlet(actor,data.outletId)))fail('Purchaser may only edit forwarded orders or submit bulk requests.',403);
+        if(old && (!['Pending Approval','Consolidated','Sent to Admin'].includes(old.status) || old.status!==data.status))fail('Use an explicit approval action.',403);
         const fields=entity==='indents'?['items']:['qty','revisedQty','supervisorNote'];
-        if(!same(without(old,fields),without(data,fields)))fail('Only order quantities and notes may change.',403);
-        if(entity==='indents' && (!Array.isArray(data.items) || data.items.length!==old.items.length || data.items.some(row=>!old.items.some(prior=>prior.itemId===row.itemId && prior.originalQty===row.originalQty))))fail('Keep the forwarded order items and original quantities intact.',403);
+        if(old && !same(without(old,fields),without(data,fields)))fail('Only order quantities and notes may change.',403);
+        if(old && entity==='indents' && (!Array.isArray(data.items) || data.items.length!==old.items.length || data.items.some(row=>!old.items.some(prior=>prior.itemId===row.itemId && prior.originalQty===row.originalQty))))fail('Keep the forwarded order items and original quantities intact.',403);
       }
 
-      if (actor.role==='purchaser') { /* scoped field checks above */ } else if (entity === 'requests') {
+      if (actor.role==='purchaser') {
+        if (entity === 'requests' && !old && !['Pending', 'Consolidated'].includes(data.status)) fail('New requests must be pending or consolidated.');
+        if (entity === 'indents' && !old && data.status !== 'Pending Approval') fail('New indents must await approval.');
+      } else if (entity === 'requests') {
         const r = old || data;
         if (!hasOutlet(actor, r.outletId) || (old && data && old.outletId !== data.outletId)) fail('Outlet access denied.', 403);
         if (actor.role === 'cuisine_head') {
@@ -168,7 +171,7 @@ export function validateChanges(state, changes, actor, stockAction = false) {
       data.chefName = actor.name;
       data.timestamp = new Date().toISOString();
     }
-    if(data && entity==='indents' && !old && data.status==='Pending Approval' && next.indents.some(i=>i.outletId===data.outletId && i.status==='Pending Approval'))fail('Recall the pending consolidated request for this outlet and combine it with new requests before submitting.',409);
+    if(data && entity==='indents' && !old && data.status==='Pending Approval' && actor.role==='executive_chef' && next.indents.some(i=>i.outletId===data.outletId && i.status==='Pending Approval'))fail('Recall the pending consolidated request for this outlet and combine it with new requests before submitting.',409);
     if (data && entity === 'indents' && !old) { data.ownerId = actor.id; data.supervisorName = actor.name; }
     if (data && entity === 'purchase_orders' && !old) { data.ownerId = actor.id; data.raisedBy = actor.name; }
     if (data && old && ['requests', 'indents', 'purchase_orders'].includes(entity)) {

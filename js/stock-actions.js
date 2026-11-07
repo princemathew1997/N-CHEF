@@ -7,6 +7,7 @@
     const adminPages = ['cuisines'];
     let bulkReceiptMode = false;
     let bulkReceiptItems = [];
+    let bulkCuisineMode = false;
     const canOpenCatalog = () => ['admin','purchaser'].includes(currentUser?.role);
     const allowedOutlets = () => OutletSelection.allowed();
     const options = (rows, value, label) => rows.map(r => `<option value="${esc(value(r))}">${esc(label(r))}</option>`).join('');
@@ -72,6 +73,68 @@
         mountPicker();draw();OutletSelection.renderHeader();
     };
     function orderDistribution(content){
+        if (bulkCuisineMode) {
+            const myRequests = indentsData.filter(i => allowedOutlets().some(o => o.id === i.outletId));
+            const historyTable = myRequests.length ? `
+                <div style="margin-top: 24px; text-align: left;">
+                    <h4 style="margin: 0 0 12px 0; color: #fff; font-size: 1rem; display: flex; align-items: center; gap: 8px;">
+                        <i data-lucide="history" style="width: 16px; height: 16px; color: var(--primary);"></i> Bulk Cuisine Request History & Status
+                    </h4>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr><th>Order Number</th><th>Outlet</th><th>Date</th><th>Items</th><th>Status</th><th>Notes / Reason</th></tr>
+                            </thead>
+                            <tbody>
+                                ${myRequests.map(req => {
+                                    const totalItems = (req.items || []).length;
+                                    let badge = `<span class="status low">${esc(req.status)}</span>`;
+                                    if (req.status === 'Pending Approval') {
+                                        badge = `<span class="status pending" style="background: rgba(255,190,11,0.15); color: var(--primary); border: 1px solid rgba(255,190,11,0.3); font-weight: 600; padding: 3px 8px; border-radius: 6px;">Awaiting Admin Approval</span>`;
+                                    } else if (req.status === 'Approved') {
+                                        badge = `<span class="status ok" style="background: rgba(46,196,182,0.15); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.3); font-weight: 600; padding: 3px 8px; border-radius: 6px;">Approved & Ready to Distribute</span>`;
+                                    } else if (req.status === 'Rejected') {
+                                        badge = `<span class="status danger" style="background: rgba(230,57,70,0.15); color: #ff6b6b; border: 1px solid rgba(230,57,70,0.3); font-weight: 600; padding: 3px 8px; border-radius: 6px;">Rejected by Admin</span>`;
+                                    } else if (req.status && req.status.startsWith('PO Raised')) {
+                                        badge = `<span class="status" style="background: rgba(67, 97, 238, 0.15); color: #4895ef; border: 1px solid rgba(67, 97, 238, 0.35); font-weight: 600; padding: 3px 8px; border-radius: 6px;">${esc(req.status)}</span>`;
+                                    }
+                                    const note = req.rejectReason ? `<span style="color: #ff6b6b;">${esc(req.rejectReason)}</span>` : (req.items && req.items[0]?.comment ? esc(req.items[0].comment) : '-');
+                                    return `<tr>
+                                        <td><strong>${esc(req.indentNumber || req.id)}</strong></td>
+                                        <td>${esc(outletsData.find(o => o.id === req.outletId)?.name || req.outletName || req.outletId)}</td>
+                                        <td>${esc(req.date || req.createdAt?.slice(0, 10) || '-')}</td>
+                                        <td>${totalItems} item(s)</td>
+                                        <td>${badge}</td>
+                                        <td>${note}</td>
+                                    </tr>`;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            ` : '<p style="margin-top: 18px; color: var(--text-muted); font-size: 0.88rem;">No requests submitted yet.</p>';
+
+            content.innerHTML = `
+                <div style="padding: 24px; text-align: center; background: #141416; border: 1.5px solid var(--primary, #FFBE0B); border-radius: 12px; margin-top: 10px;">
+                    <h3 style="color: var(--primary, #FFBE0B); margin-top: 0; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <i data-lucide="plus-circle" style="width: 22px; height: 22px;"></i> Bulk Ingredient Request for Cuisine
+                    </h3>
+                    <p style="color: var(--text-muted); max-width: 620px; margin: 8px auto 20px auto; font-size: 0.95rem;">
+                        Select items across categories and cuisines to place a bulk ingredient request for supervisor review & admin approval.
+                    </p>
+                    <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+                        <button type="button" class="btn btn-primary" id="btnOpenBulkCuisineWizard" style="padding: 10px 24px; font-weight: 600; font-size: 0.95rem;">
+                            Open Ingredient Request Screen
+                        </button>
+                    </div>
+                    ${historyTable}
+                </div>
+            `;
+            const btn = content.querySelector('#btnOpenBulkCuisineWizard');
+            if (btn) btn.onclick = () => window.openRequestWizard?.();
+            if (window.lucide) window.lucide.createIcons();
+            return;
+        }
         const orders=indentsData.filter(i=>i.status==='Approved' && allowedOutlets().some(o=>o.id===i.outletId) && InventoryTools.consolidatedDistributionRows(committedState,i.id).length);
         if(!orders.some(i=>i.id===distributionOrder))distributionOrder=orders[0]?.id || '';
         content.innerHTML=field('Approved consolidated order','<div id="distributionOrder"></div>')+'<div id="orderDistributionLines"></div>';
@@ -103,8 +166,29 @@
         if(currentUser.role==='executive_chef' && !['overview','history'].includes(page)){window.switchToView('operations:dashboard');return;}
         if(page==='catalog' && !canOpenCatalog()){window.switchToView('viewMasterOrders');return;}
         if (adminPages.includes(page) && currentUser.role !== 'admin') { window.switchToView('viewMasterOrders'); return; }
-        panel.innerHTML = `<header class="dash-header"><div><h1>${titles[page]}</h1><p>${page==='catalog'?'Manage item details here. Receive quantities through Stock.':'Stock is held by outlet. Cuisine distributions deduct stock immediately.'}</p></div></header><div class="panel inventory-workspace" id="inventoryContent"></div>`;
+        panel.innerHTML = `<header class="dash-header"><div><h1>${titles[page]}</h1><p>${page==='catalog'?'Manage item details here. Receive quantities through Stock.':'Stock is held by outlet. Cuisine distributions deduct stock immediately.'}</p></div>${page==='distribute' && ['admin','purchaser'].includes(currentUser.role)?`
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <label class="threshold-toggle" style="margin: 0; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 0.9rem; font-weight: 600; color: #fff;">Bulk Order / Request Mode</span>
+                <span class="threshold-switch">
+                    <input type="checkbox" role="switch" id="bulkCuisineModeToggle" ${bulkCuisineMode ? 'checked' : ''}>
+                    <span class="threshold-track" aria-hidden="true"></span>
+                </span>
+                <span id="bulkCuisineModeStatus" style="font-weight: 700; color: var(--primary, #FFBE0B); min-width: 28px;">${bulkCuisineMode ? 'On' : 'Off'}</span>
+            </label>
+        </div>`:''}</header><div class="panel inventory-workspace" id="inventoryContent"></div>`;
         const content=panel.querySelector('#inventoryContent');
+        const cuisineToggle = panel.querySelector('#bulkCuisineModeToggle');
+        if (cuisineToggle) {
+            cuisineToggle.onchange = e => {
+                bulkCuisineMode = e.target.checked;
+                panel.querySelector('#bulkCuisineModeStatus').textContent = bulkCuisineMode ? 'On' : 'Off';
+                if (bulkCuisineMode && typeof window.openRequestWizard === 'function') {
+                    window.openRequestWizard();
+                }
+                render();
+            };
+        }
         if(page==='stock-prices'){panel.querySelector('.dash-header p').textContent='Update unit prices for available outlet stock.';window.CurrentStockPrices.render(content);return;}
         if(page==='prices'){panel.querySelector('.dash-header p').textContent='Review recorded purchase prices and trends over time.';window.PriceHistory.render(content);return;}
         if(page==='overview') overview(content);

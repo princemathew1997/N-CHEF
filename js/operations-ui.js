@@ -35,7 +35,7 @@
         if(['approvals','vendor-orders'].includes(page)){
             const ordering=page==='vendor-orders';
             const indents=indentsData.filter(i=>ordering?i.status==='Approved' && !i.purchaseOrderIds?.length:i.status==='Pending Approval');
-            content.innerHTML=`<div class="approval-request-list">${indents.map(i=>`<section class="operations-card approval-request-card" data-approval-request="${esc(i.id)}" aria-label="${esc(i.indentNumber)}"><header class="approval-request-header"><div><small>Consolidated request</small><h3>${esc(i.indentNumber)}</h3><p>Outlet: <strong>${esc(outletName(i.outletId))}</strong> · ${i.items.length} item(s)${i.supervisorName?' · Executive Chef: '+esc(i.supervisorName):''}</p></div><span class="approval-request-status ${i.status==='Pending Approval'?'awaiting':'approved'}">${i.status==='Pending Approval'?'Awaiting approval':esc(i.status)}</span></header>${table(['Item','Requested','Revised','Available','Shortage'],i.items.map(row=>[esc(masterItemsData.find(x=>x.id===row.itemId)?.name),esc(row.originalQty),esc(row.revisedQty),esc(stock(row.itemId,i.outletId)),esc(Math.max(0,row.revisedQty-stock(row.itemId,i.outletId)))]))}<footer class="approval-request-actions">${i.status==='Pending Approval'?button('edit-indent',i.id,'Edit quantities')+button('approve-indent',i.id,'Approve for order'):''}${ordering?button('raise-po',i.id,'Generate vendor orders'):''}</footer></section>`).join('')}</div>`;
+            content.innerHTML=`<div class="approval-request-list">${indents.map(i=>`<section class="operations-card approval-request-card" data-approval-request="${esc(i.id)}" aria-label="${esc(i.indentNumber)}"><header class="approval-request-header"><div><small>Consolidated request</small><h3>${esc(i.indentNumber)}</h3><p>Outlet: <strong>${esc(outletName(i.outletId))}</strong> · ${i.items.length} item(s)${i.supervisorName?' · Executive Chef / Supervisor: '+esc(i.supervisorName):''}</p></div><span class="approval-request-status ${i.status==='Pending Approval'?'awaiting':'approved'}">${i.status==='Pending Approval'?'Awaiting approval':esc(i.status)}</span></header>${table(['Item','Requested','Revised','Available','Shortage'],i.items.map(row=>[esc(masterItemsData.find(x=>x.id===row.itemId)?.name),esc(row.originalQty),esc(row.revisedQty),esc(stock(row.itemId,i.outletId)),esc(Math.max(0,row.revisedQty-stock(row.itemId,i.outletId)))]))}<footer class="approval-request-actions">${i.status==='Pending Approval'?button('edit-indent',i.id,'Edit quantities')+button('approve-indent',i.id,'Approve for order')+button('reject-indent',i.id,'Reject request'):''}${ordering?button('raise-po',i.id,'Generate vendor orders'):''}</footer></section>`).join('')}</div>`;
             const direct=ordering?[]:requestsData.filter(r=>!r.indentId && r.status==='Sent to Admin');
             if(direct.length)content.innerHTML+=`<section class="operations-card approval-request-card direct-request-card"><header class="approval-request-header"><div><small>Individual requests</small><h3>Cuisine requests awaiting approval</h3></div></header>${table(['Cuisine request','Requested','Revised','Available','Shortage','Action'],direct.map(r=>[esc(r.itemName),esc(r.qty),esc(r.revisedQty ?? r.qty),esc(stock(r.itemId,r.outletId)),esc(Math.max(0,(r.revisedQty ?? r.qty)-stock(r.itemId,r.outletId))),button('approve-request',r.id,'Edit / approve')]))}</section>`;
             if(!indents.length && !direct.length)content.innerHTML=ordering?'<p>No approved requests awaiting vendor orders.</p>':'<p>No requests awaiting approval.</p>';
@@ -175,6 +175,18 @@
                 const modified=requests.map(r=>({...r,revisedQty:Number(data[r.id])}));
                 const value={...indent,items:indent.items.map(i=>{const linked=modified.filter(r=>r.itemId===i.itemId);const revisedQty=requests.length?linked.reduce((s,r)=>s+r.revisedQty,0):Number(data[i.itemId]);return {...i,revisedQty,...(i.cuisineBreakdown?{cuisineBreakdown:i.cuisineBreakdown.map(b=>({...b,qty:linked.filter(r=>r.cuisine===b.cuisine).reduce((s,r)=>s+r.revisedQty,0)}))}:{})};})};
                 return act('changes',{changes:[{entity:'indents',key:id,value},...modified.map(value=>({entity:'requests',key:value.id,value}))]});
+            });
+        }
+        if(action==='reject-indent'){
+            const indent=indentsData.find(i=>i.id===id);
+            if(!indent || indent.status!=='Pending Approval')throw new Error('Only pending orders can be rejected.');
+            return editorForm('Reject request '+esc(indent.indentNumber),formHTML(input('reason','Rejection reason','text','','required maxlength="500"')),async data=>{
+                const reason=data.reason.trim();
+                const modifiedRequests=requestsData.filter(r=>r.indentId===id).map(r=>({...r,status:'Rejected',rejectReason:reason}));
+                return act('changes',{changes:[
+                    {entity:'indents',key:id,value:{...indent,status:'Rejected',rejectReason:reason}},
+                    ...modifiedRequests.map(r=>({entity:'requests',key:r.id,value:r}))
+                ]});
             });
         }
         if(action==='confirm-delivery'){
