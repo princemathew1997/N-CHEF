@@ -123,7 +123,11 @@ test('secure setup, login, permissions, atomic approval and conflicts', async ()
     assert.equal((await save([{entity:'items',key:item.id,value:{...item,unit:'litres'}}])).status,400);
     const deactivate={...catalog,active:false};
     assert.equal((await save([{entity:'items',key:catalog.id,value:deactivate}])).status,200);
+    assert.equal((await db.prepare('SELECT active FROM items WHERE id=?').bind(catalog.id).first()).active,0);
+    assert.equal((await request('state')).data.items.find(i=>i.id===catalog.id)?.active,false);
     assert.equal((await stockAction('stock/receipt',{...receiptInput,itemId:catalog.id})).status,400);
+    assert.equal((await save([{entity:'items',key:catalog.id,value:catalog}])).status,200);
+    assert.equal((await db.prepare('SELECT active FROM items WHERE id=?').bind(catalog.id).first()).active,1);
     assert.equal((await save([{entity:'items',key:catalog.id,value:null}])).status,400);
     assert.equal((await request('stock/consume','POST',{itemId:item.id,outletId:'brigade',quantity:1})).status,404);
     await db.prepare("UPDATE legacy_stock SET quantity=8 WHERE item_id='item_01'").run();

@@ -4,6 +4,10 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 2.7.2 - 2026-11-07
+
+- Restore inactive entries to Item Catalog so admins can find and reactivate them. Keep the saved catalog status consistent with the database status.
+
 ## 2.7.1 - 2026-11-07
 
 - Exclude inactive items from item search when receiving or adding legacy stock, including after a live catalog refresh.
