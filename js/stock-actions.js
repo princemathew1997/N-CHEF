@@ -170,7 +170,7 @@
                     form.elements.quantity.setCustomValidity(matches.length && !open.length?'Approved requests have already been fully issued.':'');
                 }
             };
-            form.oninput=update;form.onchange=()=>{OutletSelection.choose(form.elements.outletId.value);update();};createItemPicker(content.querySelector('#stockItemPicker'),items,{onChange:update});update();
+            form.oninput=update;form.onchange=()=>{OutletSelection.choose(form.elements.outletId.value);update();};createItemPicker(content.querySelector('#stockItemPicker'),items,{onChange:update,activeOnly:page==='receipt' || page==='assign'});update();
             form.onsubmit=e=>{e.preventDefault();const data=Object.fromEntries(new FormData(form));delete data.requestChoice;data.quantity=Number(data.quantity);if(data.unitPrice!==undefined)data.unitPrice=Number(data.unitPrice);if(page==='assign' && form.elements.unitPrice.value==='')delete data.unitPrice;submit(form,()=>runDatabaseAction('stock/'+(page==='assign'?'opening':page),data));};
         }
         if(page==='bulk-receipt') {
