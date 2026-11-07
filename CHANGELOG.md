@@ -4,6 +4,11 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 2.8.0 - 2026-11-07
+
+- Consolidate bulk stock operations into Receive Stock with toggle switch, batch queue, manual entry, and CSV upload.
+- Enforce distinct delivery preservation, in-flight submission locking, vendor/note tracking, and admin-only direct receiving.
+
 ## 2.7.2 - 2026-11-07
 
 - Restore inactive entries to Item Catalog so admins can find and reactivate them. Keep the saved catalog status consistent with the database status.
