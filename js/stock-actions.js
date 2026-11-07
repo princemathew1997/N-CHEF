@@ -145,21 +145,32 @@
             const canBulk = isReceipt && ['admin','purchaser'].includes(currentUser.role);
             
             content.innerHTML=`
-            ${isReceipt && ['admin','purchaser'].includes(currentUser.role)?'<div style="margin-bottom:16px;"><button type="button" class="btn btn-outline" data-receive-po>Receive stock from Vendor Order</button></div>':''}
             ${canBulk ? `
-            <div style="margin-bottom: 20px; padding: 14px 18px; border: 1px solid var(--border-gold, #FFBE0B); border-radius: 10px; background: rgba(255, 190, 11, 0.05); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
-                <div>
-                    <strong style="color: var(--primary, #FFBE0B); font-size: 1rem;">Bulk Stock Mode</strong>
-                    <p style="margin: 2px 0 0 0; color: var(--text-muted); font-size: 0.85rem;">Toggle ON to add multiple items to a batch list below before sending for approval or receiving.</p>
+            <div style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <button type="button" class="btn btn-outline" id="btnToggleCsvUpload" style="display: inline-flex; align-items: center; gap: 6px; border-color: rgba(255, 190, 11, 0.4);">
+                        <i data-lucide="file-up" style="width: 15px; height: 15px;"></i> Upload CSV Spreadsheet
+                    </button>
                 </div>
                 <label class="threshold-toggle" style="margin: 0; cursor: pointer;">
-                    <span style="font-size: 0.88rem; font-weight: 600; color: #fff;">Bulk Receipt Mode</span>
+                    <span style="font-size: 0.9rem; font-weight: 600; color: #fff;">Bulk Stock Mode</span>
                     <span class="threshold-switch">
                         <input type="checkbox" role="switch" id="bulkReceiptModeToggle" ${bulkReceiptMode ? 'checked' : ''}>
                         <span class="threshold-track" aria-hidden="true"></span>
                     </span>
                     <span id="bulkReceiptModeStatus" style="font-weight: 700; color: var(--primary, #FFBE0B); min-width: 28px;">${bulkReceiptMode ? 'On' : 'Off'}</span>
                 </label>
+            </div>
+
+            <!-- CSV Upload Dropdown/Modal Area -->
+            <div id="bulkCsvUploadArea" class="hidden" style="margin-bottom: 24px; padding: 20px; border: 1.5px solid var(--primary, #FFBE0B); border-radius: 12px; background: #141416; box-shadow: 0 4px 18px rgba(0,0,0,0.35);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h3 style="margin: 0; color: var(--primary, #FFBE0B); font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                        <i data-lucide="file-spreadsheet" style="width: 18px; height: 18px;"></i> Upload Bulk Stock Spreadsheet
+                    </h3>
+                    <button type="button" class="btn btn-outline" id="btnCloseCsvUpload" style="padding: 4px 10px; font-size: 0.8rem;">Close</button>
+                </div>
+                <div id="bulkCsvUploadContent"></div>
             </div>
             ` : ''}
             <form id="outletStockForm" class="inventory-form">
@@ -174,35 +185,6 @@
             
             ${isReceipt ? `
             <div id="bulkBatchSection" class="${bulkReceiptMode ? '' : 'hidden'}" style="margin: 28px 0 20px 0; padding: 20px; border: 1.5px solid var(--primary, #FFBE0B); border-radius: 12px; background: #141416; box-shadow: 0 4px 18px rgba(0,0,0,0.35);">
-                <!-- Bulk Entry Method Sub-tabs (Manual vs CSV Upload) -->
-                <div style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255, 190, 11, 0.25); padding-bottom: 12px; flex-wrap: wrap; gap: 10px;">
-                    <div>
-                        <span style="font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 600;">Bulk Entry Option</span>
-                        <div style="margin-top: 4px; display: flex; gap: 8px;">
-                            <button type="button" class="btn btn-primary" id="btnBulkMethodManual" style="padding: 6px 14px; font-size: 0.85rem;">
-                                <i data-lucide="edit-3" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;"></i>Manual Entry
-                            </button>
-                            <button type="button" class="btn btn-outline" id="btnBulkMethodCSV" style="padding: 6px 14px; font-size: 0.85rem;">
-                                <i data-lucide="file-up" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;"></i>Upload CSV File
-                            </button>
-                        </div>
-                    </div>
-                    <div style="font-size: 0.85rem; color: var(--text-muted);">
-                        Use either manual input above or CSV upload to append stock rows.
-                    </div>
-                </div>
-
-                <!-- CSV Upload Option Container -->
-                <div id="bulkCsvUploadArea" class="hidden" style="margin-bottom: 24px; padding: 16px; background: rgba(0,0,0,0.3); border: 1px dashed var(--border-gold, #FFBE0B); border-radius: 8px;">
-                    <h4 style="margin: 0 0 10px 0; color: var(--primary, #FFBE0B); font-size: 1rem; display: flex; align-items: center; gap: 6px;">
-                        <i data-lucide="file-spreadsheet" style="width: 16px; height: 16px;"></i> Import Bulk Stock Spreadsheet
-                    </h4>
-                    <p style="margin: 0 0 12px 0; font-size: 0.85rem; color: var(--text-muted);">
-                        Download the template, enter your stock rows, and upload. Validated rows are appended directly to the batch list below.
-                    </p>
-                    <div id="bulkCsvUploadContent"></div>
-                </div>
-
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
                     <div>
                         <h3 style="margin: 0; color: var(--primary, #FFBE0B); font-size: 1.15rem; display: flex; align-items: center; gap: 8px;">
@@ -230,7 +212,7 @@
                 </div>
             </div>
 
-            <!-- Approval Requests & Submission History for Bulk Stock -->
+            <!-- Approval Requests for Bulk Stock (Admin only) -->
             <div id="bulkReceiptApprovalAndHistoryContainer"></div>
             ` : ''}
             
@@ -302,26 +284,17 @@
 
                 renderBatchTable();
 
-                // Setup Manual vs CSV Option Switcher
-                const btnManual = content.querySelector('#btnBulkMethodManual');
-                const btnCSV = content.querySelector('#btnBulkMethodCSV');
+                // Setup CSV Upload Area Toggle
+                const btnToggleCSV = content.querySelector('#btnToggleCsvUpload');
+                const btnCloseCSV = content.querySelector('#btnCloseCsvUpload');
                 const csvArea = content.querySelector('#bulkCsvUploadArea');
                 const csvContent = content.querySelector('#bulkCsvUploadContent');
-                const manualForm = content.querySelector('#outletStockForm');
 
-                if (btnManual && btnCSV && csvArea) {
-                    btnManual.onclick = () => {
-                        btnManual.className = 'btn btn-primary';
-                        btnCSV.className = 'btn btn-outline';
-                        csvArea.classList.add('hidden');
-                        manualForm.classList.remove('hidden');
-                    };
-                    btnCSV.onclick = () => {
-                        btnCSV.className = 'btn btn-primary';
-                        btnManual.className = 'btn btn-outline';
-                        csvArea.classList.remove('hidden');
-                        manualForm.classList.add('hidden');
-                        if (csvContent && !csvContent.dataset.rendered) {
+                if (btnToggleCSV && csvArea) {
+                    btnToggleCSV.onclick = () => {
+                        const isOpening = csvArea.classList.contains('hidden');
+                        csvArea.classList.toggle('hidden', !isOpening);
+                        if (isOpening && csvContent && !csvContent.dataset.rendered) {
                             csvContent.dataset.rendered = 'true';
                             window.renderBulkReceiptCSVUpload?.(csvContent, (newRows) => {
                                 for (const row of newRows) {
@@ -338,6 +311,11 @@
                                 window.showToast?.(`Added ${newRows.length} items from CSV to batch list`, 'success');
                             });
                         }
+                    };
+                }
+                if (btnCloseCSV && csvArea) {
+                    btnCloseCSV.onclick = () => {
+                        csvArea.classList.add('hidden');
                     };
                 }
 
