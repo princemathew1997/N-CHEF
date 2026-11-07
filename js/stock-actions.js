@@ -246,7 +246,23 @@
                     if (!bulkReceiptMode && csvArea) csvArea.classList.add('hidden');
                 };
 
-                const renderBatchTable = () => {
+                let renderBatchTable;
+                const setBatchBusy = (busy) => {
+                    const clearBtn = content.querySelector('#bulkBatchClearBtn');
+                    const sendApprovalBtn = content.querySelector('#bulkBatchSendApprovalBtn');
+                    const receiveBtn = content.querySelector('#bulkBatchReceiveBtn');
+                    const submitBtn = content.querySelector('#stockSubmitBtn');
+                    const btnToggleCSV = content.querySelector('#btnToggleCsvUpload');
+                    const modeToggle = content.querySelector('#bulkReceiptModeToggle');
+                    if (clearBtn) clearBtn.disabled = busy || bulkReceiptItems.length === 0;
+                    if (sendApprovalBtn) sendApprovalBtn.disabled = busy || bulkReceiptItems.length === 0;
+                    if (receiveBtn) receiveBtn.disabled = busy || bulkReceiptItems.length === 0;
+                    if (submitBtn) submitBtn.disabled = busy;
+                    if (btnToggleCSV) btnToggleCSV.disabled = busy;
+                    if (modeToggle) modeToggle.disabled = busy;
+                };
+
+                renderBatchTable = () => {
                     const tableContainer = content.querySelector('#bulkBatchTableContainer');
                     const countEl = content.querySelector('#bulkBatchCount');
                     const totalEl = content.querySelector('#bulkBatchTotalValue');
@@ -310,11 +326,18 @@
                             csvContent.dataset.rendered = 'true';
                             window.renderBulkReceiptCSVUpload?.(csvContent, (newRows) => {
                                 for (const row of newRows) {
-                                    const exIdx = bulkReceiptItems.findIndex(r => r.itemId === row.itemId && r.outletId === row.outletId);
+                                    // Match delivery by item, outlet, date AND unit price to preserve distinct deliveries
+                                    const exIdx = bulkReceiptItems.findIndex(r => 
+                                        r.itemId === row.itemId && 
+                                        r.outletId === row.outletId && 
+                                        r.date === row.date && 
+                                        Math.abs(r.unitPrice - row.unitPrice) < 0.001
+                                    );
                                     if (exIdx >= 0) {
                                         bulkReceiptItems[exIdx].quantity += row.quantity;
-                                        bulkReceiptItems[exIdx].unitPrice = row.unitPrice;
-                                        if (row.note) bulkReceiptItems[exIdx].note = row.note;
+                                        if (row.note && !bulkReceiptItems[exIdx].note.includes(row.note)) {
+                                            bulkReceiptItems[exIdx].note = (bulkReceiptItems[exIdx].note + '; ' + row.note).replace(/^;\s*/, '');
+                                        }
                                     } else {
                                         bulkReceiptItems.push(row);
                                     }
@@ -351,9 +374,11 @@
                             window.showUiModal?.({ title: 'Pending changes', message: 'Finish your other pending changes before submitting.', type: 'warning' });
                             return;
                         }
-                        sendApprovalBtn.disabled = true;
+                        setBatchBusy(true);
+                        // Snapshot batch in flight to prevent dropping items added while request is pending
+                        const batchInFlight = [...bulkReceiptItems];
                         try {
-                            const csvString = window.buildBulkReceiptCSV ? window.buildBulkReceiptCSV(bulkReceiptItems) : '';
+                            const csvString = window.buildBulkReceiptCSV ? window.buildBulkReceiptCSV(batchInFlight) : '';
                             const valResult = await apiRequest('stock/bulk-receipt/validate', 'POST', { csv: csvString });
                             const state = await apiRequest('stock/bulk-receipt/request', 'POST', {
                                 csv: csvString,
@@ -362,19 +387,19 @@
                             });
                             applyServerState(state);
                             window.onLiveSyncReceived?.();
-                            const submittedCount = bulkReceiptItems.length;
-                            bulkReceiptItems = [];
+                            // Remove only the items that were submitted in this batch, keeping any newly added items
+                            bulkReceiptItems = bulkReceiptItems.slice(batchInFlight.length);
                             renderBatchTable();
                             window.renderBulkReceiptApprovalAndHistory?.(content.querySelector('#bulkReceiptApprovalAndHistoryContainer'));
                             window.showUiModal?.({
                                 title: 'Batch Sent for Approval',
-                                message: `Successfully submitted ${submittedCount} item(s) to Admin for approval. Stock will be received once approved.`,
+                                message: `Successfully submitted ${batchInFlight.length} item(s) to Admin for approval. Stock will be received once approved.`,
                                 type: 'success'
                             });
                         } catch (err) {
                             window.showUiModal?.({ title: 'Submission failed', message: err.message, type: 'warning' });
                         } finally {
-                            sendApprovalBtn.disabled = false;
+                            setBatchBusy(false);
                         }
                     };
                 }
@@ -389,9 +414,10 @@
                             return;
                         }
                         if (!confirm(`Receive all ${bulkReceiptItems.length} items directly into stock?`)) return;
-                        receiveBtn.disabled = true;
+                        setBatchBusy(true);
+                        const batchInFlight = [...bulkReceiptItems];
                         try {
-                            const csvString = window.buildBulkReceiptCSV ? window.buildBulkReceiptCSV(bulkReceiptItems) : '';
+                            const csvString = window.buildBulkReceiptCSV ? window.buildBulkReceiptCSV(batchInFlight) : '';
                             const valResult = await apiRequest('stock/bulk-receipt/validate', 'POST', { csv: csvString });
                             const state = await apiRequest('stock/bulk-receipt', 'POST', {
                                 csv: csvString,
@@ -400,15 +426,14 @@
                             });
                             applyServerState(state);
                             window.onLiveSyncReceived?.();
-                            const receivedCount = bulkReceiptItems.length;
-                            bulkReceiptItems = [];
+                            bulkReceiptItems = bulkReceiptItems.slice(batchInFlight.length);
                             renderBatchTable();
                             window.renderBulkReceiptApprovalAndHistory?.(content.querySelector('#bulkReceiptApprovalAndHistoryContainer'));
-                            window.showToast?.(`Received ${receivedCount} bulk stock items successfully!`, 'success');
+                            window.showToast?.(`Received ${batchInFlight.length} bulk stock items successfully!`, 'success');
                         } catch (err) {
                             window.showUiModal?.({ title: 'Receipt failed', message: err.message, type: 'warning' });
                         } finally {
-                            receiveBtn.disabled = false;
+                            setBatchBusy(false);
                         }
                     };
                 }
@@ -460,13 +485,19 @@
                     const selectedOutlet = outletsData.find(o => o.id === data.outletId);
                     const outletName = selectedOutlet?.name || data.outletId;
 
-                    // Check duplicate in same batch list
-                    const existingIndex = bulkReceiptItems.findIndex(r => r.itemId === selectedItem.id && r.outletId === data.outletId && r.date === (data.receiptDate || InventoryTools.day()));
+                    // Check duplicate in same batch list: match by item, outlet, date and unit price
+                    const existingIndex = bulkReceiptItems.findIndex(r => 
+                        r.itemId === selectedItem.id && 
+                        r.outletId === data.outletId && 
+                        r.date === (data.receiptDate || InventoryTools.day()) &&
+                        Math.abs(r.unitPrice - data.unitPrice) < 0.001
+                    );
                     if (existingIndex >= 0) {
-                        if (!confirm(`"${selectedItem.name}" for ${outletName} on this date is already in the batch list. Add additional quantity to it?`)) return;
+                        if (!confirm(`"${selectedItem.name}" for ${outletName} on this date at ₹${data.unitPrice.toFixed(2)} is already in the batch list. Add additional quantity to it?`)) return;
                         bulkReceiptItems[existingIndex].quantity += data.quantity;
-                        bulkReceiptItems[existingIndex].unitPrice = data.unitPrice;
-                        if (data.reason) bulkReceiptItems[existingIndex].note = data.reason;
+                        if (data.reason && !bulkReceiptItems[existingIndex].note.includes(data.reason)) {
+                            bulkReceiptItems[existingIndex].note = (bulkReceiptItems[existingIndex].note + '; ' + data.reason).replace(/^;\s*/, '');
+                        }
                     } else {
                         bulkReceiptItems.push({
                             date: data.receiptDate || InventoryTools.day(),
@@ -487,57 +518,7 @@
                     form.elements.reason.value = '';
                     if (itemPicker && itemPicker.clear) itemPicker.clear();
                     update();
-                    const batchTableContainer = content.querySelector('#bulkBatchTableContainer');
-                    if (batchTableContainer) {
-                        const countEl = content.querySelector('#bulkBatchCount');
-                        const totalEl = content.querySelector('#bulkBatchTotalValue');
-                        const clearBtn = content.querySelector('#bulkBatchClearBtn');
-                        const sendApprovalBtn = content.querySelector('#bulkBatchSendApprovalBtn');
-                        const receiveBtn = content.querySelector('#bulkBatchReceiveBtn');
-
-                        countEl.textContent = bulkReceiptItems.length;
-                        const totalCost = bulkReceiptItems.reduce((acc, row) => acc + (row.quantity * row.unitPrice), 0);
-                        totalEl.textContent = price(Math.round(totalCost * 100));
-
-                        if (clearBtn) clearBtn.disabled = false;
-                        if (sendApprovalBtn) sendApprovalBtn.disabled = false;
-                        if (receiveBtn) receiveBtn.disabled = false;
-
-                        batchTableContainer.innerHTML = table(
-                            ['#', 'Date', 'Outlet', 'Item', 'Vendor', 'Unit', 'Quantity', 'Unit Price', 'Total Cost', 'Note', 'Action'],
-                            bulkReceiptItems.map((r, idx) => [
-                                idx + 1,
-                                esc(r.date || '—'),
-                                esc(r.outletName),
-                                esc(r.itemName),
-                                esc(r.vendor || 'Direct Delivery'),
-                                esc(r.unit),
-                                numberText(r.quantity),
-                                price(Math.round(r.unitPrice * 100)),
-                                price(Math.round(r.quantity * r.unitPrice * 100)),
-                                esc(r.note || '—'),
-                                `<button type="button" class="btn btn-outline" data-remove-batch-index="${idx}" style="color: #f87171; border-color: rgba(248, 113, 113, 0.4); padding: 4px 10px; font-size: 0.8rem;">Remove</button>`
-                            ])
-                        );
-
-                        batchTableContainer.querySelectorAll('[data-remove-batch-index]').forEach(btn => {
-                            btn.onclick = () => {
-                                const idxToRemove = Number(btn.dataset.removeBatchIndex);
-                                bulkReceiptItems.splice(idxToRemove, 1);
-                                const countEl2 = content.querySelector('#bulkBatchCount');
-                                const totalEl2 = content.querySelector('#bulkBatchTotalValue');
-                                countEl2.textContent = bulkReceiptItems.length;
-                                const tot = bulkReceiptItems.reduce((acc, row) => acc + (row.quantity * row.unitPrice), 0);
-                                totalEl2.textContent = price(Math.round(tot * 100));
-                                if (bulkReceiptItems.length === 0) {
-                                    batchTableContainer.innerHTML = '<p style="color: var(--text-muted); font-size: 0.9rem; margin: 10px 0;">No items in batch yet. Fill in the form above and click "+ Add to Batch List".</p>';
-                                    if (clearBtn) clearBtn.disabled = true;
-                                    if (sendApprovalBtn) sendApprovalBtn.disabled = true;
-                                    if (receiveBtn) receiveBtn.disabled = true;
-                                }
-                            };
-                        });
-                    }
+                    renderBatchTable();
                     window.showToast?.(`Added "${selectedItem.name}" to batch list`, 'info');
                     return;
                 }

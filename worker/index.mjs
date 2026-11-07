@@ -225,6 +225,10 @@ export default {
           const validation = validateBulkReceiptCSV(reqRecord.csv, state, { ...actor, id: reqRecord.requestedBy, name: reqRecord.supervisorName, role: 'purchaser' });
           if (validation.errors.length) return send({ error: `Validation error upon approval: ${validation.errors[0].message}`, errors: validation.errors }, 422);
 
+          // Prevent approving duplicate / already received batches
+          const priorApproved = await env.DB.prepare("SELECT id FROM audit_events WHERE action='bulk_receipt' AND entity_id=?").bind(reqRecord.fingerprint).first();
+          if (priorApproved) return send({ error: 'This bulk stock batch has already been approved and received into stock.', errors: [{ row: 1, column: 'File', message: 'These exact stock items have already been received. Check Stock History.' }] }, 422);
+
           const batchId = reqRecord.batchId;
           const stock = { outletStock: clone(state.outletStock), legacyStock: clone(state.legacyStock), movements: [], importSummary: { fingerprint: reqRecord.fingerprint, rows: validation.rows.length, action: 'bulk_receipt', batchId, receivedBy: reqRecord.supervisorName, receivedById: reqRecord.requestedBy, approvedBy: actor.name, receivedAt: nowIso } };
           for (const row of validation.rows) {
@@ -233,8 +237,10 @@ export default {
             balance.quantity += row.quantity;
             if (row.unitCostMinor !== null) balance.unit_cost_minor = row.unitCostMinor;
             const noteDate = row.date ? ` (${row.date})` : '';
-            const noteText = row.notes ? `[${batchId}] ${row.notes}${noteDate}` : `[${batchId}] Bulk Stock Receipt: Row ${row.row}${noteDate}`;
-            stock.movements.push({ item_id: row.itemId, outlet_id: row.outletId, delta: row.quantity, quantity: balance.quantity, kind: 'receipt', reason: noteText, cuisine: '', vendor: 'Direct Delivery', item_name: row.itemName, unit: row.unit, unit_cost_minor: row.unitCostMinor, total_cost_minor: row.unitCostMinor === null ? null : Math.round(row.quantity * row.unitCostMinor) });
+            const rowVendor = row.vendor || 'Direct Delivery';
+            const userNote = row.noteOnly || row.notes || `Row ${row.row}`;
+            const noteText = `[${batchId}] ${userNote}${noteDate}`;
+            stock.movements.push({ item_id: row.itemId, outlet_id: row.outletId, delta: row.quantity, quantity: balance.quantity, kind: 'receipt', reason: noteText, cuisine: '', vendor: rowVendor, item_name: row.itemName, unit: row.unit, unit_cost_minor: row.unitCostMinor, total_cost_minor: row.unitCostMinor === null ? null : Math.round(row.quantity * row.unitCostMinor) });
           }
 
           putRecord(next, 'notification', { ...reqRecord, status: 'Approved', resolvedAt: nowIso, resolvedBy: actor.id, resolvedByName: actor.name });
@@ -290,7 +296,11 @@ export default {
           return send({ ...savedState, batchSummary: { batchId, rowsCount: validation.rows.length, supervisorName: actor.name, submittedAt: nowIso, status: 'Pending Approval' } });
         }
 
-        // Direct receive (Admin or direct flow)
+        if (path === '/api/stock/bulk-receipt') {
+          if (actor.role !== 'admin') fail('Administrator permission required to receive bulk stock directly.', 403);
+        }
+
+        // Direct receive (Admin only flow)
         const stock={outletStock:clone(state.outletStock),legacyStock:clone(state.legacyStock),movements:[],importSummary:{fingerprint,rows:validation.rows.length,action:'bulk_receipt',batchId,receivedBy:actor.name,receivedById:actor.id,receivedAt:new Date().toISOString()}};
         for(const row of validation.rows) {
           let balance=stock.outletStock.find(b=>b.item_id===row.itemId && b.outlet_id===row.outletId);
@@ -298,8 +308,10 @@ export default {
           balance.quantity+=row.quantity;
           if(row.unitCostMinor!==null)balance.unit_cost_minor=row.unitCostMinor;
           const noteDate = row.date ? ` (${row.date})` : '';
-          const noteText = row.notes ? `[${batchId}] ${row.notes}${noteDate}` : `[${batchId}] Bulk Stock Receipt: Row ${row.row}${noteDate}`;
-          stock.movements.push({item_id:row.itemId,outlet_id:row.outletId,delta:row.quantity,quantity:balance.quantity,kind:'receipt',reason:noteText,cuisine:'',vendor:'Direct Delivery',item_name:row.itemName,unit:row.unit,unit_cost_minor:row.unitCostMinor,total_cost_minor:row.unitCostMinor===null?null:Math.round(row.quantity*row.unitCostMinor)});
+          const rowVendor = row.vendor || 'Direct Delivery';
+          const userNote = row.noteOnly || row.notes || `Row ${row.row}`;
+          const noteText = `[${batchId}] ${userNote}${noteDate}`;
+          stock.movements.push({item_id:row.itemId,outlet_id:row.outletId,delta:row.quantity,quantity:balance.quantity,kind:'receipt',reason:noteText,cuisine:'',vendor:rowVendor,item_name:row.itemName,unit:row.unit,unit_cost_minor:row.unitCostMinor,total_cost_minor:row.unitCostMinor===null?null:Math.round(row.quantity*row.unitCostMinor)});
         }
         const savedState = await persistChanges(env.DB,state,clone(state),[],actor,input.operationId,stock);
         return send({ ...savedState, batchSummary: { batchId, rowsCount: validation.rows.length, receivedBy: actor.name, receivedAt: new Date().toISOString() } });

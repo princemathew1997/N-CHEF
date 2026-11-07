@@ -159,6 +159,15 @@ export function validateBulkReceiptCSV(csv, state, actor) {
       add(row, 'Notes', 'Notes must be 500 characters or less.', notesText);
     }
 
+    // Extract vendor if formatted as "[Vendor: <name>] <note>"
+    let parsedVendor = '';
+    let parsedNoteOnly = notesText;
+    const vendorMatch = notesText.match(/^\[Vendor:\s*([^\]]+)\]\s*(.*)$/i);
+    if (vendorMatch) {
+      parsedVendor = vendorMatch[1].trim();
+      parsedNoteOnly = vendorMatch[2].trim();
+    }
+
     if (item && outlet && Number.isFinite(quantity) && quantity > 0 && unitCostMinor !== null) {
       const balance = (state.outletStock || []).find(b => b.item_id === item.id && b.outlet_id === outlet.id)?.quantity || 0;
       if (balance + quantity > 1e9) {
@@ -188,7 +197,9 @@ export function validateBulkReceiptCSV(csv, state, actor) {
         unitCostMinor,
         currentQuantity: balance,
         resultingQuantity: balance + quantity,
-        notes: notesText || 'Bulk Stock Receipt'
+        notes: notesText || 'Bulk Stock Receipt',
+        vendor: parsedVendor || '',
+        noteOnly: parsedNoteOnly || ''
       });
     }
   }

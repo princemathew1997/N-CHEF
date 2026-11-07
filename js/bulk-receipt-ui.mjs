@@ -32,15 +32,21 @@ window.buildBulkReceiptCSV = (itemsList) => {
   const todayIST = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
   const rows = [
     bulkReceiptHeaders,
-    ...itemsList.map(item => [
-      item.outletName,
-      item.date || todayIST,
-      item.itemName,
-      item.unit,
-      String(item.quantity),
-      Number(item.unitPrice).toFixed(2),
-      item.notes || 'Bulk Stock Receipt'
-    ])
+    ...itemsList.map(item => {
+      let notes = item.note || item.notes || '';
+      if (item.vendor && item.vendor !== 'Direct Delivery') {
+        notes = `[Vendor: ${item.vendor}] ${notes}`.trim();
+      }
+      return [
+        item.outletName,
+        item.date || todayIST,
+        item.itemName,
+        item.unit,
+        String(item.quantity),
+        Number(item.unitPrice).toFixed(2),
+        notes || 'Bulk Stock Receipt'
+      ];
+    })
   ];
   return encodeCSV(rows);
 };
