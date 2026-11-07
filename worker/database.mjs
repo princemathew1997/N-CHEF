@@ -6,6 +6,8 @@ import {deliveryCounts} from './queues.mjs';
 export async function readState(db,options={}) {
   const queries = entities.map(entity => entity === 'users'
     ? 'SELECT id, username, name, effective_role AS role, title, profile_json FROM users WHERE active = 1 ORDER BY created_at DESC'
+    : entity === 'items'
+    ? "SELECT CASE WHEN active=0 THEN json_set(payload_json,'$.active',json('false')) ELSE payload_json END AS payload_json FROM items ORDER BY rowid DESC"
     : `SELECT payload_json FROM ${entity} WHERE ${['requests', 'indents', 'purchase_orders'].includes(entity) ? 'deleted = 0' : 'active = 1'} ORDER BY rowid DESC`);
   const selected=JSON.stringify(options.recordIds || []),placeholders='SELECT value FROM json_each(?)';
   const operationalRecords=db.prepare(`SELECT kind,payload_json FROM operation_records WHERE kind NOT IN ('delivery','notification') OR
@@ -99,7 +101,7 @@ export async function persistChanges(db, state, next, touched, actor, operationI
         if (old) writes.push(query(db, 'DELETE FROM sessions WHERE user_id = ?', key));
       } else if (entity === 'items') {
         const vendor = next.vendors.find(v => v.name === data.vendor);
-        writes.push(query(db, 'INSERT INTO items (id, name, category, vendor_id, unit, payload_json) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, category = excluded.category, vendor_id = excluded.vendor_id, unit = excluded.unit, payload_json = excluded.payload_json, version = items.version + 1', key, data.name, data.category, vendor.id, data.unit, JSON.stringify(data)));
+        writes.push(query(db, 'INSERT INTO items (id, name, category, vendor_id, unit, active, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, category = excluded.category, vendor_id = excluded.vendor_id, unit = excluded.unit, active = excluded.active, payload_json = excluded.payload_json, version = items.version + 1', key, data.name, data.category, vendor.id, data.unit, data.active === false ? 0 : 1, JSON.stringify(data)));
       } else if (entity === 'indents') {
         writes.push(query(db, 'INSERT INTO indents (id, indent_number, outlet_id, supervisor_id, status, payload_json) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET status = excluded.status, payload_json = excluded.payload_json, version = indents.version + 1, updated_at = strftime(\'%Y-%m-%dT%H:%M:%fZ\', \'now\')', key, data.indentNumber, data.outletId, data.ownerId || old?.ownerId || actor.id, data.status, JSON.stringify(data)));
         writes.push(query(db, 'DELETE FROM indent_items WHERE indent_id = ?', key));
