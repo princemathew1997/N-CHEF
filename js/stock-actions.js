@@ -144,6 +144,7 @@
             const isReceipt = page === 'receipt';
             const canBulk = isReceipt && ['admin','purchaser'].includes(currentUser.role);
             let renderBatchTable;
+            let isBatchSubmissionInFlight = false;
             
             content.innerHTML=`
             ${isReceipt && ['admin','purchaser'].includes(currentUser.role)?`
@@ -247,7 +248,6 @@
                     if (!bulkReceiptMode && csvArea) csvArea.classList.add('hidden');
                 };
 
-                let isBatchSubmissionInFlight = false;
                 const setBatchBusy = (busy) => {
                     isBatchSubmissionInFlight = !!busy;
                     const clearBtn = content.querySelector('#bulkBatchClearBtn');
