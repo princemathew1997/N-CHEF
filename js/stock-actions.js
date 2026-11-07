@@ -145,10 +145,11 @@
             const canBulk = isReceipt && ['admin','purchaser'].includes(currentUser.role);
             
             content.innerHTML=`
+            ${isReceipt && ['admin','purchaser'].includes(currentUser.role)?'<div style="margin-bottom:16px;"><button type="button" class="btn btn-outline" data-receive-po>Receive stock from Vendor Order</button></div>':''}
             ${canBulk ? `
             <div style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
                 <div style="display: flex; gap: 10px; align-items: center;">
-                    <button type="button" class="btn btn-outline" id="btnToggleCsvUpload" style="display: inline-flex; align-items: center; gap: 6px; border-color: rgba(255, 190, 11, 0.4);">
+                    <button type="button" class="btn btn-outline ${bulkReceiptMode ? '' : 'hidden'}" id="btnToggleCsvUpload" style="display: inline-flex; align-items: center; gap: 6px; border-color: rgba(255, 190, 11, 0.4);">
                         <i data-lucide="file-up" style="width: 15px; height: 15px;"></i> Upload CSV Spreadsheet
                     </button>
                 </div>
@@ -237,6 +238,10 @@
                     batchSection.classList.toggle('hidden', !bulkReceiptMode);
                     const dateField = content.querySelector('#bulkReceiptDateField');
                     if (dateField) dateField.classList.toggle('hidden', !bulkReceiptMode);
+                    const csvBtn = content.querySelector('#btnToggleCsvUpload');
+                    if (csvBtn) csvBtn.classList.toggle('hidden', !bulkReceiptMode);
+                    const csvArea = content.querySelector('#bulkCsvUploadArea');
+                    if (!bulkReceiptMode && csvArea) csvArea.classList.add('hidden');
                 };
 
                 const renderBatchTable = () => {
