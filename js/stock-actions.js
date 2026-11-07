@@ -174,7 +174,9 @@
             </div>
             ` : ''}
             <form id="outletStockForm" class="inventory-form">
-            ${field('Outlet',outletSelect())}${field('Item','<div id="stockItemPicker"></div>')}
+            ${field('Outlet',outletSelect())}
+            ${page==='receipt'?field('Receipt Date (IST)',`<input name="receiptDate" type="date" value="${InventoryTools.day()}" max="${InventoryTools.day()}" required>`):''}
+            ${field('Item','<div id="stockItemPicker"></div>')}
             <p id="availableStock"></p>
             ${page==='receipt'?field('Vendor',select('vendor',options(vendorsData,v=>v.name,v=>v.name)))+field('<span id="receiptPriceLabel">Unit price (INR)</span>','<input name="unitPrice" type="number" min="0" step="0.01" required>')+'<p id="receiptTotal">Total: ₹0.00</p>':''}
             ${page==='assign'?'<p>Vendor: <strong>Legacy Stock</strong>. Quantity is added directly to this outlet’s available stock.</p>'+field('Unit price (optional, INR)','<input name="unitPrice" type="number" min="0" step="0.01">'):''}
@@ -256,9 +258,10 @@
                         tableContainer.innerHTML = '<p style="color: var(--text-muted); font-size: 0.9rem; margin: 10px 0;">No items in batch yet. Fill in the form above and click "+ Add to Batch List".</p>';
                     } else {
                         tableContainer.innerHTML = table(
-                            ['#', 'Outlet', 'Item', 'Vendor', 'Unit', 'Quantity', 'Unit Price', 'Total Cost', 'Note', 'Action'],
+                            ['#', 'Date', 'Outlet', 'Item', 'Vendor', 'Unit', 'Quantity', 'Unit Price', 'Total Cost', 'Note', 'Action'],
                             bulkReceiptItems.map((r, idx) => [
                                 idx + 1,
+                                esc(r.date || '—'),
                                 esc(r.outletName),
                                 esc(r.itemName),
                                 esc(r.vendor || 'Direct Delivery'),
@@ -449,14 +452,15 @@
                     const outletName = selectedOutlet?.name || data.outletId;
 
                     // Check duplicate in same batch list
-                    const existingIndex = bulkReceiptItems.findIndex(r => r.itemId === selectedItem.id && r.outletId === data.outletId);
+                    const existingIndex = bulkReceiptItems.findIndex(r => r.itemId === selectedItem.id && r.outletId === data.outletId && r.date === (data.receiptDate || InventoryTools.day()));
                     if (existingIndex >= 0) {
-                        if (!confirm(`"${selectedItem.name}" is already in this batch list. Add additional quantity to it?`)) return;
+                        if (!confirm(`"${selectedItem.name}" for ${outletName} on this date is already in the batch list. Add additional quantity to it?`)) return;
                         bulkReceiptItems[existingIndex].quantity += data.quantity;
                         bulkReceiptItems[existingIndex].unitPrice = data.unitPrice;
                         if (data.reason) bulkReceiptItems[existingIndex].note = data.reason;
                     } else {
                         bulkReceiptItems.push({
+                            date: data.receiptDate || InventoryTools.day(),
                             outletId: data.outletId,
                             outletName,
                             itemId: selectedItem.id,
@@ -491,9 +495,10 @@
                         if (receiveBtn) receiveBtn.disabled = false;
 
                         batchTableContainer.innerHTML = table(
-                            ['#', 'Outlet', 'Item', 'Vendor', 'Unit', 'Quantity', 'Unit Price', 'Total Cost', 'Note', 'Action'],
+                            ['#', 'Date', 'Outlet', 'Item', 'Vendor', 'Unit', 'Quantity', 'Unit Price', 'Total Cost', 'Note', 'Action'],
                             bulkReceiptItems.map((r, idx) => [
                                 idx + 1,
+                                esc(r.date || '—'),
                                 esc(r.outletName),
                                 esc(r.itemName),
                                 esc(r.vendor || 'Direct Delivery'),
