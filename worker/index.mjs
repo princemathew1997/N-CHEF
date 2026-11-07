@@ -256,8 +256,12 @@ export default {
         if(previous)return send({error:'This stock sheet has already been received. No duplicate stock has been added.',errors:[{row:1,column:'File',message:'These item, outlet, quantity and price entries were already received. Check Stock History before submitting again.'}],unrecognizedItems:[]},422);
         
         // Also check if there is an active pending bulk receipt request with this exact fingerprint
-        const pendingRequest = (state.operationRecords || []).find(r => r.kind === 'notification' && r.eventType === 'bulk_receipt_request' && r.status === 'Pending' && r.fingerprint === fingerprint);
-        if (pendingRequest) return send({ error: 'This stock sheet is already awaiting Admin approval.', errors: [{ row: 1, column: 'File', message: `This bulk sheet has already been submitted for Admin approval (Batch ID: ${pendingRequest.batchId}).` }], unrecognizedItems: [] }, 422);
+        // Query database directly to ensure paged API mode / partial state reads cannot bypass pending duplicate protection
+        const pendingDb = await env.DB.prepare("SELECT id, payload_json FROM operation_records WHERE kind='notification' AND json_extract(payload_json,'$.eventType')='bulk_receipt_request' AND json_extract(payload_json,'$.status')='Pending' AND json_extract(payload_json,'$.fingerprint')=?").bind(fingerprint).first();
+        if (pendingDb) {
+          const parsed = JSON.parse(pendingDb.payload_json);
+          return send({ error: 'This stock sheet is already awaiting Admin approval.', errors: [{ row: 1, column: 'File', message: `This bulk sheet has already been submitted for Admin approval (Batch ID: ${parsed.batchId || ''}).` }], unrecognizedItems: [] }, 422);
+        }
 
         if(path.endsWith('/validate'))return send({...validation,revision:state.revision});
         if(input.revision!==state.revision)fail('Data changed since validation. Validate the complete sheet again before receiving.',409);

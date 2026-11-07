@@ -247,19 +247,23 @@
                     if (!bulkReceiptMode && csvArea) csvArea.classList.add('hidden');
                 };
 
+                let isBatchSubmissionInFlight = false;
                 const setBatchBusy = (busy) => {
+                    isBatchSubmissionInFlight = !!busy;
                     const clearBtn = content.querySelector('#bulkBatchClearBtn');
                     const sendApprovalBtn = content.querySelector('#bulkBatchSendApprovalBtn');
                     const receiveBtn = content.querySelector('#bulkBatchReceiveBtn');
                     const submitBtn = content.querySelector('#stockSubmitBtn');
                     const btnToggleCSV = content.querySelector('#btnToggleCsvUpload');
                     const modeToggle = content.querySelector('#bulkReceiptModeToggle');
+                    const uploadFileBtn = content.querySelector('#bulkReceiptSubmit');
                     if (clearBtn) clearBtn.disabled = busy || bulkReceiptItems.length === 0;
                     if (sendApprovalBtn) sendApprovalBtn.disabled = busy || bulkReceiptItems.length === 0;
                     if (receiveBtn) receiveBtn.disabled = busy || bulkReceiptItems.length === 0;
                     if (submitBtn) submitBtn.disabled = busy;
                     if (btnToggleCSV) btnToggleCSV.disabled = busy;
                     if (modeToggle) modeToggle.disabled = busy;
+                    if (uploadFileBtn) uploadFileBtn.disabled = busy;
                 };
 
                 renderBatchTable = () => {
@@ -301,6 +305,7 @@
 
                         tableContainer.querySelectorAll('[data-remove-batch-index]').forEach(btn => {
                             btn.onclick = () => {
+                                if (isBatchSubmissionInFlight) return;
                                 const idxToRemove = Number(btn.dataset.removeBatchIndex);
                                 bulkReceiptItems.splice(idxToRemove, 1);
                                 renderBatchTable();
@@ -325,6 +330,10 @@
                         if (isOpening && csvContent && !csvContent.dataset.rendered) {
                             csvContent.dataset.rendered = 'true';
                             window.renderBulkReceiptCSVUpload?.(csvContent, (newRows) => {
+                                if (isBatchSubmissionInFlight) {
+                                    window.showUiModal?.({ title: 'Submission in progress', message: 'A batch submission is currently in flight. Please wait until it completes before uploading additional rows.', type: 'warning' });
+                                    return;
+                                }
                                 for (const row of newRows) {
                                     // Match delivery by item, outlet, date AND unit price to preserve distinct deliveries
                                     const exIdx = bulkReceiptItems.findIndex(r => 
@@ -477,6 +486,10 @@
 
                 // Bulk receipt mode handling
                 if (isReceipt && bulkReceiptMode) {
+                    if (isBatchSubmissionInFlight) {
+                        window.showUiModal?.({ title: 'Submission in progress', message: 'A batch submission is currently in flight. Please wait until it completes before adding more items.', type: 'warning' });
+                        return;
+                    }
                     const selectedItem = masterItemsData.find(i => i.id === data.itemId);
                     if (!selectedItem) {
                         window.showUiModal?.({ title: 'Select Item', message: 'Please select an item from the catalog.', type: 'warning' });
