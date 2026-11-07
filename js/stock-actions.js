@@ -5,6 +5,8 @@
     titles.prices='Price History';
     titles['stock-prices']='Edit Stock Prices';
     const adminPages = ['cuisines'];
+    let bulkReceiptMode = false;
+    let bulkReceiptItems = [];
     const canOpenCatalog = () => ['admin','purchaser'].includes(currentUser?.role);
     const allowedOutlets = () => OutletSelection.allowed();
     const options = (rows, value, label) => rows.map(r => `<option value="${esc(value(r))}">${esc(label(r))}</option>`).join('');
@@ -139,7 +141,28 @@
         }
         if(['receipt','distribute','adjust','assign'].includes(page)) {
             const items=page==='adjust'?masterItemsData:activeItems();
-            content.innerHTML=`${page==='receipt' && ['admin','purchaser'].includes(currentUser.role)?'<div style="margin-bottom:16px;"><button type="button" class="btn btn-outline" data-receive-po>Receive stock from Vendor Order</button></div>':''}<form id="outletStockForm" class="inventory-form">
+            const isReceipt = page === 'receipt';
+            const canBulk = isReceipt && ['admin','purchaser'].includes(currentUser.role);
+            
+            content.innerHTML=`
+            ${isReceipt && ['admin','purchaser'].includes(currentUser.role)?'<div style="margin-bottom:16px;"><button type="button" class="btn btn-outline" data-receive-po>Receive stock from Vendor Order</button></div>':''}
+            ${canBulk ? `
+            <div style="margin-bottom: 20px; padding: 14px 18px; border: 1px solid var(--border-gold, #FFBE0B); border-radius: 10px; background: rgba(255, 190, 11, 0.05); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                <div>
+                    <strong style="color: var(--primary, #FFBE0B); font-size: 1rem;">Bulk Stock Mode</strong>
+                    <p style="margin: 2px 0 0 0; color: var(--text-muted); font-size: 0.85rem;">Toggle ON to add multiple items to a batch list below before sending for approval or receiving.</p>
+                </div>
+                <label class="threshold-toggle" style="margin: 0; cursor: pointer;">
+                    <span style="font-size: 0.88rem; font-weight: 600; color: #fff;">Bulk Receipt Mode</span>
+                    <span class="threshold-switch">
+                        <input type="checkbox" role="switch" id="bulkReceiptModeToggle" ${bulkReceiptMode ? 'checked' : ''}>
+                        <span class="threshold-track" aria-hidden="true"></span>
+                    </span>
+                    <span id="bulkReceiptModeStatus" style="font-weight: 700; color: var(--primary, #FFBE0B); min-width: 28px;">${bulkReceiptMode ? 'On' : 'Off'}</span>
+                </label>
+            </div>
+            ` : ''}
+            <form id="outletStockForm" class="inventory-form">
             ${field('Outlet',outletSelect())}${field('Item','<div id="stockItemPicker"></div>')}
             <p id="availableStock"></p>
             ${page==='receipt'?field('Vendor',select('vendor',options(vendorsData,v=>v.name,v=>v.name)))+field('<span id="receiptPriceLabel">Unit price (INR)</span>','<input name="unitPrice" type="number" min="0" step="0.01" required>')+'<p id="receiptTotal">Total: ₹0.00</p>':''}
@@ -147,8 +170,195 @@
             ${page==='distribute'?field('Cuisine',select('cuisine',options(cuisinesData,c=>c.name,c=>c.name)))+'<input type="hidden" name="requestId"><label id="requestChoiceLabel" class="hidden">Approved cuisine request<select name="requestChoice"></select></label><p id="distributionRequestHint"></p><a href="#" data-operations="deliveries">View cuisine deliveries and receipt issues</a>':''}
             ${field(page==='adjust'?'Actual on-hand quantity':'Quantity',`<span class="quantity-entry"><input name="quantity" type="number" step="any" min="${page==='adjust'?'0':'0.00000001'}" required><span class="stock-unit" aria-label="Unit"></span></span>`)}
             ${field(page==='adjust'?'Reason (required)':'Note',`<input name="reason" maxlength="500" ${page==='adjust'?'required':''}>`)}
-            <button class="btn btn-primary">${titles[page]}</button></form><div id="legacyDetails"></div>`;
+            <button class="btn btn-primary" id="stockSubmitBtn">${isReceipt && bulkReceiptMode ? '+ Add to Batch List' : titles[page]}</button></form>
+            
+            ${isReceipt ? `
+            <div id="bulkBatchSection" class="${bulkReceiptMode ? '' : 'hidden'}" style="margin: 28px 0 20px 0; padding: 20px; border: 1.5px solid var(--primary, #FFBE0B); border-radius: 12px; background: #141416; box-shadow: 0 4px 18px rgba(0,0,0,0.35);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <h3 style="margin: 0; color: var(--primary, #FFBE0B); font-size: 1.15rem; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="layers" style="width: 18px; height: 18px;"></i> Current Bulk Stock Items List
+                        </h3>
+                        <p style="margin: 4px 0 0 0; color: var(--text-muted); font-size: 0.85rem;">Items added using the form above will accumulate here. Review and submit the entire batch.</p>
+                    </div>
+                    <div style="font-size: 0.95rem;">
+                        <span style="color: var(--text-muted);">Total Items:</span> <strong id="bulkBatchCount" style="color: #fff;">${bulkReceiptItems.length}</strong> · 
+                        <span style="color: var(--text-muted);">Total Batch Value:</span> <strong id="bulkBatchTotalValue" style="color: var(--primary, #FFBE0B);">₹0.00</strong>
+                    </div>
+                </div>
+                <div id="bulkBatchTableContainer"></div>
+                <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 12px; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-outline" id="bulkBatchClearBtn" ${bulkReceiptItems.length ? '' : 'disabled'}>Clear List</button>
+                    ${currentUser.role === 'admin' ? `
+                    <button type="button" class="btn btn-primary" id="bulkBatchReceiveBtn" ${bulkReceiptItems.length ? '' : 'disabled'}>
+                        <i data-lucide="check-circle" style="width: 15px; height: 15px; vertical-align: middle; margin-right: 4px;"></i>Receive All Items into Stock
+                    </button>
+                    ` : `
+                    <button type="button" class="btn btn-primary" id="bulkBatchSendApprovalBtn" ${bulkReceiptItems.length ? '' : 'disabled'}>
+                        <i data-lucide="send" style="width: 15px; height: 15px; vertical-align: middle; margin-right: 4px;"></i>Send Batch for Admin Approval
+                    </button>
+                    `}
+                </div>
+            </div>
+
+            <!-- Approval Requests & Submission History for Bulk Stock -->
+            <div id="bulkReceiptApprovalAndHistoryContainer"></div>
+            ` : ''}
+            
+            <div id="legacyDetails"></div>`;
+
             const form=content.querySelector('form');
+            const itemPicker = createItemPicker(content.querySelector('#stockItemPicker'),items,{onChange:()=>update()});
+
+            // Bulk Mode toggle handling
+            if (canBulk) {
+                const modeToggle = content.querySelector('#bulkReceiptModeToggle');
+                const modeStatus = content.querySelector('#bulkReceiptModeStatus');
+                const submitBtn = content.querySelector('#stockSubmitBtn');
+                const batchSection = content.querySelector('#bulkBatchSection');
+
+                modeToggle.onchange = () => {
+                    bulkReceiptMode = modeToggle.checked;
+                    modeStatus.textContent = bulkReceiptMode ? 'On' : 'Off';
+                    submitBtn.textContent = bulkReceiptMode ? '+ Add to Batch List' : titles.receipt;
+                    batchSection.classList.toggle('hidden', !bulkReceiptMode);
+                };
+
+                const renderBatchTable = () => {
+                    const tableContainer = content.querySelector('#bulkBatchTableContainer');
+                    const countEl = content.querySelector('#bulkBatchCount');
+                    const totalEl = content.querySelector('#bulkBatchTotalValue');
+                    const clearBtn = content.querySelector('#bulkBatchClearBtn');
+                    const sendApprovalBtn = content.querySelector('#bulkBatchSendApprovalBtn');
+                    const receiveBtn = content.querySelector('#bulkBatchReceiveBtn');
+
+                    if (!tableContainer) return;
+                    countEl.textContent = bulkReceiptItems.length;
+                    const totalCost = bulkReceiptItems.reduce((acc, row) => acc + (row.quantity * row.unitPrice), 0);
+                    totalEl.textContent = price(Math.round(totalCost * 100));
+
+                    if (clearBtn) clearBtn.disabled = bulkReceiptItems.length === 0;
+                    if (sendApprovalBtn) sendApprovalBtn.disabled = bulkReceiptItems.length === 0;
+                    if (receiveBtn) receiveBtn.disabled = bulkReceiptItems.length === 0;
+
+                    if (!bulkReceiptItems.length) {
+                        tableContainer.innerHTML = '<p style="color: var(--text-muted); font-size: 0.9rem; margin: 10px 0;">No items in batch yet. Fill in the form above and click "+ Add to Batch List".</p>';
+                    } else {
+                        tableContainer.innerHTML = table(
+                            ['#', 'Outlet', 'Item', 'Vendor', 'Unit', 'Quantity', 'Unit Price', 'Total Cost', 'Note', 'Action'],
+                            bulkReceiptItems.map((r, idx) => [
+                                idx + 1,
+                                esc(r.outletName),
+                                esc(r.itemName),
+                                esc(r.vendor || 'Direct Delivery'),
+                                esc(r.unit),
+                                numberText(r.quantity),
+                                price(Math.round(r.unitPrice * 100)),
+                                price(Math.round(r.quantity * r.unitPrice * 100)),
+                                esc(r.note || '—'),
+                                `<button type="button" class="btn btn-outline" data-remove-batch-index="${idx}" style="color: #f87171; border-color: rgba(248, 113, 113, 0.4); padding: 4px 10px; font-size: 0.8rem;">Remove</button>`
+                            ])
+                        );
+
+                        tableContainer.querySelectorAll('[data-remove-batch-index]').forEach(btn => {
+                            btn.onclick = () => {
+                                const idxToRemove = Number(btn.dataset.removeBatchIndex);
+                                bulkReceiptItems.splice(idxToRemove, 1);
+                                renderBatchTable();
+                            };
+                        });
+                    }
+                    if (window.lucide) window.lucide.createIcons();
+                };
+
+                renderBatchTable();
+
+                const clearBtn = content.querySelector('#bulkBatchClearBtn');
+                if (clearBtn) {
+                    clearBtn.onclick = () => {
+                        if (!bulkReceiptItems.length) return;
+                        if (confirm('Clear all items from the current batch list?')) {
+                            bulkReceiptItems = [];
+                            renderBatchTable();
+                        }
+                    };
+                }
+
+                // Send for Admin Approval (Purchaser)
+                const sendApprovalBtn = content.querySelector('#bulkBatchSendApprovalBtn');
+                if (sendApprovalBtn) {
+                    sendApprovalBtn.onclick = async () => {
+                        if (!bulkReceiptItems.length) return;
+                        if (databaseWritePending || pendingChanges().length) {
+                            window.showUiModal?.({ title: 'Pending changes', message: 'Finish your other pending changes before submitting.', type: 'warning' });
+                            return;
+                        }
+                        sendApprovalBtn.disabled = true;
+                        try {
+                            const csvString = window.buildBulkReceiptCSV ? window.buildBulkReceiptCSV(bulkReceiptItems) : '';
+                            const valResult = await apiRequest('stock/bulk-receipt/validate', 'POST', { csv: csvString });
+                            const state = await apiRequest('stock/bulk-receipt/request', 'POST', {
+                                csv: csvString,
+                                revision: valResult.revision,
+                                operationId: crypto.randomUUID()
+                            });
+                            applyServerState(state);
+                            window.onLiveSyncReceived?.();
+                            const submittedCount = bulkReceiptItems.length;
+                            bulkReceiptItems = [];
+                            renderBatchTable();
+                            window.renderBulkReceiptApprovalAndHistory?.(content.querySelector('#bulkReceiptApprovalAndHistoryContainer'));
+                            window.showUiModal?.({
+                                title: 'Batch Sent for Approval',
+                                message: `Successfully submitted ${submittedCount} item(s) to Admin for approval. Stock will be received once approved.`,
+                                type: 'success'
+                            });
+                        } catch (err) {
+                            window.showUiModal?.({ title: 'Submission failed', message: err.message, type: 'warning' });
+                        } finally {
+                            sendApprovalBtn.disabled = false;
+                        }
+                    };
+                }
+
+                // Direct Receive All (Admin)
+                const receiveBtn = content.querySelector('#bulkBatchReceiveBtn');
+                if (receiveBtn) {
+                    receiveBtn.onclick = async () => {
+                        if (!bulkReceiptItems.length) return;
+                        if (databaseWritePending || pendingChanges().length) {
+                            window.showUiModal?.({ title: 'Pending changes', message: 'Finish your other pending changes before receiving.', type: 'warning' });
+                            return;
+                        }
+                        if (!confirm(`Receive all ${bulkReceiptItems.length} items directly into stock?`)) return;
+                        receiveBtn.disabled = true;
+                        try {
+                            const csvString = window.buildBulkReceiptCSV ? window.buildBulkReceiptCSV(bulkReceiptItems) : '';
+                            const valResult = await apiRequest('stock/bulk-receipt/validate', 'POST', { csv: csvString });
+                            const state = await apiRequest('stock/bulk-receipt', 'POST', {
+                                csv: csvString,
+                                revision: valResult.revision,
+                                operationId: crypto.randomUUID()
+                            });
+                            applyServerState(state);
+                            window.onLiveSyncReceived?.();
+                            const receivedCount = bulkReceiptItems.length;
+                            bulkReceiptItems = [];
+                            renderBatchTable();
+                            window.renderBulkReceiptApprovalAndHistory?.(content.querySelector('#bulkReceiptApprovalAndHistoryContainer'));
+                            window.showToast?.(`Received ${receivedCount} bulk stock items successfully!`, 'success');
+                        } catch (err) {
+                            window.showUiModal?.({ title: 'Receipt failed', message: err.message, type: 'warning' });
+                        } finally {
+                            receiveBtn.disabled = false;
+                        }
+                    };
+                }
+
+                // Render approvals & history
+                window.renderBulkReceiptApprovalAndHistory?.(content.querySelector('#bulkReceiptApprovalAndHistoryContainer'));
+            }
+
             const update=()=>{
                 const item=masterItemsData.find(i=>i.id===form.elements.itemId.value),unit=item?.unit || '';
                 content.querySelector('.stock-unit').textContent=unit || 'Unit';
@@ -170,8 +380,111 @@
                     form.elements.quantity.setCustomValidity(matches.length && !open.length?'Approved requests have already been fully issued.':'');
                 }
             };
-            form.oninput=update;form.onchange=()=>{OutletSelection.choose(form.elements.outletId.value);update();};createItemPicker(content.querySelector('#stockItemPicker'),items,{onChange:update});update();
-            form.onsubmit=e=>{e.preventDefault();const data=Object.fromEntries(new FormData(form));delete data.requestChoice;data.quantity=Number(data.quantity);if(data.unitPrice!==undefined)data.unitPrice=Number(data.unitPrice);if(page==='assign' && form.elements.unitPrice.value==='')delete data.unitPrice;submit(form,()=>runDatabaseAction('stock/'+(page==='assign'?'opening':page),data));};
+            form.oninput=update;
+            form.onchange=()=>{OutletSelection.choose(form.elements.outletId.value);update();};
+            update();
+
+            form.onsubmit=e=>{
+                e.preventDefault();
+                const data=Object.fromEntries(new FormData(form));
+                delete data.requestChoice;
+                data.quantity=Number(data.quantity);
+                if(data.unitPrice!==undefined)data.unitPrice=Number(data.unitPrice);
+                if(page==='assign' && form.elements.unitPrice.value==='')delete data.unitPrice;
+
+                // Bulk receipt mode handling
+                if (isReceipt && bulkReceiptMode) {
+                    const selectedItem = masterItemsData.find(i => i.id === data.itemId);
+                    if (!selectedItem) {
+                        window.showUiModal?.({ title: 'Select Item', message: 'Please select an item from the catalog.', type: 'warning' });
+                        return;
+                    }
+                    const selectedOutlet = outletsData.find(o => o.id === data.outletId);
+                    const outletName = selectedOutlet?.name || data.outletId;
+
+                    // Check duplicate in same batch list
+                    const existingIndex = bulkReceiptItems.findIndex(r => r.itemId === selectedItem.id && r.outletId === data.outletId);
+                    if (existingIndex >= 0) {
+                        if (!confirm(`"${selectedItem.name}" is already in this batch list. Add additional quantity to it?`)) return;
+                        bulkReceiptItems[existingIndex].quantity += data.quantity;
+                        bulkReceiptItems[existingIndex].unitPrice = data.unitPrice;
+                        if (data.reason) bulkReceiptItems[existingIndex].note = data.reason;
+                    } else {
+                        bulkReceiptItems.push({
+                            outletId: data.outletId,
+                            outletName,
+                            itemId: selectedItem.id,
+                            itemName: selectedItem.name,
+                            unit: selectedItem.unit,
+                            vendor: data.vendor,
+                            quantity: data.quantity,
+                            unitPrice: data.unitPrice,
+                            note: data.reason || ''
+                        });
+                    }
+
+                    // Reset item, quantity and note input for next item entry
+                    form.elements.quantity.value = '';
+                    form.elements.reason.value = '';
+                    if (itemPicker && itemPicker.clear) itemPicker.clear();
+                    update();
+                    const batchTableContainer = content.querySelector('#bulkBatchTableContainer');
+                    if (batchTableContainer) {
+                        const countEl = content.querySelector('#bulkBatchCount');
+                        const totalEl = content.querySelector('#bulkBatchTotalValue');
+                        const clearBtn = content.querySelector('#bulkBatchClearBtn');
+                        const sendApprovalBtn = content.querySelector('#bulkBatchSendApprovalBtn');
+                        const receiveBtn = content.querySelector('#bulkBatchReceiveBtn');
+
+                        countEl.textContent = bulkReceiptItems.length;
+                        const totalCost = bulkReceiptItems.reduce((acc, row) => acc + (row.quantity * row.unitPrice), 0);
+                        totalEl.textContent = price(Math.round(totalCost * 100));
+
+                        if (clearBtn) clearBtn.disabled = false;
+                        if (sendApprovalBtn) sendApprovalBtn.disabled = false;
+                        if (receiveBtn) receiveBtn.disabled = false;
+
+                        batchTableContainer.innerHTML = table(
+                            ['#', 'Outlet', 'Item', 'Vendor', 'Unit', 'Quantity', 'Unit Price', 'Total Cost', 'Note', 'Action'],
+                            bulkReceiptItems.map((r, idx) => [
+                                idx + 1,
+                                esc(r.outletName),
+                                esc(r.itemName),
+                                esc(r.vendor || 'Direct Delivery'),
+                                esc(r.unit),
+                                numberText(r.quantity),
+                                price(Math.round(r.unitPrice * 100)),
+                                price(Math.round(r.quantity * r.unitPrice * 100)),
+                                esc(r.note || '—'),
+                                `<button type="button" class="btn btn-outline" data-remove-batch-index="${idx}" style="color: #f87171; border-color: rgba(248, 113, 113, 0.4); padding: 4px 10px; font-size: 0.8rem;">Remove</button>`
+                            ])
+                        );
+
+                        batchTableContainer.querySelectorAll('[data-remove-batch-index]').forEach(btn => {
+                            btn.onclick = () => {
+                                const idxToRemove = Number(btn.dataset.removeBatchIndex);
+                                bulkReceiptItems.splice(idxToRemove, 1);
+                                const countEl2 = content.querySelector('#bulkBatchCount');
+                                const totalEl2 = content.querySelector('#bulkBatchTotalValue');
+                                countEl2.textContent = bulkReceiptItems.length;
+                                const tot = bulkReceiptItems.reduce((acc, row) => acc + (row.quantity * row.unitPrice), 0);
+                                totalEl2.textContent = price(Math.round(tot * 100));
+                                if (bulkReceiptItems.length === 0) {
+                                    batchTableContainer.innerHTML = '<p style="color: var(--text-muted); font-size: 0.9rem; margin: 10px 0;">No items in batch yet. Fill in the form above and click "+ Add to Batch List".</p>';
+                                    if (clearBtn) clearBtn.disabled = true;
+                                    if (sendApprovalBtn) sendApprovalBtn.disabled = true;
+                                    if (receiveBtn) receiveBtn.disabled = true;
+                                }
+                            };
+                        });
+                    }
+                    window.showToast?.(`Added "${selectedItem.name}" to batch list`, 'info');
+                    return;
+                }
+
+                // Normal single stock submit
+                submit(form,()=>runDatabaseAction('stock/'+(page==='assign'?'opening':page),data));
+            };
         }
         if(page==='bulk-receipt') {
             window.renderBulkReceipt?.(content);
