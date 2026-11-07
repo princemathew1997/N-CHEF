@@ -175,7 +175,7 @@
             ` : ''}
             <form id="outletStockForm" class="inventory-form">
             ${field('Outlet',outletSelect())}
-            ${page==='receipt'?field('Receipt Date (IST)',`<input name="receiptDate" type="date" value="${InventoryTools.day()}" max="${InventoryTools.day()}" required>`):''}
+            ${canBulk?`<div id="bulkReceiptDateField" class="${bulkReceiptMode?'':'hidden'}">${field('Receipt Date (IST)',`<input name="receiptDate" type="date" value="${InventoryTools.day()}" max="${InventoryTools.day()}">`)}</div>`:''}
             ${field('Item','<div id="stockItemPicker"></div>')}
             <p id="availableStock"></p>
             ${page==='receipt'?field('Vendor',select('vendor',options(vendorsData,v=>v.name,v=>v.name)))+field('<span id="receiptPriceLabel">Unit price (INR)</span>','<input name="unitPrice" type="number" min="0" step="0.01" required>')+'<p id="receiptTotal">Total: ₹0.00</p>':''}
@@ -235,6 +235,8 @@
                     modeStatus.textContent = bulkReceiptMode ? 'On' : 'Off';
                     submitBtn.textContent = bulkReceiptMode ? '+ Add to Batch List' : titles.receipt;
                     batchSection.classList.toggle('hidden', !bulkReceiptMode);
+                    const dateField = content.querySelector('#bulkReceiptDateField');
+                    if (dateField) dateField.classList.toggle('hidden', !bulkReceiptMode);
                 };
 
                 const renderBatchTable = () => {
