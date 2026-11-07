@@ -145,14 +145,15 @@
             const canBulk = isReceipt && ['admin','purchaser'].includes(currentUser.role);
             
             content.innerHTML=`
-            ${isReceipt && ['admin','purchaser'].includes(currentUser.role)?'<div style="margin-bottom:16px;"><button type="button" class="btn btn-outline" data-receive-po>Receive stock from Vendor Order</button></div>':''}
+            ${isReceipt && ['admin','purchaser'].includes(currentUser.role)?`
+            <div style="margin-bottom:16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                <button type="button" class="btn btn-outline" data-receive-po>Receive stock from Vendor Order</button>
+                <button type="button" class="btn btn-outline ${bulkReceiptMode ? '' : 'hidden'}" id="btnToggleCsvUpload" style="display: inline-flex; align-items: center; gap: 6px; border-color: rgba(255, 190, 11, 0.4);">
+                    <i data-lucide="file-up" style="width: 15px; height: 15px;"></i> Upload CSV Spreadsheet
+                </button>
+            </div>`:''}
             ${canBulk ? `
-            <div style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
-                <div style="display: flex; gap: 10px; align-items: center;">
-                    <button type="button" class="btn btn-outline ${bulkReceiptMode ? '' : 'hidden'}" id="btnToggleCsvUpload" style="display: inline-flex; align-items: center; gap: 6px; border-color: rgba(255, 190, 11, 0.4);">
-                        <i data-lucide="file-up" style="width: 15px; height: 15px;"></i> Upload CSV Spreadsheet
-                    </button>
-                </div>
+            <div style="margin-bottom: 20px; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px;">
                 <label class="threshold-toggle" style="margin: 0; cursor: pointer;">
                     <span style="font-size: 0.9rem; font-weight: 600; color: #fff;">Bulk Stock Mode</span>
                     <span class="threshold-switch">
