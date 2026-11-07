@@ -40,10 +40,10 @@
         if (allowed().some(o=>o.id===target.value)) choose(target.value);
     });
     let sequence=0;
-    window.createItemPicker = (container,items,{name='itemId',selected='',optional=false,onChange=()=>{},label='Item name',placeholder='',formatOption=item=>`${item.name} (${item.unit})`,liveCatalog=true,showAllOnFocus=false}={}) => {
+    window.createItemPicker = (container,items,{name='itemId',selected='',optional=false,onChange=()=>{},label='Item name',placeholder='',formatOption=item=>`${item.name} (${item.unit})`,liveCatalog=true,showAllOnFocus=false,activeOnly=false}={}) => {
         const catalogPicker=liveCatalog && typeof masterItemsData!=='undefined' && items.length===masterItemsData.filter(i=>i.active!==false).length;
         const id='item-picker-'+(++sequence);
-        const initial=items.find(i=>i.id===selected);
+        const initial=items.find(i=>i.id===selected && (!activeOnly || i.active!==false));
         container.innerHTML=`<div class="item-picker"><input type="hidden" name="${esc(name)}" value="${esc(initial?.id || '')}"><input type="text" role="combobox" aria-label="${esc(label)}" aria-autocomplete="list" aria-expanded="false" aria-controls="${id}" placeholder="${esc(placeholder || (optional?'All items — type to search':'Type an item name to search'))}" autocomplete="off" value="${esc(initial?.name || '')}" ${optional?'':'required'}><div class="item-picker-options hidden" id="${id}" role="listbox" aria-label="${esc(label==='Item name'?'Matching items':label+' options')}"></div></div>`;
         const hidden=container.querySelector('input[type=hidden]'),input=container.querySelector('input[type=text]'),list=container.querySelector('[role=listbox]');
         let matches=[],active=-1;
@@ -51,7 +51,11 @@
         const valid=()=>input.setCustomValidity(hidden.value || (optional && !input.value.trim())?'':`Select ${label==='Item name'?'an item':'an order'} from the search results.`);
         function select(item){hidden.value=item.id;input.value=item.name;valid();close();onChange(item.id);}
         function draw(query=input.value){
-            const catalog=window.liveCatalogReference || (typeof masterItemsData!=='undefined'?masterItemsData:items);const source=!liveCatalog?items:catalogPicker?catalog.filter(i=>i.active!==false):items.map(i=>catalog.find(c=>c.id===i.id)||i);const all=InventoryTools.matchItems(source,query);matches=all.slice(0,50);active=-1;
+            const catalog=window.liveCatalogReference || (typeof masterItemsData!=='undefined'?masterItemsData:items);
+            const source=liveCatalog
+                ? (catalogPicker ? catalog.filter(item=>item.active!==false) : items.map(item=>catalog.find(current=>current.id===item.id) || item))
+                : items;
+            const all=InventoryTools.matchItems(activeOnly ? source.filter(item=>item.active!==false) : source,query);matches=all.slice(0,50);active=-1;
             list.replaceChildren();
             matches.forEach((item,index)=>{const option=document.createElement('button');option.type='button';option.role='option';option.id=id+'-'+index;option.className='item-picker-option';option.textContent=formatOption(item);option.setAttribute('aria-selected',String(item.id===hidden.value));option.onmousedown=e=>e.preventDefault();option.onclick=()=>select(item);list.append(option);});
             const message=document.createElement('small');message.textContent=all.length>50?`${all.length} matches. Type more to narrow the list.`:!all.length?(label==='Item name'?'No matching items.':'No matching orders.'):'';list.append(message);
