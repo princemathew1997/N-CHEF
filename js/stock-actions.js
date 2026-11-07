@@ -143,6 +143,7 @@
             const items=page==='adjust'?masterItemsData:activeItems();
             const isReceipt = page === 'receipt';
             const canBulk = isReceipt && ['admin','purchaser'].includes(currentUser.role);
+            let renderBatchTable;
             
             content.innerHTML=`
             ${isReceipt && ['admin','purchaser'].includes(currentUser.role)?`
@@ -246,7 +247,6 @@
                     if (!bulkReceiptMode && csvArea) csvArea.classList.add('hidden');
                 };
 
-                let renderBatchTable;
                 const setBatchBusy = (busy) => {
                     const clearBtn = content.querySelector('#bulkBatchClearBtn');
                     const sendApprovalBtn = content.querySelector('#bulkBatchSendApprovalBtn');
