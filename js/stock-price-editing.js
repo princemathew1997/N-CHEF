@@ -13,18 +13,37 @@
     function render(content){
         if(!permitted())return;
         if(owner!==currentUser.id){owner=currentUser.id;filters={outlet:OutletSelection.restore(),category:'',search:''};}
-        content.innerHTML=`<p>Set the unit price for items with available stock. Each change updates the remaining stock value and is recorded in Stock History.</p><div class="inventory-filters"><label>Outlet${OutletSelection.markup('priceOutlet',true)}</label><label>Category<select name="priceCategory"><option value="">All categories</option>${[...new Set(masterItemsData.map(i=>i.category))].sort().map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('')}</select></label><label>Item<input type="search" name="priceSearch" placeholder="Search stock items"></label></div><div data-stock-price-editor></div><p data-stock-price-status role="status"></p><div data-stock-price-list></div>`;
+        content.innerHTML=`<p>Set the unit price for outlet stock. Each change updates the remaining stock value and is recorded in Stock History.</p><div class="inventory-filters"><label>Outlet${OutletSelection.markup('priceOutlet',true)}</label><label>Category<select name="priceCategory"><option value="">All categories</option>${[...new Set(masterItemsData.map(i=>i.category))].sort().map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('')}</select></label><label>Item<input type="search" name="priceSearch" placeholder="Search stock items"></label></div><div data-stock-price-editor></div><p data-stock-price-status role="status"></p><div data-stock-price-list></div>`;
         const outlet=content.querySelector('[name=priceOutlet]'),category=content.querySelector('[name=priceCategory]'),search=content.querySelector('[name=priceSearch]');
         if(outlet.tagName==='SELECT')outlet.value=filters.outlet;
         category.value=filters.category;search.value=filters.search;
         const editor=content.querySelector('[data-stock-price-editor]');
         function draw(){
             if(!content.isConnected || !permitted())return;
-            const outlets=OutletSelection.allowed(),items=new Map(masterItemsData.map(i=>[i.id,i]));
-            const stock=(committedState.outletStock || []).filter(b=>b.quantity>0 && outlets.some(o=>o.id===b.outlet_id) && (!outlet.value || b.outlet_id===outlet.value)).map(b=>({...b,item:items.get(b.item_id),outlet:outlets.find(o=>o.id===b.outlet_id)})).filter(b=>b.item && (!category.value || b.item.category===category.value) && b.item.name.toLowerCase().includes(search.value.trim().toLowerCase())).sort((a,b)=>a.item.name.localeCompare(b.item.name) || a.outlet.name.localeCompare(b.outlet.name));
-            content.querySelector('[data-stock-price-status]').textContent=`${stock.length} item(s) with available stock`;
-            content.querySelector('[data-stock-price-list]').innerHTML=`<div class="table-container"><table><thead><tr>${['Outlet','Item','Available','Unit','Current unit price','Stock value','Action'].map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${stock.map((b,index)=>`<tr><td>${esc(b.outlet.name)}</td><td>${esc(b.item.name)}</td><td>${esc(b.quantity.toLocaleString('en-IN',{maximumFractionDigits:6}))}</td><td>${esc(b.item.unit)}</td><td>${money(b.unit_cost_minor)}</td><td>${money(b.unit_cost_minor==null?null:Math.round(b.quantity*b.unit_cost_minor))}</td><td><button type="button" class="btn btn-outline" data-current-price="${index}">Edit price</button></td></tr>`).join('') || '<tr><td colspan="7">No available stock matches these filters.</td></tr>'}</tbody></table></div>`;
-            content.querySelectorAll('[data-current-price]').forEach(button=>button.onclick=()=>edit(stock[Number(button.dataset.currentPrice)]));
+            const outlets=OutletSelection.allowed(),selectedOutlets=outlets.filter(o=>!outlet.value || o.id===outlet.value);
+            const stockMap=new Map((committedState.outletStock || []).map(b=>[`${b.item_id}:${b.outlet_id}`,b]));
+            const rows=[];
+            for(const o of selectedOutlets){
+                for(const item of masterItemsData){
+                    const existing=stockMap.get(`${item.id}:${o.id}`);
+                    const qty=existing?.quantity || 0;
+                    if(item.active===false && qty<=0)continue;
+                    if(category.value && item.category!==category.value)continue;
+                    if(search.value.trim() && !item.name.toLowerCase().includes(search.value.trim().toLowerCase()))continue;
+                    rows.push({
+                        item_id:item.id,
+                        outlet_id:o.id,
+                        quantity:qty,
+                        unit_cost_minor:existing?.unit_cost_minor ?? null,
+                        item,
+                        outlet:o
+                    });
+                }
+            }
+            rows.sort((a,b)=>a.item.name.localeCompare(b.item.name) || a.outlet.name.localeCompare(b.outlet.name));
+            content.querySelector('[data-stock-price-status]').textContent=`${rows.length} item(s) found`;
+            content.querySelector('[data-stock-price-list]').innerHTML=`<div class="table-container"><table><thead><tr>${['Outlet','Item','Available','Unit','Current unit price','Stock value','Action'].map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map((b,index)=>`<tr><td>${esc(b.outlet.name)}</td><td>${esc(b.item.name)}</td><td>${esc(b.quantity.toLocaleString('en-IN',{maximumFractionDigits:6}))}</td><td>${esc(b.item.unit)}</td><td>${money(b.unit_cost_minor)}</td><td>${money(b.unit_cost_minor==null?null:Math.round(b.quantity*b.unit_cost_minor))}</td><td><button type="button" class="btn btn-outline" data-current-price="${index}">Edit price</button></td></tr>`).join('') || '<tr><td colspan="7">No items match these filters.</td></tr>'}</tbody></table></div>`;
+            content.querySelectorAll('[data-current-price]').forEach(button=>button.onclick=()=>edit(rows[Number(button.dataset.currentPrice)]));
         }
         function edit(balance){
             const snapshot={itemId:balance.item_id,outletId:balance.outlet_id,expectedQuantity:balance.quantity,expectedUnitCostMinor:balance.unit_cost_minor ?? null};

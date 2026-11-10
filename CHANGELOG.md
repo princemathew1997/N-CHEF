@@ -4,6 +4,16 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 2.10.0 - 2026-11-10
+
+- Add inline Stock Overview quick editing for Admins and Supervisors (Purchaser):
+  - Directly adjust Available quantity (with audit reason via `stock/adjust`).
+  - Set/update Current Unit Cost (with audit reason via `stock/current-price`).
+  - Update catalog Item Unit (with automatic propagation across master items and outlet views).
+- Allow setting and updating unit prices for 0-quantity stock items in Edit Stock Prices, establishing baseline outlet costs prior to receiving inventory.
+- Permit Supervisors (Purchaser) to update catalog items and correct units on items with prior transaction history.
+- No database migrations required.
+
 ## 2.9.0 - 2026-11-07
 
 - Add Bulk Order / Request Mode toggle to Distribute to Cuisine, allowing Supervisors (purchaser) and Admins to request bulk ingredients across categories and cuisines.
