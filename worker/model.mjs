@@ -100,7 +100,7 @@ export function validateChanges(state, changes, actor, stockAction = false) {
     }
     if (entity === 'items') {
       if (!data) fail('Deactivate catalog items instead of deleting them.');
-      if (actor.role !== 'admin' && !(actor.role === 'purchaser' && !old)) fail('Only admins can edit catalog items. Supervisors may add new items.', 403);
+      if (actor.role !== 'admin' && actor.role !== 'purchaser') fail('Only admins and supervisors can manage catalog items.', 403);
       for (const field of ['bought', 'allocations', 'consumed']) {
         const expected = old?.[field] ?? (field === 'bought' ? 0 : {});
         if (!same(data[field] ?? expected, expected)) fail('Use stock transactions to change quantities.');
@@ -116,7 +116,6 @@ export function validateChanges(state, changes, actor, stockAction = false) {
       if ((!old || old.name.trim().toLowerCase() !== data.name.toLowerCase()) && next.items.some(i => i.id !== key && i.name.trim().toLowerCase() === data.name.toLowerCase())) fail('Item name already exists.', 409);
       if (data.cuisine && !next.cuisines.some(c => c.name === data.cuisine)) fail('Choose an existing cuisine.');
       if (data.active !== undefined && typeof data.active !== 'boolean') fail('Invalid active status.');
-      if (old && old.unit !== data.unit && ((state.stockHistory || []).some(m => m.item_id === key) || old.bought || Object.values(old.allocations || {}).some(Boolean) || (state.legacyStock || []).some(s=>s.item_id===key && (s.quantity || s.issue)))) fail('Unit cannot change after stock transactions.');
     }
     if (!stockAction && data && ['requests','indents','purchase_orders'].includes(entity) && ((!old && ['Approved','Received','Partially Received'].includes(data.status)) || (old && old.status !== data.status && ['Approved','Received','Partially Received'].includes(data.status)))) fail('Use the approval or receiving action.');
     if (data && !old && ['requests','indents','purchase_orders'].includes(entity)) {
@@ -158,7 +157,7 @@ export function validateChanges(state, changes, actor, stockAction = false) {
       } else if (entity === 'users') {
         fail('Only admins can manage accounts.',403);
       } else if (entity === 'items') {
-        fail('Only admins can manage catalog items.',403);
+        if (actor.role !== 'purchaser') fail('Only admins and supervisors can manage catalog items.',403);
       } else fail('Administrator permission required.', 403);
     }
     if(data && old && entity==='requests' && (data.date!==old.date || data.backdateJustification!==old.backdateJustification))fail('Request date and justification cannot change after submission.');

@@ -9,9 +9,12 @@ export function setAvailableStockPrice(state, actor, input) {
   if (!hasOutlet(actor,input.outletId) || !state.outlets.some(o=>o.id===input.outletId)) fail('Outlet access denied.',403);
   const item=state.items.find(i=>i.id===input.itemId);
   if (!item) fail('Item not found.',404);
-  const outletStock=clone(state.outletStock);
-  const balance=outletStock.find(b=>b.item_id===item.id && b.outlet_id===input.outletId);
-  if (!balance || balance.quantity<=0) fail('Price editing requires available stock.',409);
+  const outletStock=clone(state.outletStock || []);
+  let balance=outletStock.find(b=>b.item_id===item.id && b.outlet_id===input.outletId);
+  if (!balance) {
+    balance={item_id:item.id,outlet_id:input.outletId,quantity:0,unit_cost_minor:null};
+    outletStock.push(balance);
+  }
   const previousUnitCostMinor=balance.unit_cost_minor ?? null;
   if (input.expectedQuantity!==balance.quantity || input.expectedUnitCostMinor!==previousUnitCostMinor) fail('Stock or price changed. Reopen the item and try again.',409);
   safeText(input.reason,'Price change reason',500);

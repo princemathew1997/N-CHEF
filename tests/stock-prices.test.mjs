@@ -22,10 +22,11 @@ test('available stock can be priced regardless of its origin or inactive catalog
 test('current stock price edits enforce roles, outlets, availability and stale snapshots',()=>{
  for(const role of ['cuisine_head','executive_chef'])assert.throws(()=>setAvailableStockPrice(state(),{...purchaser,role},input),e=>e.status===403);
  assert.throws(()=>setAvailableStockPrice(state(),purchaser,{...input,outletId:'cafe'}),e=>e.status===403);
- assert.throws(()=>setAvailableStockPrice(state(),admin,{...input,outletId:'cafe',expectedQuantity:0,expectedUnitCostMinor:100}),/available stock/);
  assert.throws(()=>setAvailableStockPrice(state(),admin,{...input,outletId:'missing'}),e=>e.status===403);
  assert.throws(()=>setAvailableStockPrice(state(),admin,{...input,itemId:'missing'}),e=>e.status===404);
  for(const changed of [{expectedQuantity:3},{expectedUnitCostMinor:0}])assert.throws(()=>setAvailableStockPrice(state(),admin,{...input,...changed}),e=>e.status===409);
+ const zeroStockResult = setAvailableStockPrice(state(),admin,{...input,outletId:'cafe',expectedQuantity:0,expectedUnitCostMinor:100,unitPrice:20});
+ assert.equal(zeroStockResult.outletStock.find(b=>b.outlet_id==='cafe').unit_cost_minor,2000);
 });
 
 test('stock prices require a reason and finite two-decimal amounts with supported totals',()=>{

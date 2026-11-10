@@ -30,16 +30,146 @@
     const categories = () => [...new Set(masterItemsData.map(i=>i.category))].sort();
     const categoryOptions = () => '<option value="">All Categories</option>'+options(categories(),c=>c,c=>c);
     function overview(content) {
-        content.innerHTML='<div class="inventory-filters">'+field('Outlet',OutletSelection.markup('overviewOutlet',true))+field('Category',select('category',categoryOptions()))+field('Item','<div id="overviewItemPicker"></div>')+'</div><div id="overviewRows"></div>';
+        const canQuickEdit = ['admin','purchaser'].includes(currentUser?.role);
+        content.innerHTML=`<div class="inventory-filters">${field('Outlet',OutletSelection.markup('overviewOutlet',true))}${field('Category',select('category',categoryOptions()))}${field('Item','<div id="overviewItemPicker"></div>')}</div><div id="overviewQuickEditor"></div><div id="overviewRows"></div>`;
         const category=content.querySelector('[name=category]');category.value=overviewFilters.category;
         const outlet=content.querySelector('[name=overviewOutlet]');
         if(outlet.tagName==='SELECT')outlet.value=overviewFilters.outlet;
         let picker;
+        const quickEditor = content.querySelector('#overviewQuickEditor');
         const draw=()=>{
             overviewFilters.outlet=outlet.value;overviewFilters.category=category.value;
-            const rows=allowedOutlets().filter(o=>!outlet.value || o.id===outlet.value).flatMap(o=>masterItemsData.filter(i=>(i.active!==false || quantity(i.id,o.id)>0) && (!category.value || i.category===category.value) && (!overviewFilters.item || i.id===overviewFilters.item)).map(i=>[esc(o.name),esc(i.name),esc(i.category),numberText(quantity(i.id,o.id)),esc(i.unit),price(cost(i.id,o.id)),price(cost(i.id,o.id)==null?null:Math.round(quantity(i.id,o.id)*cost(i.id,o.id)))]));
-            content.querySelector('#overviewRows').innerHTML=table(['Outlet','Item','Category','Available','Unit','Current unit cost','Remaining value'],rows);
+            const outletList = allowedOutlets().filter(o=>!outlet.value || o.id===outlet.value);
+            const filteredItems = [];
+            for (const o of outletList) {
+                for (const i of masterItemsData) {
+                    if ((i.active!==false || quantity(i.id,o.id)>0) && (!category.value || i.category===category.value) && (!overviewFilters.item || i.id===overviewFilters.item)) {
+                        filteredItems.push({ outlet: o, item: i, qty: quantity(i.id, o.id), unitCost: cost(i.id, o.id) });
+                    }
+                }
+            }
+            const headers = ['Outlet','Item','Category','Available','Unit','Current unit cost','Remaining value', ...(canQuickEdit ? ['Action'] : [])];
+            const rows = filteredItems.map((row, idx) => [
+                esc(row.outlet.name),
+                esc(row.item.name),
+                esc(row.item.category),
+                numberText(row.qty),
+                esc(row.item.unit),
+                price(row.unitCost),
+                price(row.unitCost == null ? null : Math.round(row.qty * row.unitCost)),
+                ...(canQuickEdit ? [`<button type="button" class="btn btn-outline" style="padding: 4px 10px; font-size: 0.82rem;" data-quick-edit="${idx}">Edit</button>`] : [])
+            ]);
+            content.querySelector('#overviewRows').innerHTML=table(headers, rows);
+            if (canQuickEdit) {
+                content.querySelectorAll('[data-quick-edit]').forEach(btn => {
+                    btn.onclick = () => openQuickEdit(filteredItems[Number(btn.dataset.quickEdit)]);
+                });
+            }
         };
+
+        function openQuickEdit(target) {
+            const currentUnitCostVal = target.unitCost != null ? (target.unitCost / 100).toFixed(2) : '';
+            const unitOptions = (committedState.operationRecords || []).filter(r => r.kind === 'unit').map(r => r.name);
+            if (!unitOptions.includes(target.item.unit)) unitOptions.unshift(target.item.unit);
+
+            quickEditor.innerHTML = `
+                <form class="inventory-form" style="margin-bottom: 20px; border: 1.5px solid var(--primary, #FFBE0B); background: #18191c; padding: 18px; border-radius: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <h3 style="margin: 0; color: var(--primary, #FFBE0B); font-size: 1.1rem;">Quick Edit Stock: ${esc(target.item.name)} (${esc(target.outlet.name)})</h3>
+                        <button type="button" class="btn btn-outline" data-quick-cancel style="padding: 2px 8px; font-size: 0.8rem;">✕ Close</button>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+                        <label>Available Quantity
+                            <input name="quickQty" type="number" step="any" min="0" value="${esc(target.qty)}" required>
+                        </label>
+                        <label>Unit
+                            <select name="quickUnit">
+                                ${unitOptions.map(u => `<option value="${esc(u)}" ${u === target.item.unit ? 'selected' : ''}>${esc(u)}</option>`).join('')}
+                            </select>
+                        </label>
+                        <label>Current Unit Cost (INR)
+                            <input name="quickCost" type="number" step="0.01" min="0" max="1000000000" placeholder="e.g. 25.00" value="${esc(currentUnitCostVal)}">
+                        </label>
+                    </div>
+                    <label style="margin-top: 10px; display: block;">Reason / Note (required for audit)
+                        <input name="quickReason" maxlength="500" placeholder="e.g. Physical count update & baseline price verification" required>
+                    </label>
+                    <p data-quick-error role="alert" style="color: #ff6b6b; margin: 8px 0 0 0; font-size: 0.88rem;"></p>
+                    <div style="margin-top: 14px; display: flex; gap: 10px;">
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                        <button type="button" class="btn btn-outline" data-quick-cancel>Cancel</button>
+                    </div>
+                </form>
+            `;
+
+            const form = quickEditor.querySelector('form');
+            form.querySelectorAll('[data-quick-cancel]').forEach(b => b.onclick = () => { quickEditor.innerHTML = ''; });
+
+            form.onsubmit = async (e) => {
+                e.preventDefault();
+                if (!form.reportValidity()) return;
+                const errP = form.querySelector('[data-quick-error]');
+                errP.textContent = '';
+                const buttons = form.querySelectorAll('button');
+                buttons.forEach(b => b.disabled = true);
+
+                try {
+                    const newQty = Number(form.elements.quickQty.value);
+                    const newUnit = form.elements.quickUnit?.value?.trim();
+                    const rawCost = form.elements.quickCost.value.trim();
+                    const newCost = rawCost !== '' ? Number(rawCost) : null;
+                    const reason = form.elements.quickReason.value.trim();
+
+                    // 1. If Available quantity changed, execute stock/adjust
+                    if (newQty !== target.qty) {
+                        await runDatabaseAction('stock/adjust', {
+                            itemId: target.item.id,
+                            outletId: target.outlet.id,
+                            quantity: newQty,
+                            reason: reason
+                        });
+                    }
+
+                    // 2. If Current unit cost changed or was provided
+                    if (newCost !== null) {
+                        const targetMinor = Math.round(newCost * 100);
+                        if (targetMinor !== (target.unitCost ?? null)) {
+                            // Find the latest snapshot quantity (if we adjusted, it's newQty, else target.qty)
+                            const currentQty = newQty !== target.qty ? newQty : target.qty;
+                            await runDatabaseAction('stock/current-price', {
+                                itemId: target.item.id,
+                                outletId: target.outlet.id,
+                                expectedQuantity: currentQty,
+                                expectedUnitCostMinor: target.unitCost ?? null,
+                                unitPrice: newCost,
+                                reason: reason
+                            });
+                        }
+                    }
+
+                    // 3. If Unit changed (Admin or Supervisor)
+                    if (newUnit && newUnit !== target.item.unit) {
+                        const original = masterItemsData.find(i => i.id === target.item.id) || target.item;
+                        const value = { ...original, unit: newUnit };
+                        await runDatabaseAction('changes', {
+                            changes: [{ entity: 'items', key: value.id, value }]
+                        });
+                    }
+
+                    quickEditor.innerHTML = '';
+                    draw();
+                    window.renderOutletDashboard?.();
+                    window.showToast?.('Stock values updated successfully', 'success');
+                } catch (err) {
+                    errP.textContent = err.message;
+                } finally {
+                    buttons.forEach(b => b.disabled = false);
+                }
+            };
+
+            quickEditor.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+
         const mountPicker=()=>{const items=masterItemsData.filter(i=>!category.value || i.category===category.value);if(!items.some(i=>i.id===overviewFilters.item))overviewFilters.item='';picker=createItemPicker(content.querySelector('#overviewItemPicker'),items,{optional:true,selected:overviewFilters.item,onChange:id=>{overviewFilters.item=id;draw();}});};
         category.onchange=()=>{mountPicker();draw();};outlet.onchange=draw;mountPicker();draw();
     }
