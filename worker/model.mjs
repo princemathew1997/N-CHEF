@@ -100,7 +100,10 @@ export function validateChanges(state, changes, actor, stockAction = false) {
     }
     if (entity === 'items') {
       if (!data) fail('Deactivate catalog items instead of deleting them.');
-      if (actor.role !== 'admin' && actor.role !== 'purchaser') fail('Only admins and supervisors can manage catalog items.', 403);
+      if (actor.role !== 'admin' && !(actor.role === 'purchaser' && (!old || old.unit !== data.unit))) fail('Only admins can edit catalog items. Supervisors may add new items.', 403);
+      if (actor.role === 'purchaser' && old && old.unit !== data.unit) {
+        if (data.name !== old.name || data.active !== old.active || data.category !== old.category) fail('Supervisors may only update the item unit.', 403);
+      }
       for (const field of ['bought', 'allocations', 'consumed']) {
         const expected = old?.[field] ?? (field === 'bought' ? 0 : {});
         if (!same(data[field] ?? expected, expected)) fail('Use stock transactions to change quantities.');
@@ -157,7 +160,7 @@ export function validateChanges(state, changes, actor, stockAction = false) {
       } else if (entity === 'users') {
         fail('Only admins can manage accounts.',403);
       } else if (entity === 'items') {
-        if (actor.role !== 'purchaser') fail('Only admins and supervisors can manage catalog items.',403);
+        if (actor.role !== 'purchaser' || !old || old.unit === data?.unit) fail('Only admins can manage catalog items.',403);
       } else fail('Administrator permission required.', 403);
     }
     if(data && old && entity==='requests' && (data.date!==old.date || data.backdateJustification!==old.backdateJustification))fail('Request date and justification cannot change after submission.');
