@@ -26,7 +26,13 @@
     const reportFilters = {category:'',item:'',from:InventoryTools.day(),to:InventoryTools.day()};
     let reportSequence=0;
     const overviewFilters = {outlet:'',category:'',item:''};
-    const numberText = value => Number(value.toFixed(6)).toLocaleString('en-IN');
+    const formatQty = value => {
+        if (value == null || value === '') return '0';
+        const num = Number(value);
+        if (!Number.isFinite(num)) return String(value);
+        return Number(num.toFixed(3)).toString();
+    };
+    const numberText = value => Number(Number(value || 0).toFixed(3)).toLocaleString('en-IN', { maximumFractionDigits: 3 });
     const categories = () => [...new Set(masterItemsData.map(i=>i.category))].sort();
     const categoryOptions = () => '<option value="">All Categories</option>'+options(categories(),c=>c,c=>c);
     function overview(content) {
@@ -277,7 +283,10 @@
         const rows=InventoryTools.consolidatedDistributionRows(committedState,distributionOrder),allocations=InventoryTools.defaultDistributionAllocations(rows);
         target.innerHTML=`<form id="orderDistributionForm"><p>Allocate stock against the remaining approved cuisine quantities. A comment is required whenever you issue a different quantity. Unissued quantities remain outstanding.</p>${table(['Item / unit','Cuisine','Approved remaining','Available stock','Issue now','Comment for change'],rows.map((r,index)=>{
             const item=masterItemsData.find(i=>i.id===r.itemId),allocated=allocations[index];
-            return [esc(item?.name || r.itemName)+' ('+esc(item?.unit || r.unit)+')',esc(r.cuisine),esc(r.remaining),esc(r.available),`<input aria-label="Issue ${esc(item?.name || r.itemName)} to ${esc(r.cuisine)}" name="quantity_${index}" type="number" min="0" max="${r.remaining}" step="any" value="${allocated}" required>`,`<input aria-label="Comment ${esc(item?.name || r.itemName)} ${esc(r.cuisine)}" name="comment_${index}" maxlength="500" placeholder="Required if quantity changes">`];
+            const remainingFormatted = formatQty(r.remaining);
+            const availableFormatted = formatQty(r.available);
+            const allocatedFormatted = formatQty(allocated);
+            return [esc(item?.name || r.itemName)+' ('+esc(item?.unit || r.unit)+')',esc(r.cuisine),esc(remainingFormatted),esc(availableFormatted),`<input aria-label="Issue ${esc(item?.name || r.itemName)} to ${esc(r.cuisine)}" name="quantity_${index}" type="number" min="0" max="${r.remaining}" step="any" value="${allocatedFormatted}" required>`,`<input aria-label="Comment ${esc(item?.name || r.itemName)} ${esc(r.cuisine)}" name="comment_${index}" maxlength="500" placeholder="Required if quantity changes">`];
         }))}<p id="distributionAvailabilityMessage" role="status"></p><button class="btn btn-primary">Distribute order</button></form>`;
         const form=target.querySelector('form');
         const validate=()=>{
