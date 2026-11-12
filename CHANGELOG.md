@@ -4,6 +4,14 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 2.11.0 - 2026-11-12
+
+- Deduct outstanding allocated cuisine quantities from Available stock in Stock Overview so kitchen allocations accurately reflect remaining stock.
+- Group and display items by Cuisine Section in consolidated request cards within the Approval Queue and Generate Vendor Orders screens.
+- Format distribution quantities to a maximum of 3 decimal places without floating-point artifacts.
+- Support live overview synchronization upon order and stock updates.
+- No database migrations required.
+
 ## 2.10.0 - 2026-11-10
 
 - Add inline Stock Overview quick editing for Admins and Supervisors (Purchaser):
