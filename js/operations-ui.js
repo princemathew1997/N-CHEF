@@ -35,7 +35,77 @@
         if(['approvals','vendor-orders'].includes(page)){
             const ordering=page==='vendor-orders';
             const indents=indentsData.filter(i=>ordering?i.status==='Approved' && !i.purchaseOrderIds?.length:i.status==='Pending Approval');
-            content.innerHTML=`<div class="approval-request-list">${indents.map(i=>`<section class="operations-card approval-request-card" data-approval-request="${esc(i.id)}" aria-label="${esc(i.indentNumber)}"><header class="approval-request-header"><div><small>Consolidated request</small><h3>${esc(i.indentNumber)}</h3><p>Outlet: <strong>${esc(outletName(i.outletId))}</strong> · ${i.items.length} item(s)${i.supervisorName?' · Executive Chef / Supervisor: '+esc(i.supervisorName):''}</p></div><span class="approval-request-status ${i.status==='Pending Approval'?'awaiting':'approved'}">${i.status==='Pending Approval'?'Awaiting approval':esc(i.status)}</span></header>${table(['Item','Requested','Revised','Available','Shortage'],i.items.map(row=>[esc(masterItemsData.find(x=>x.id===row.itemId)?.name),esc(row.originalQty),esc(row.revisedQty),esc(stock(row.itemId,i.outletId)),esc(Math.max(0,row.revisedQty-stock(row.itemId,i.outletId)))]))}<footer class="approval-request-actions">${i.status==='Pending Approval'?button('edit-indent',i.id,'Edit quantities')+button('approve-indent',i.id,'Approve for order')+button('reject-indent',i.id,'Reject request'):''}${ordering?button('raise-po',i.id,'Generate vendor orders'):''}</footer></section>`).join('')}</div>`;
+            const renderIndentTables = (i) => {
+                const map = new Map();
+                const linked = (requestsData || []).filter(r => r.indentId === i.id);
+                (i.items || []).forEach(row => {
+                    const itemName = masterItemsData.find(x => x.id === row.itemId)?.name || row.itemName || row.itemId;
+                    if (row.cuisineBreakdown && row.cuisineBreakdown.length) {
+                        row.cuisineBreakdown.forEach(cb => {
+                            const c = cb.cuisine || 'General';
+                            if (!map.has(c)) map.set(c, []);
+                            map.get(c).push({
+                                itemId: row.itemId,
+                                name: itemName,
+                                originalQty: cb.qty,
+                                revisedQty: cb.qty
+                            });
+                        });
+                    } else {
+                        const itemReqs = linked.filter(r => r.itemId === row.itemId);
+                        if (itemReqs.length) {
+                            itemReqs.forEach(r => {
+                                const c = r.cuisine || 'General';
+                                if (!map.has(c)) map.set(c, []);
+                                map.get(c).push({
+                                    itemId: row.itemId,
+                                    name: itemName,
+                                    originalQty: r.qty,
+                                    revisedQty: r.revisedQty ?? r.qty
+                                });
+                            });
+                        } else {
+                            const c = 'General';
+                            if (!map.has(c)) map.set(c, []);
+                            map.get(c).push({
+                                itemId: row.itemId,
+                                name: itemName,
+                                originalQty: row.originalQty,
+                                revisedQty: row.revisedQty
+                            });
+                        }
+                    }
+                });
+                if (map.size <= 1) {
+                    return table(['Item','Requested','Revised','Available','Shortage'], i.items.map(row=>[
+                        esc(masterItemsData.find(x=>x.id===row.itemId)?.name || row.itemName),
+                        esc(row.originalQty),
+                        esc(row.revisedQty),
+                        esc(stock(row.itemId, i.outletId)),
+                        esc(Math.max(0, row.revisedQty - stock(row.itemId, i.outletId)))
+                    ]));
+                }
+                let sectionsHtml = '';
+                for (const [cuisineName, rows] of map.entries()) {
+                    sectionsHtml += `
+                        <div class="indent-cuisine-section" style="margin: 12px 20px 8px 20px; padding-bottom: 4px;">
+                            <h4 style="margin: 0 0 6px 0; color: var(--primary, #FFBE0B); font-size: 0.92rem; display: flex; align-items: center; gap: 6px;">
+                                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--primary, #FFBE0B);"></span>
+                                ${esc(cuisineName)} Cuisine Section
+                            </h4>
+                            ${table(['Item','Requested','Revised','Available','Shortage'], rows.map(row=>[
+                                esc(row.name),
+                                esc(row.originalQty),
+                                esc(row.revisedQty),
+                                esc(stock(row.itemId, i.outletId)),
+                                esc(Math.max(0, row.revisedQty - stock(row.itemId, i.outletId)))
+                            ]))}
+                        </div>
+                    `;
+                }
+                return sectionsHtml;
+            };
+            content.innerHTML=`<div class="approval-request-list">${indents.map(i=>`<section class="operations-card approval-request-card" data-approval-request="${esc(i.id)}" aria-label="${esc(i.indentNumber)}"><header class="approval-request-header"><div><small>Consolidated request</small><h3>${esc(i.indentNumber)}</h3><p>Outlet: <strong>${esc(outletName(i.outletId))}</strong> · ${i.items.length} item(s)${i.supervisorName?' · Executive Chef / Supervisor: '+esc(i.supervisorName):''}</p></div><span class="approval-request-status ${i.status==='Pending Approval'?'awaiting':'approved'}">${i.status==='Pending Approval'?'Awaiting approval':esc(i.status)}</span></header>${renderIndentTables(i)}<footer class="approval-request-actions">${i.status==='Pending Approval'?button('edit-indent',i.id,'Edit quantities')+button('approve-indent',i.id,'Approve for order')+button('reject-indent',i.id,'Reject request'):''}${ordering?button('raise-po',i.id,'Generate vendor orders'):''}</footer></section>`).join('')}</div>`;
             const direct=ordering?[]:requestsData.filter(r=>!r.indentId && r.status==='Sent to Admin');
             if(direct.length)content.innerHTML+=`<section class="operations-card approval-request-card direct-request-card"><header class="approval-request-header"><div><small>Individual requests</small><h3>Cuisine requests awaiting approval</h3></div></header>${table(['Cuisine request','Requested','Revised','Available','Shortage','Action'],direct.map(r=>[esc(r.itemName),esc(r.qty),esc(r.revisedQty ?? r.qty),esc(stock(r.itemId,r.outletId)),esc(Math.max(0,(r.revisedQty ?? r.qty)-stock(r.itemId,r.outletId))),button('approve-request',r.id,'Edit / approve')]))}</section>`;
             if(!indents.length && !direct.length)content.innerHTML=ordering?'<p>No approved requests awaiting vendor orders.</p>':'<p>No requests awaiting approval.</p>';
