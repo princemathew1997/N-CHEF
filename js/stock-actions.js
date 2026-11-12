@@ -21,6 +21,17 @@
     const cost = (item,outlet) => committedState?.outletStock?.find(s=>s.item_id===item && s.outlet_id===outlet)?.unit_cost_minor;
     const price = minor => minor==null?'Cost unavailable':(minor/100).toLocaleString('en-IN',{style:'currency',currency:'INR'});
     const quantity = (item, outlet) => committedState?.outletStock?.find(s=>s.item_id===item && s.outlet_id===outlet)?.quantity || 0;
+    const allocatedToCuisine = (item, outlet) => {
+        const requests = requestsData || committedState?.requests || [];
+        const records = committedState?.operationRecords || [];
+        return requests.filter(r => r.outletId === outlet && r.itemId === item && ['Pending', 'Pending Approval', 'Consolidated', 'Approved', 'PO Raised'].includes(r.status))
+            .reduce((sum, r) => {
+                const issued = (r.legacyIssuedQuantity || 0) + records.filter(d => ['delivery', 'issued_summary'].includes(d.kind) && d.requestId === r.id && !d.replacementFor).reduce((n, d) => n + d.quantity, 0);
+                const reqQty = Number(r.approvedQuantity ?? r.revisedQty ?? r.qty ?? 0);
+                return sum + Math.max(0, reqQty - issued);
+            }, 0);
+    };
+    const availableQuantity = (item, outlet) => Math.max(0, quantity(item, outlet) - allocatedToCuisine(item, outlet));
     const outletSelect = () => OutletSelection.markup();
 
     const reportFilters = {category:'',item:'',from:InventoryTools.day(),to:InventoryTools.day()};
@@ -49,8 +60,10 @@
             const filteredItems = [];
             for (const o of outletList) {
                 for (const i of masterItemsData) {
-                    if ((i.active!==false || quantity(i.id,o.id)>0) && (!category.value || i.category===category.value) && (!overviewFilters.item || i.id===overviewFilters.item)) {
-                        filteredItems.push({ outlet: o, item: i, qty: quantity(i.id, o.id), unitCost: cost(i.id, o.id) });
+                    const onHandQty = quantity(i.id, o.id);
+                    const availQty = availableQuantity(i.id, o.id);
+                    if ((i.active!==false || onHandQty>0 || availQty>0) && (!category.value || i.category===category.value) && (!overviewFilters.item || i.id===overviewFilters.item)) {
+                        filteredItems.push({ outlet: o, item: i, qty: availQty, onHandQty: onHandQty, unitCost: cost(i.id, o.id) });
                     }
                 }
             }
@@ -804,7 +817,7 @@
             e.preventDefault();
             button.disabled=true;try {window.openVendorOrderReceiving();}catch(e){error(e);}finally{button.disabled=false;}
         });
-        const oldSync=window.onLiveSyncReceived;window.onLiveSyncReceived=()=>{oldSync?.();if(currentView==='inventory:stock-prices'){window.CurrentStockPrices.refresh();return;}if(currentView==='inventory:history' && !document.activeElement?.closest('.queue-filters'))window.StockHistoryQueues.refresh();if(currentView.startsWith('inventory:') && !panel.querySelector('form') && !panel.contains(document.activeElement))render();};
+        const oldSync=window.onLiveSyncReceived;window.onLiveSyncReceived=()=>{oldSync?.();if(currentView==='inventory:stock-prices'){window.CurrentStockPrices.refresh();return;}if(currentView==='inventory:history' && !document.activeElement?.closest('.queue-filters'))window.StockHistoryQueues.refresh();if(currentView.startsWith('inventory:') && (!panel.querySelector('form') || currentView==='inventory:overview') && !panel.contains(document.activeElement))render();};
         window.openAddItemModal=()=>{editing=null;window.switchToView('inventory:catalog');};
     });
 })();
