@@ -47,7 +47,7 @@ export async function deliveryCounts(db,actor){
 
 export async function dispatchList(db,actor,input){
   const query=parameters(input),{clauses,values}=scope(actor,query,true),{limit,cursor}=pageOptions(query);
-  const view=query.get('view') || 'attention';if(!['attention','today','history'].includes(view))fail('Invalid delivery view.');
+  const view=query.get('view') || 'attention';if(!['attention','today','history','received'].includes(view))fail('Invalid delivery view.');
   // Search selects dispatches, not a subset of their lines: acceptance always refers to the whole card.
   for(const [key,expression] of [['item',"json_extract(payload_json,'$.itemId')"],['order',"coalesce(json_extract(payload_json,'$.orderRef'),json_extract(payload_json,'$.indentId'),'')"]]){
     if(query.get(key)){
@@ -61,9 +61,12 @@ export async function dispatchList(db,actor,input){
   if(dates.start){having.push('min(delivery_created)>=?');values.push(dates.start);}if(dates.end){having.push('min(delivery_created)<?');values.push(dates.end);}
   if(view==='attention')having.push("sum(delivery_status IN ('Issued','Issue reported'))>0");
   if(view==='history')having.push("sum(delivery_status IN ('Issued','Issue reported'))=0");
+  if(view==='received')having.push("sum(delivery_status IN ('Received','Resolved'))>0");
   const status=query.get('status');
   if(status){if(!['Issued','Issue reported','Received','Resolved'].includes(status))fail('Invalid delivery status.');having.push('sum(delivery_status=?)>0');values.push(status);}
-  const grouped=`SELECT delivery_dispatch dispatchId,delivery_dispatch page_id,max(delivery_created) sort_time,min(delivery_created) createdAt,
+  const receivedTime="CASE WHEN delivery_status IN ('Received','Resolved') THEN coalesce(json_extract(payload_json,'$.resolvedAt'),json_extract(payload_json,'$.confirmedAt'),delivery_created) END";
+  const sortTime=view==='received'?receivedTime:'delivery_created';
+  const grouped=`SELECT delivery_dispatch dispatchId,delivery_dispatch page_id,max(${sortTime}) sort_time,min(delivery_created) createdAt,
     ${view==='attention' && actor.role!=='cuisine_head'?"max(delivery_status='Issue reported')":'0'} priority,
     delivery_outlet outletId,delivery_cuisine cuisine,delivery_recipient recipientId,
     count(*) itemCount,sum(delivery_status='Issued') awaiting,sum(delivery_status='Issue reported') issues,

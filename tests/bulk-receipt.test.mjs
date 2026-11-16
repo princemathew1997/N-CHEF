@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateBulkReceiptCSV, bulkReceiptHeaders } from '../shared/bulk-receipt.mjs';
 import { encodeCSV } from '../shared/legacy-import.mjs';
+import { dayIST } from '../worker/operations.mjs';
 
 const state = {
   outlets: [
@@ -22,15 +23,16 @@ const admin = { id: 'admin_1', role: 'admin', assignedLocations: ['all'] };
 const supervisor = { id: 'sup_1', role: 'supervisor', assignedLocations: ['brigade'] };
 
 test('validateBulkReceiptCSV validates normal receipt row with Date', () => {
+  const date = dayIST();
   const csv = encodeCSV([
     bulkReceiptHeaders,
-    ['BRIGADE', '2026-11-06', 'Tuna', 'pcs', '5', '55.50', 'Fresh delivery']
+    ['BRIGADE', date, 'Tuna', 'pcs', '5', '55.50', 'Fresh delivery']
   ]);
   const result = validateBulkReceiptCSV(csv, state, supervisor);
   assert.equal(result.errors.length, 0);
   assert.equal(result.rows.length, 1);
   assert.equal(result.rows[0].itemName, 'Tuna');
-  assert.equal(result.rows[0].date, '2026-11-06');
+  assert.equal(result.rows[0].date, date);
   assert.equal(result.rows[0].quantity, 5);
   assert.equal(result.rows[0].unitCostMinor, 5550);
   assert.equal(result.rows[0].resultingQuantity, 15);

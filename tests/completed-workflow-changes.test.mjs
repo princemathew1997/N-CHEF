@@ -59,5 +59,11 @@ test('invoice comparison uses accepted stock only and supports optional or inval
  const {event}=planVendorReceipt(state,actor,input);
  assert.equal(event.stockTotalMinor,10000);assert.equal(event.vendorInvoiceTotalMinor,12000);assert.equal(event.invoiceDifferenceMinor,2000);
  assert.equal(planVendorReceipt(state,actor,{...input,vendorInvoiceTotal:undefined}).event.vendorInvoiceTotalMinor,undefined);
+ assert.equal(event.vendorBillType,undefined);
+ for(const vendorBillType of ['cash','credit']){
+   const {po}=planVendorReceipt(state,actor,{...input,vendorBillType});
+   assert.equal(po.receiptEvents.at(-1).vendorBillType,vendorBillType);
+ }
+ assert.throws(()=>planVendorReceipt(state,actor,{...input,vendorBillType:'invalid'}),/Cash or Credit/);
  assert.throws(()=>planVendorReceipt(state,actor,{...input,vendorInvoiceTotal:-1}),/valid/);
 });
