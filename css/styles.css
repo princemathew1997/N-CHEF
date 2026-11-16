@@ -654,14 +654,31 @@ label {
     gap: 4px;
     padding: 10px 14px;
 }
-.metric-card h3 {
+.metric-card h3, .metric-card .metric-label {
     font-size: 0.7rem;
+    font-weight: 700;
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+.metric-filter {
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    min-width: 0;
+}
+.metric-filter:enabled:hover, .metric-filter[aria-pressed="true"] {
+    border-color: var(--primary);
+}
+.metric-filter:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+.metric-filter:disabled {
+    cursor: default;
 }
 .metric-card .value {
     font-size: 1.5rem;
@@ -1150,7 +1167,7 @@ tbody tr:hover {
         text-align: center;
         align-items: center;
     }
-    .metric-card h3 {
+    .metric-card h3, .metric-card .metric-label {
         font-size: 0.6rem;
         white-space: nowrap;
         overflow: hidden;
@@ -1580,11 +1597,17 @@ body.database-saving::after {
 .queue-counts { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:16px; }
 .queue-counts > span { padding:12px; border:1px solid var(--border); border-radius:8px; }
 .queue-counts strong { color:var(--primary); margin-left:8px; }
+.stock-movement-dialog { width:min(72rem,calc(100% - 2rem)); }
+.stock-movement-dialog > form { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.stock-movement-dialog h2 { margin:0; }
+.stock-movement-dialog > p { margin:12px 0; }
+.stock-movement-dialog .table-container { height:auto; min-height:0; }
 .dispatch-card { margin-top:16px; }
 .dispatch-items { padding:12px; }
 .dispatch-items .table-container { height:auto; min-height:0; }
 .queue-issue { color:#ff8b8b; }
 .queue-pager { display:flex; gap:12px; margin-top:16px; }
+.queue-pager .btn:disabled { color:var(--text-muted); border-color:var(--border); background:transparent; cursor:default; opacity:.65; }
 .nav-workgroup { display:grid; grid-template-columns:minmax(0,1fr) 28px; align-items:center; }
 .nav-workgroup > .nav-item { min-width:0; padding-right:2px; }
 .nav-group-toggle { border:0; color:var(--text-muted); background:transparent; border-radius:6px; cursor:pointer; min-height:32px; font-size:18px; }
