@@ -29,11 +29,16 @@ for(const role of ['cuisine_head','executive_chef']) {
     });
 }
 
-test('search results keep the existing-order duplicate protection',()=>{
+test('search prevents pending duplicates and allows another request after approval',()=>{
     const {context,nodes,render}=setup('cuisine_head');
-    context.requestsData.push({ownerId:'chef',outletId:'a',date:'2026-11-04',itemId:'rice'});
+    const request={ownerId:'chef',outletId:'a',date:'2026-11-04',itemId:'rice',status:'Pending'};
+    context.requestsData.push(request);
     nodes.get('wizardItemSearch').value='rice';render();
-    assert.match(nodes.get('wizardItemsGrid').innerHTML,/Already ordered/);
+    assert.match(nodes.get('wizardItemsGrid').innerHTML,/Pending request already exists/);
     let warned=false;context.alert=()=>{warned=true;};context.window.toggleWizardItem('rice');
     assert.equal(warned,true);assert.equal(runInNewContext('Object.keys(wizardSelectedItems).length',context),0);
+    request.status='Approved';render();
+    assert.doesNotMatch(nodes.get('wizardItemsGrid').innerHTML,/Pending request already exists/);
+    context.window.toggleWizardItem('rice');
+    assert.equal(nodes.get('wizardSelectedCount').textContent,'(1)');
 });

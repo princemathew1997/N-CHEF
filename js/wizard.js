@@ -6,18 +6,20 @@ let currentWizardCat = '';
 let allCategories = [];
 let wizardNewOrderStarted=false;
 
-function wizardHasExistingItem(itemId) {
+function wizardHasPendingItem(itemId) {
     if (currentUser?.role === 'purchaser') return false;
     const date = document.getElementById('wizardRequestDate').value;
     const outlet = document.getElementById('wizardOutlet').value;
     return requestsData.some(request => request.ownerId === currentUser.id
         && request.outletId === outlet
         && (request.date || InventoryTools.day(request.timestamp)) === date
-        && request.itemId === itemId);
+        && request.itemId === itemId
+        && request.status === 'Pending'
+        && !request.indentId);
 }
 
 function showWizardExistingItemMessage() {
-    alert('This item is already in your initial order for this date and outlet. Please edit the initial order to change its quantity.');
+    alert('This item already has a pending request for this date and outlet. Open Existing requests to review it.');
 }
 
 function refreshWizardDateContext(){
@@ -49,7 +51,7 @@ function refreshWizardDateContext(){
     if(showExisting){document.getElementById('wizardStep1').classList.add('hidden');document.getElementById('wizardStep2').classList.add('hidden');}
     else if(document.getElementById('wizardStep2').classList.contains('hidden'))document.getElementById('wizardStep1').classList.remove('hidden');
     for (const itemId of Object.keys(wizardSelectedItems)) {
-        if (wizardHasExistingItem(itemId)) delete wizardSelectedItems[itemId];
+        if (wizardHasPendingItem(itemId)) delete wizardSelectedItems[itemId];
     }
     updateWizardSelectedCount();
     renderWizardItems();
@@ -205,7 +207,7 @@ function initRequestWizard() {
     });
 
     document.getElementById('wizardSubmitBtn')?.addEventListener('click', async () => {
-        if (Object.keys(wizardSelectedItems).some(wizardHasExistingItem)) {
+        if (Object.keys(wizardSelectedItems).some(wizardHasPendingItem)) {
             showWizardExistingItemMessage();
             return;
         }
@@ -363,7 +365,7 @@ function renderWizardItems() {
     const status = document.getElementById('wizardSearchStatus');
     if (status) status.textContent = query ? `${items.length} matching ingredient(s) across all categories. Clear search to browse the selected category.` : '';
     grid.innerHTML = items.map(item => {
-        const alreadyRequested = wizardHasExistingItem(item.id);
+        const alreadyRequested = wizardHasPendingItem(item.id);
         const selData = wizardSelectedItems[item.id];
         const isSelected = !!selData;
         const assignedCuisine = (typeof selData === 'object' && selData?.cuisine) ? selData.cuisine : '';
@@ -373,7 +375,7 @@ function renderWizardItems() {
             <div>
                 <strong style="display:block; font-size:0.92rem; line-height:1.2; margin-bottom:4px;">${item.name}</strong>
                 <span style="font-size:0.75rem; color:var(--text-muted);">${item.unit}</span>
-                ${alreadyRequested ? '<small style="display:block; margin-top:8px; color:var(--primary);">Already ordered — edit the initial order</small>' : ''}
+                ${alreadyRequested ? '<small style="display:block; margin-top:8px; color:var(--primary);">Pending request already exists</small>' : ''}
             </div>
             <div style="margin-top:10px; width:22px; height:22px; border-radius:50%; background:${isSelected ? 'var(--primary)' : 'rgba(255,255,255,0.08)'}; display:flex; align-items:center; justify-content:center;">
                 <i data-lucide="check" style="width:13px; height:13px; color:${isSelected ? '#000' : 'transparent'};"></i>
@@ -386,7 +388,7 @@ function renderWizardItems() {
 window.renderWizardItems = renderWizardItems;
 
 function toggleWizardItem(itemId) {
-    if (wizardHasExistingItem(itemId)) {
+    if (wizardHasPendingItem(itemId)) {
         showWizardExistingItemMessage();
         return;
     }

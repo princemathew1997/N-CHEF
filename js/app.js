@@ -1723,7 +1723,7 @@ function loadChefPortalData() {
     }
     
     // Get all requests for this chef
-    const allChefReqs = requestsData.filter(r => (r.chefName === currentUser.name || r.requestedBy === currentUser.name));
+    const allChefReqs = requestsData.filter(r => r.ownerId === currentUser.id);
     
     // Update summary metric cards
     const pendingCount = allChefReqs.filter(r => r.status === 'Pending' || r.status === 'Accepted' || r.status === 'Sent to Admin').length;
@@ -1739,12 +1739,7 @@ function loadChefPortalData() {
     
     // Setup filter dropdown
     const filterSelect = document.getElementById('chefFilterStatus');
-    if (filterSelect && !filterSelect.dataset.bound) {
-        filterSelect.addEventListener('change', () => {
-            renderChefPortalTable();
-        });
-        filterSelect.dataset.bound = 'true';
-    }
+    if (filterSelect) filterSelect.onchange = renderChefPortalTable;
     
     function renderChefPortalTable() {
         const tbody = document.getElementById('chefPortalRequestsTableBody');

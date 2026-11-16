@@ -68,6 +68,10 @@ export function planVendorReceipt(state,actor,input){
   if(!events.length)fail('Enter at least one received or rejected quantity.');
   const event={id:crypto.randomUUID(),receivedAt:new Date().toISOString(),receivedBy:actor.id,lines:events};
   event.stockTotalMinor=events.reduce((sum,line)=>sum+line.totalCostMinor,0);
+  if(input.vendorBillType!==undefined){
+    if(!['cash','credit'].includes(input.vendorBillType))fail('Choose Cash or Credit for the vendor bill.');
+    event.vendorBillType=input.vendorBillType;
+  }
   if(input.vendorInvoiceTotal!==undefined){
     event.vendorInvoiceTotalMinor=money(input.vendorInvoiceTotal);
     event.invoiceDifferenceMinor=event.vendorInvoiceTotalMinor-event.stockTotalMinor;

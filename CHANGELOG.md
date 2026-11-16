@@ -4,6 +4,13 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 2.12.0 - 2026-11-16
+
+- Clear the Approvals badge when the approval queue is empty and link approved requests to vendor ordering.
+- Show orders in the chef's request list by account ownership and allow new requests for items on approved orders.
+- Show confirmed cuisine deliveries in Receive Order under Received.
+- Record Cash or Credit per vendor receipt and show it in receipt details.
+
 ## 2.11.0 - 2026-11-12
 
 - Deduct outstanding allocated cuisine quantities from Available stock in Stock Overview so kitchen allocations accurately reflect remaining stock.

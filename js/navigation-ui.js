@@ -9,7 +9,8 @@
     function updateBadges(){
         document.querySelectorAll('.nav-workgroup').forEach(group=>{
             const primary=group.querySelector(':scope > .nav-item'),native=primary.querySelector('.nav-attention-count');
-            const related=[...group.querySelectorAll('.nav-children .nav-attention-count')].reduce((total,badge)=>total+(Number(badge.textContent) || 0),0);
+            const related=primary.dataset.operations==='approvals' ? 0 :
+                [...group.querySelectorAll('.nav-children .nav-attention-count')].reduce((total,badge)=>total+(Number(badge.textContent) || 0),0);
             let summary=primary.querySelector('.nav-group-count');
             if(native)native.style.display=related?'none':'';
             if(!related){summary?.remove();return;}
