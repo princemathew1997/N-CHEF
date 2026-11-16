@@ -39,7 +39,8 @@
         }
         if(['approvals','vendor-orders'].includes(page)){
             const ordering=page==='vendor-orders';
-            const indents=indentsData.filter(i=>ordering?i.status==='Approved' && !i.purchaseOrderIds?.length:i.status==='Pending Approval');
+            const vendorOrders=InventoryTools.pendingVendorOrders(committedState);
+            const indents=ordering?vendorOrders:indentsData.filter(i=>i.status==='Pending Approval');
             const renderIndentTables = (i) => {
                 const map = new Map();
                 const linked = (requestsData || []).filter(r => r.indentId === i.id);
@@ -114,7 +115,7 @@
             const direct=ordering?[]:requestsData.filter(r=>!r.indentId && r.status==='Sent to Admin');
             if(direct.length)content.innerHTML+=`<section class="operations-card approval-request-card direct-request-card"><header class="approval-request-header"><div><small>Individual requests</small><h3>Cuisine requests awaiting approval</h3></div></header>${table(['Cuisine request','Requested','Revised','Available','Shortage','Action'],direct.map(r=>[esc(r.itemName),esc(r.qty),esc(r.revisedQty ?? r.qty),esc(stock(r.itemId,r.outletId)),esc(Math.max(0,(r.revisedQty ?? r.qty)-stock(r.itemId,r.outletId))),button('approve-request',r.id,'Edit / approve')]))}</section>`;
             if(!indents.length && !direct.length)content.innerHTML=ordering?'<p>No approved requests awaiting vendor orders.</p>':'<p>No requests awaiting approval.</p>';
-            if(!ordering && indentsData.some(i=>i.status==='Approved' && !i.purchaseOrderIds?.length)){
+            if(!ordering && vendorOrders.length){
                 content.insertAdjacentHTML('afterbegin',`<p>Approved requests are ready for purchasing. ${link('vendor-orders')}</p>`);
             }
         }
