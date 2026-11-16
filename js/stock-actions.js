@@ -36,6 +36,7 @@
 
     const reportFilters = {category:'',item:'',from:InventoryTools.day(),to:InventoryTools.day()};
     let reportSequence=0;
+    let lowStockOnly=false;
     const overviewFilters = {outlet:'',category:'',item:''};
     const formatQty = value => {
         if (value == null || value === '') return '0';
@@ -196,6 +197,7 @@
         OutletSelection.restore();
         const tbody=document.getElementById('inventoryTableBody');if(!tbody)return;
         const filters=document.getElementById('masterStockFilters');
+        const lowStockFilter=document.getElementById('lowStockFilter');
         if(!filters.dataset.bound){
             filters.innerHTML=field('Category',select('category',categoryOptions()))+field('Item','<div id="masterItemPicker"></div>')+field('From (IST)','<input type="date" name="from">')+field('To (IST)','<input type="date" name="to">')+'<p id="reportError" role="alert"></p>';
             filters.querySelector('[name=category]').onchange=e=>{reportFilters.category=e.target.value;reportFilters.item='';mountPicker();draw();};
@@ -206,18 +208,28 @@
         function mountPicker(){const items=masterItemsData.filter(i=>!reportFilters.category || i.category===reportFilters.category);if(!items.some(i=>i.id===reportFilters.item))reportFilters.item='';createItemPicker(filters.querySelector('#masterItemPicker'),items,{optional:true,selected:reportFilters.item,onChange:id=>{reportFilters.item=id;draw();}});}
         async function draw(){
             const sequence=++reportSequence;
+            lowStockFilter.disabled=true;
             try {
                 const items=masterItemsData.filter(i=>(!reportFilters.category || i.category===reportFilters.category) && (!reportFilters.item || i.id===reportFilters.item));
                 const result=committedState.historyPaged?await apiRequest('stock/report?'+new URLSearchParams({outlet:currentStoreView,from:reportFilters.from,to:reportFilters.to,item:reportFilters.item,category:reportFilters.category})):InventoryTools.report(items,committedState.outletStock,committedState.stockHistory,currentStoreView,reportFilters.from,reportFilters.to);
                 if(sequence!==reportSequence || !tbody.isConnected)return;
                 const headings=['Item','Unit','Opening Stock','Received',...result.cuisines.map(c=>c+' Usage'),'Adjustments','Remaining Stock'];
                 document.getElementById('inventoryTableHeader').innerHTML=headings.map(h=>'<th>'+esc(h)+'</th>').join('');
-                tbody.innerHTML=result.rows.map(r=>'<tr>'+[esc(r.item.name),esc(r.item.unit),numberText(r.opening),numberText(r.received),...result.cuisines.map(c=>numberText(r.usage[c])),numberText(r.adjustments),numberText(r.remaining)].map(v=>'<td>'+v+'</td>').join('')+'</tr>').join('') || `<tr><td colspan="${headings.length}">No stock activity matches these filters.</td></tr>`;
-                const metrics={metricTotalItems:result.rows.length,metricActiveOutlets:result.rows.filter(r=>Object.values(r.usage).some(q=>q>0)).length,metricLowStock:result.rows.filter(r=>r.item.thresholdEnabled && r.remaining<=r.item.threshold).length};
+                const lowRows=result.rows.filter(r=>r.item.thresholdEnabled && r.remaining<=r.item.threshold);
+                const showRows=()=>{
+                    lowStockFilter.setAttribute('aria-pressed',String(lowStockOnly));
+                    const rows=lowStockOnly?lowRows:result.rows;
+                    const emptyMessage=lowStockOnly?'No items are low on remaining stock for these filters.':'No stock activity matches these filters.';
+                    tbody.innerHTML=rows.map(r=>'<tr>'+[esc(r.item.name),esc(r.item.unit),numberText(r.opening),numberText(r.received),...result.cuisines.map(c=>numberText(r.usage[c])),numberText(r.adjustments),numberText(r.remaining)].map(v=>'<td>'+v+'</td>').join('')+'</tr>').join('') || `<tr><td colspan="${headings.length}">${emptyMessage}</td></tr>`;
+                };
+                const metrics={metricTotalItems:result.rows.length,metricActiveOutlets:result.rows.filter(r=>Object.values(r.usage).some(q=>q>0)).length,metricLowStock:lowRows.length};
                 for(const [id,val] of Object.entries(metrics))document.getElementById(id).textContent=val;
-                document.getElementById('metricTotalItemsLabel').textContent='Items in Report';document.getElementById('metricActiveOutletsLabel').textContent='Items Used';document.getElementById('metricLowStockLabel').textContent='Low Remaining Stock';
+                document.getElementById('metricTotalItemsLabel').textContent='Items in Report';document.getElementById('metricActiveOutletsLabel').textContent='Items Used';
+                lowStockFilter.onclick=()=>{lowStockOnly=!lowStockOnly;showRows();};
+                lowStockFilter.disabled=false;
+                showRows();
                 filters.querySelector('#reportError').textContent='';
-            } catch(e){filters.querySelector('#reportError').textContent=e.message;tbody.innerHTML='';}
+            } catch(e){if(sequence!==reportSequence || !tbody.isConnected)return;filters.querySelector('#reportError').textContent=e.message;tbody.innerHTML='';}
         }
         mountPicker();draw();OutletSelection.renderHeader();
     };

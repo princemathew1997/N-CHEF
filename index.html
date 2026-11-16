@@ -8,7 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <link rel="stylesheet" href="css/styles.css?v=50">
+    <link rel="stylesheet" href="css/styles.css?v=53">
     <!-- NUNIT-INJECT: CATCH JS ERRORS -->
     <script>
         window.addEventListener('error', function(e) { 
@@ -204,10 +204,10 @@
                         <h3 id="metricActiveOutletsLabel">Active Outlets</h3>
                         <div class="value" id="metricActiveOutlets">0</div>
                     </div>
-                    <div class="panel metric-card">
-                        <h3 id="metricLowStockLabel">Low Stock Items</h3>
-                        <div class="value" id="metricLowStock">0</div>
-                    </div>
+                    <button type="button" class="panel metric-card metric-filter" id="lowStockFilter" aria-controls="inventoryTable" aria-pressed="false" disabled>
+                        <span class="metric-label" id="metricLowStockLabel">Low Remaining Stock</span>
+                        <span class="value" id="metricLowStock">0</span>
+                    </button>
                 </div>
 
                 <div class="responsive-form-grid dash-grid" style="grid-template-columns: 1fr;">
@@ -1085,10 +1085,10 @@
     <script src="js/vendor-order-ui.js"></script>
     <script src="js/wizard.js?v=d1"></script>
     <script src="js/navigation-ui.js"></script>
-    <script src="js/queue-ui.js"></script>
+    <script src="js/queue-ui.js?v=4"></script>
     <script src="js/price-history.js?v=d1"></script>
     <script src="js/stock-price-editing.js"></script>
-    <script src="js/stock-actions.js?v=d1"></script>
+    <script src="js/stock-actions.js?v=d2"></script>
     <script src="js/operations-ui.js"></script>
     <script src="js/legacy-import-ui.js"></script>
     <script src="js/bulk-receipt-ui.js"></script>

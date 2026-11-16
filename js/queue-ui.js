@@ -34,13 +34,17 @@
           ${dispatch.awaiting || dispatch.issues?`<p>Waiting ${esc(age(dispatch.createdAt))}</p>`:''}
           ${dispatch.issues?`<p class="queue-issue">${dispatch.issues} issue(s) to resolve</p>`:''}
           ${!dispatch.awaiting && !dispatch.issues?'<span class="status ok">Completed</span>':''}</div></header>
-          <div class="approval-request-actions"><button type="button" class="btn btn-outline" data-expand-dispatch="${esc(dispatch.dispatchId)}">View items</button>
+          <div class="approval-request-actions"><button type="button" class="btn btn-outline" data-expand-dispatch="${esc(dispatch.dispatchId)}" aria-expanded="false">View items (${dispatch.itemCount})</button>
           ${chef && dispatch.awaiting?`<button type="button" class="btn btn-primary" data-action="accept-dispatch" data-id="${esc(dispatch.dispatchId)}">Accept all remaining (${dispatch.awaiting})</button>`:''}</div>
           <div class="dispatch-items hidden"></div></section>`;
     }
     function pager(container,hasPrevious,next,onPrevious,onNext){
         container.innerHTML=`<button type="button" class="btn btn-outline" data-prev ${hasPrevious?'':'disabled'}>Previous</button><button type="button" class="btn btn-outline" data-next ${next?'':'disabled'}>Next</button>`;
-        container.querySelector('[data-prev]').onclick=onPrevious;container.querySelector('[data-next]').onclick=onNext;
+        if(hasPrevious)container.querySelector('[data-prev]').onclick=onPrevious;
+        if(next)container.querySelector('[data-next]').onclick=onNext;
+    }
+    function disablePager(container){
+        container.querySelectorAll('button').forEach(button=>{button.disabled=true;});
     }
     async function allDispatchRows(dispatch){
         let cursor=null;const result=[];
@@ -52,25 +56,43 @@
         const chef=currentUser.role==='cuisine_head';
         content.innerHTML=`<div class="queue-counts" aria-live="polite"></div><div class="purchase-order-tabs">${[['attention','Needs attention'],['today','Today'],chef?['received','Received']:['history','History']].map(([value,label])=>`<button type="button" class="btn ${filters.view===value?'btn-primary':'btn-outline'}" data-queue-view="${value}">${label}</button>`).join('')}</div><details class="queue-filter-panel"><summary>Filters</summary><form class="queue-filters">${outletControl()}<label>Cuisine<select name="cuisine"><option value="">All assigned cuisines</option>${options(cuisinesData.filter(c=>!chef || (currentUser.assignedSections || currentUser.assignedCuisines || []).includes(c.name)),c=>c.name,c=>c.name)}</select></label><label>Status<select name="status"><option value="">All statuses</option>${options(['Issued','Issue reported','Received','Resolved'],r=>r,r=>r)}</select></label><label>Item<div data-queue-item></div></label><label>Order reference<input name="order" placeholder="Order / request reference"></label><label>From (IST)<input type="date" name="from"></label><label>To (IST)<input type="date" name="to"></label><button type="submit" class="btn btn-outline">Apply filters</button></form></details><p class="text-muted">${chef?'Find confirmed quantities under Received. Report issues item by item, then accept the remaining items in that delivery.':'Follow up on awaiting confirmations and resolve reported issues.'} Needs attention includes unfinished deliveries from earlier days. Counts cover your assigned scope.</p><div data-dispatch-cards aria-live="polite"></div><div class="queue-pager"></div>`;
         const form=content.querySelector('form'),cards=content.querySelector('[data-dispatch-cards]');
+        const controls=content.querySelector('.queue-pager');
         content.querySelector('summary').textContent='Filters'+(Object.entries(filters).some(([key,value])=>key!=='view' && value)?' (applied)':'');
         for(const [name,value] of Object.entries(filters))if(form.elements[name])form.elements[name].value=value;
         createItemPicker(form.querySelector('[data-queue-item]'),masterItemsData,{optional:true,selected:filters.item,onChange:value=>filters.item=value});
         async function load(){
             const expanded=[...cards.querySelectorAll('.dispatch-items:not(.hidden)')].map(node=>node.closest('[data-dispatch]').dataset.dispatch);
             const token=++generation;cards.textContent='Loading deliveries…';
+            disablePager(controls);
             try{
                 const result=await apiRequest('dispatches?'+query(filters,cursor));if(token!==generation || renderId!==deliveryRender || !content.isConnected)return;
-                const c=result.counts;content.querySelector('.queue-counts').innerHTML=`<span>Awaiting confirmation <strong>${c.awaiting}</strong></span><span>Issues to resolve <strong>${c.issues}</strong></span><span>Completed today <strong>${c.completedToday}</strong></span>`;
+                const c=result.counts;
+                const counts=content.querySelector('.queue-counts');
+                counts.innerHTML=`<button type="button" class="btn btn-outline" data-show-awaiting>Awaiting confirmation <strong>${c.awaiting}</strong> item lines</button><span>Issues to resolve <strong>${c.issues}</strong></span><span>Completed today <strong>${c.completedToday}</strong></span>`;
+                counts.querySelector('[data-show-awaiting]').onclick=()=>{
+                    Object.assign(filters,{view:'attention',outlet:'',cuisine:'',status:'Issued',item:'',order:'',from:'',to:''});
+                    renderDeliveries(content);
+                };
                 const ordered=filters.view==='attention' && !chef?result.rows.slice().sort((a,b)=>Number(b.issues>0)-Number(a.issues>0)):result.rows;
-                cards.innerHTML=ordered.map(dispatch=>dispatchCard(dispatch,chef)).join('') || '<p>No deliveries match these filters.</p>';
+                const awaitingOnPage=ordered.reduce((total,delivery)=>total+delivery.awaiting,0);
+                cards.innerHTML=ordered.length
+                    ? `<p class="text-muted">This page: ${ordered.length} ${ordered.length===1?'delivery':'deliveries'} · ${awaitingOnPage} ${awaitingOnPage===1?'item line':'item lines'} awaiting confirmation</p>`+ordered.map(dispatch=>dispatchCard(dispatch,chef)).join('')
+                    : '<p>No deliveries match these filters.</p>';
                 cards.querySelectorAll('[data-expand-dispatch]').forEach(button=>button.onclick=()=>expand(button));
                 cards.querySelectorAll('[data-expand-dispatch]').forEach(button=>{if(expanded.includes(button.dataset.expandDispatch))expand(button);});
-                pager(content.querySelector('.queue-pager'),previous.length,result.nextCursor,()=>{cursor=previous.pop();load();},()=>{previous.push(cursor);cursor=result.nextCursor;load();});
+                pager(controls,previous.length,result.nextCursor,()=>{cursor=previous.pop();load();},()=>{previous.push(cursor);cursor=result.nextCursor;load();});
             }catch(error){if(token===generation && renderId===deliveryRender)cards.textContent=error.message;}
         }
         async function expand(button){
             const target=button.closest('section').querySelector('.dispatch-items');
-            if(!target.classList.contains('hidden')){target.classList.add('hidden');button.textContent='View items';return;}
+            if(!target.classList.contains('hidden')){
+                target.classList.add('hidden');
+                button.setAttribute('aria-expanded','false');
+                button.textContent=button.dataset.collapsedLabel;
+                return;
+            }
+            button.dataset.collapsedLabel=button.textContent;
+            button.setAttribute('aria-expanded','true');
             target.classList.remove('hidden');button.textContent='Hide items';target.textContent='Loading items…';
             let next=null;
             const loadItems=async append=>{
@@ -82,7 +104,7 @@
                     if(!append)target.innerHTML='';target.querySelector('[data-more-items]')?.remove();target.insertAdjacentHTML('beforeend',html);next=result.nextCursor;
                     if(next){const more=document.createElement('button');more.type='button';more.className='btn btn-outline';more.dataset.moreItems='';more.textContent='More items';more.onclick=()=>loadItems(true);target.append(more);}
                     target.querySelectorAll('[data-view-request]').forEach(b=>b.onclick=()=>{const d=rows.get(b.dataset.viewRequest),r=requestsData.find(r=>r.id===d.requestId);window.showUiModal({title:'Originating request',message:r?`${r.itemName} · ${r.date || InventoryTools.day(r.timestamp)} · Requested: ${r.qty} ${r.unit || ''} · Approved: ${r.approvedQuantity ?? r.revisedQty ?? r.qty} · ${r.status}`:`Request reference: ${d.requestId}`,type:'info'});});
-                    target.querySelectorAll('[data-view-movement]').forEach(b=>b.onclick=()=>{historyFilters={outlet:'',item:'',vendor:'',type:'',person:'',from:'',to:'',delivery:b.dataset.viewMovement,allDates:'1'};window.switchToView('inventory:history');});
+                    target.querySelectorAll('[data-view-movement]').forEach(b=>b.onclick=()=>openStockMovement(rows.get(b.dataset.viewMovement)));
                 }catch(error){target.textContent=error.message;}
             };await loadItems(false);
         }
@@ -90,17 +112,47 @@
         content.querySelectorAll('[data-queue-view]').forEach(button=>button.onclick=()=>{filters.view=button.dataset.queueView;filters.from=filters.to=filters.view==='today'?today():'';renderDeliveries(content);});
         refreshDeliveries=load;await load();
     }
+    function stockMovementTable(rows){
+        return table(['Date','Outlet','Item','Movement','Change','Balance','Unit','Cuisine','Vendor','Reason','Person','Unit price','Line total'],rows.map(m=>[esc(InventoryTools.timestamp(m.created_at)),esc(outletName(m.outlet_id)),esc(m.item_name),esc(m.kind==='price'?'Price update':m.kind),esc(m.delta),esc(m.quantity),esc(m.unit),esc(m.cuisine),esc(m.vendor),esc(m.reason),esc(m.actor_name),money(m.unit_cost_minor),money(m.total_cost_minor)]));
+    }
+    function openStockMovement(delivery){
+        const dialog=document.createElement('dialog');
+        dialog.className='operations-dialog stock-movement-dialog';
+        dialog.setAttribute('aria-labelledby','stockMovementTitle');
+        dialog.innerHTML=`<form method="dialog"><h2 id="stockMovementTitle">Stock movement</h2><button class="btn btn-outline" autofocus>Close</button></form><p>${esc(delivery.itemName)}</p><div data-movement-rows aria-live="polite"></div><div class="queue-pager"></div>`;
+        const target=dialog.querySelector('[data-movement-rows]'),controls=dialog.querySelector('.queue-pager');
+        const filters={delivery:delivery.id,allDates:'1'};
+        const previous=[];
+        let cursor=null;
+        async function load(){
+            target.textContent='Loading stock movements…';
+            disablePager(controls);
+            try{
+                const result=await apiRequest('stock/history?'+query(filters,cursor));
+                if(!dialog.open)return;
+                target.innerHTML=result.rows.length?stockMovementTable(result.rows):'<p>No stock movements found for this item.</p>';
+                pager(controls,previous.length,result.nextCursor,()=>{cursor=previous.pop();load();},()=>{previous.push(cursor);cursor=result.nextCursor;load();});
+            }catch(error){
+                if(dialog.open)target.textContent=error.message;
+            }
+        }
+        dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+        document.body.append(dialog);
+        dialog.showModal();
+        load();
+    }
     async function renderHistory(content){
         resetOwner();const filters=historyFilters,renderId=++historyRender;let cursor=null,previous=[],generation=0;
         content.innerHTML=`<details class="queue-filter-panel"><summary>Filters</summary><form class="queue-filters">${outletControl()}<label>Item<div data-history-item></div></label><label>Vendor<select name="vendor"><option value="">All vendors</option>${options(vendorsData,r=>r.name,r=>r.name)}</select></label><label>Movement<select name="type"><option value="">All movements</option>${options(['receipt','distribute','adjust','opening','assign','return','price'],r=>r,r=>r)}</select></label><label>Person<select name="person"><option value="">All people</option>${options(usersData)}</select></label><label>From (IST)<input type="date" name="from"></label><label>To (IST)<input type="date" name="to"></label><button type="submit" class="btn btn-outline">Apply filters</button><button type="button" class="btn btn-outline" data-history-today>Today</button></form></details><div data-history-rows aria-live="polite"></div><div class="queue-pager"></div>`;
         const form=content.querySelector('form'),target=content.querySelector('[data-history-rows]');
+        const controls=content.querySelector('.queue-pager');
         content.querySelector('summary').textContent='Filters · '+(filters.from===today() && filters.to===today()?'Today (IST)':'Selected range');
         for(const [name,value] of Object.entries(filters))if(form.elements[name])form.elements[name].value=value;
         createItemPicker(form.querySelector('[data-history-item]'),masterItemsData,{optional:true,selected:filters.item,onChange:value=>filters.item=value});
-        async function load(){const token=++generation;target.textContent='Loading stock movements…';try{
+        async function load(){const token=++generation;target.textContent='Loading stock movements…';disablePager(controls);try{
             const result=await apiRequest('stock/history?'+query(filters,cursor));if(token!==generation || renderId!==historyRender || !content.isConnected)return;
-            target.innerHTML=table(['Date','Outlet','Item','Movement','Change','Balance','Unit','Cuisine','Vendor','Reason','Person','Unit price','Line total'],result.rows.map(m=>[esc(InventoryTools.timestamp(m.created_at)),esc(outletName(m.outlet_id)),esc(m.item_name),esc(m.kind==='price'?'Price update':m.kind),esc(m.delta),esc(m.quantity),esc(m.unit),esc(m.cuisine),esc(m.vendor),esc(m.reason),esc(m.actor_name),money(m.unit_cost_minor),money(m.total_cost_minor)]));
-            pager(content.querySelector('.queue-pager'),previous.length,result.nextCursor,()=>{cursor=previous.pop();load();},()=>{previous.push(cursor);cursor=result.nextCursor;load();});
+            target.innerHTML=stockMovementTable(result.rows);
+            pager(controls,previous.length,result.nextCursor,()=>{cursor=previous.pop();load();},()=>{previous.push(cursor);cursor=result.nextCursor;load();});
         }catch(error){if(token===generation)target.textContent=error.message;}}
         form.onsubmit=event=>{event.preventDefault();filterValues(form,filters);filters.allDates='1';delete filters.delivery;cursor=null;previous=[];content.querySelector('.queue-filter-panel').open=false;load();};
         form.querySelector('[data-history-today]').onclick=()=>{historyFilters={outlet:'',item:'',vendor:'',type:'',person:'',from:today(),to:today()};renderHistory(content);};refreshHistory=load;await load();
