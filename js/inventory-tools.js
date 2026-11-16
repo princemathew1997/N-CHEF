@@ -80,6 +80,25 @@
         }
         return changes;
     }
+    function pendingVendorOrders(state){
+        const ordered = new Set((state.purchase_orders || []).map(order=>order.indentId));
+        const issued = new Map();
+        for(const record of state.operationRecords || []){
+            if(!['delivery','issued_summary'].includes(record.kind) || !record.requestId || record.replacementFor)continue;
+            issued.set(record.requestId,(issued.get(record.requestId) || 0)+record.quantity);
+        }
+        const linked = new Set();
+        const outstanding = new Set();
+        for(const request of state.requests || []){
+            if(!request.indentId || request.status!=='Approved')continue;
+            linked.add(request.indentId);
+            const approved = request.approvedQuantity ?? request.revisedQty ?? request.qty;
+            if(approved-(request.legacyIssuedQuantity || 0)-(issued.get(request.id) || 0)>1e-8)outstanding.add(request.indentId);
+        }
+        return (state.indents || []).filter(indent=>indent.status==='Approved'
+            && !indent.purchaseOrderIds?.length && !ordered.has(indent.id)
+            && (linked.has(indent.id)?outstanding.has(indent.id):indent.items?.some(item=>(item.revisedQty ?? item.originalQty)>0)));
+    }
     function menuAttention(state,user){
         const purchasing=['admin','purchaser'].includes(user.role),executive=user.role==='executive_chef';
         const requests=state.requests || [],indents=state.indents || [],records=state.operationRecords || [];
@@ -88,7 +107,7 @@
         return {approvals:purchasing?indents.filter(i=>i.status==='Pending Approval').length+requests.filter(r=>!r.indentId && r.status==='Sent to Admin').length:0,
             manage:executive?requests.filter(r=>r.status==='Pending').length:0,
             consolidate:executive?requests.filter(r=>r.status==='Accepted' && !r.indentId).length:0,
-            vendorOrders:purchasing?indents.filter(i=>i.status==='Approved' && !i.purchaseOrderIds?.length).length:0,
+            vendorOrders:purchasing?pendingVendorOrders(state).length:0,
             deliveries,accounts:user.role==='admin'?records.filter(r=>r.kind==='account_request' && r.status==='Pending').length:0,bulkReceipts};
     }
     function purchaseOrderList(orders,section,from='',to=''){
@@ -114,5 +133,5 @@
             return quantity;
         });
     }
-    root.InventoryTools = {defaultDistributionAllocations,consolidatedDistributionRows,purchaseOrderList,menuAttention,workspaceEditChanges,consolidationNote,distributionRequests,day,timestamp,bounds,resolveOutlet,matchItems,report,reviseCuisine};
+    root.InventoryTools = {defaultDistributionAllocations,consolidatedDistributionRows,purchaseOrderList,pendingVendorOrders,menuAttention,workspaceEditChanges,consolidationNote,distributionRequests,day,timestamp,bounds,resolveOutlet,matchItems,report,reviseCuisine};
 })(globalThis);

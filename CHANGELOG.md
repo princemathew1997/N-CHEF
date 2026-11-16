@@ -4,6 +4,10 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 2.12.1 - 2026-11-16
+
+- Clear fully supplied requests and requests with existing purchase orders from Generate Vendor Orders and its badge.
+
 ## 2.12.0 - 2026-11-16
 
 - Clear the Approvals badge when the approval queue is empty and link approved requests to vendor ordering.
