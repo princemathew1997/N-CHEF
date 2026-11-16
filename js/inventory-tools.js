@@ -107,7 +107,6 @@
         return {approvals:purchasing?indents.filter(i=>i.status==='Pending Approval').length+requests.filter(r=>!r.indentId && r.status==='Sent to Admin').length:0,
             manage:executive?requests.filter(r=>r.status==='Pending').length:0,
             consolidate:executive?requests.filter(r=>r.status==='Accepted' && !r.indentId).length:0,
-            vendorOrders:purchasing?pendingVendorOrders(state).length:0,
             deliveries,accounts:user.role==='admin'?records.filter(r=>r.kind==='account_request' && r.status==='Pending').length:0,bulkReceipts};
     }
     function purchaseOrderList(orders,section,from='',to=''){

@@ -1902,7 +1902,6 @@ window.updateSidebarAttention=function(){
     mark(document.querySelector('[data-operations-nav][data-operations=approvals]'),counts.approvals);
     mark(document.getElementById('navManageRequests'),counts.manage);
     mark(document.getElementById('navConsolidateRequests'),counts.consolidate);
-    mark(document.querySelector('[data-operations-nav][data-operations="vendor-orders"]'),counts.vendorOrders);
     mark(document.querySelector('[data-operations-nav][data-operations=deliveries]'),counts.deliveries);
     mark(document.querySelector('[data-operations-nav][data-operations=accounts]'),counts.accounts);
     mark(document.getElementById('navDistribution'),counts.deliveries);
@@ -1910,7 +1909,7 @@ window.updateSidebarAttention=function(){
     mark(document.querySelector('[data-inventory="receipt"]'),counts.bulkReceipts);
     window.NavigationGroups?.updateBadges();
     document.getElementById('navStock')?.classList.toggle('has-pending-requests',counts.deliveries>0);
-    document.getElementById('navRequests')?.classList.toggle('has-pending-requests',counts.approvals+counts.manage+counts.consolidate+counts.vendorOrders>0);
+    document.getElementById('navRequests')?.classList.toggle('has-pending-requests',counts.approvals+counts.manage+counts.consolidate>0);
 };
 function getVisibleNotifications(){
     return (typeof committedState!=='undefined'?committedState?.operationRecords || []:[]).filter(r=>r.kind==='notification' && !r.system && r.userId===currentUser?.id && typeof r.message==='string' && r.message.trim());

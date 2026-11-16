@@ -79,12 +79,12 @@ test('submenu attention follows the exact workflow stage and clears after handli
  assert.equal(InventoryTools.menuAttention(state,{role:'executive_chef'}).manage,1);
  assert.equal(InventoryTools.menuAttention(state,{role:'purchaser'}).approvals,1);
  state.requests[0].status='Accepted';const executive=InventoryTools.menuAttention(state,{role:'executive_chef'});assert.equal(executive.manage,0);assert.equal(executive.consolidate,1);
- state.indents[0].status='Approved';let counts=InventoryTools.menuAttention(state,{role:'admin'});assert.equal(counts.approvals,0);assert.equal(counts.vendorOrders,1);assert.equal(counts.deliveries,1);assert.equal(counts.accounts,1);
- state.indents[0].purchaseOrderIds=['po'];state.operationRecords[0].status='Resolved';state.operationRecords[1].status='Approved';counts=InventoryTools.menuAttention(state,{role:'admin'});assert.equal(counts.vendorOrders,0);assert.equal(counts.deliveries,0);assert.equal(counts.accounts,0);
+ state.indents[0].status='Approved';let counts=InventoryTools.menuAttention(state,{role:'admin'});assert.equal(counts.approvals,0);assert.equal('vendorOrders' in counts,false);assert.equal(counts.deliveries,1);assert.equal(counts.accounts,1);
+ state.indents[0].purchaseOrderIds=['po'];state.operationRecords[0].status='Resolved';state.operationRecords[1].status='Approved';counts=InventoryTools.menuAttention(state,{role:'admin'});assert.equal(counts.deliveries,0);assert.equal(counts.accounts,0);
  const head=InventoryTools.menuAttention(state,{role:'cuisine_head'});assert.equal(head.approvals,0);assert.equal(head.accounts,0);
 });
 
-test('vendor order badge clears for fully issued requests and existing POs',()=>{
+test('vendor order queue excludes fully issued requests and existing POs',()=>{
  const state={
   indents:['filled','partial','ordered','zero'].map(id=>({id,status:'Approved',items:[{revisedQty:id==='zero'?0:5}]})),
   requests:['filled','partial'].map(id=>({id,indentId:id,status:'Approved',approvedQuantity:5})),
@@ -96,9 +96,8 @@ test('vendor order badge clears for fully issued requests and existing POs',()=>
   purchase_orders:[{indentId:'ordered'}]
  };
  assert.deepEqual(InventoryTools.pendingVendorOrders(state).map(i=>i.id),['partial']);
- assert.equal(InventoryTools.menuAttention(state,{role:'admin'}).vendorOrders,1);
  state.operationRecords[1].quantity=5;
- assert.equal(InventoryTools.menuAttention(state,{role:'admin'}).vendorOrders,0);
+ assert.deepEqual(InventoryTools.pendingVendorOrders(state),[]);
 });
 
 test('purchase orders move between open and received sections and filter by the relevant IST date',()=>{
