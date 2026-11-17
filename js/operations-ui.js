@@ -237,7 +237,7 @@
                 received.setCustomValidity(exceedsOutstanding?'Received plus rejected quantity exceeds the outstanding order.':'');
                 cost.required=Number(received.value)>0;reason.required=Number(rejected.value)>0;message.required=Number(rejected.value)>0 && reason.value==='Other';
                 const amount=Math.round(Math.max(0,Number(received.value))*Math.round(Number(cost.value || 0)*100));total+=amount;form.querySelector('[data-line-total="'+index+'"]').textContent=price(amount);
-            });form.querySelector('#vendorReceiveTotal').textContent='Our received stock total: '+price(total);const invoice=form.elements.vendorInvoiceTotal.value;form.elements.vendorBillType.required=invoice!=='';form.querySelector('#vendorInvoiceDifference').textContent=invoice===''?'Enter the vendor invoice total to compare.':'Difference (vendor − ours): '+price(Math.round(Number(invoice)*100)-total);};form.oninput=update;form.onchange=update;update();return dialog;
+            });form.querySelector('#vendorReceiveTotal').textContent='Our received stock total: '+price(total);const invoice=form.elements.vendorInvoiceTotal.value;form.querySelector('#vendorInvoiceDifference').textContent=invoice===''?'Enter the vendor invoice total to compare.':'Difference (vendor − ours): '+price(Math.round(Number(invoice)*100)-total);};form.oninput=update;form.onchange=update;update();return dialog;
         }
         if(action==='raise-po'){activeReviewingIndentId=id;return window.VendorOrderUI.open();}
         if(action==='pdf')return window.VendorOrderUI.download(id);

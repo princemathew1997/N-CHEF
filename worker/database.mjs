@@ -134,7 +134,7 @@ export async function persistChanges(db, state, next, touched, actor, operationI
     for (const legacy of stock.legacyStock) {
       if (state.legacyStock.find(s => s.item_id === legacy.item_id)?.quantity !== legacy.quantity || state.legacyStock.find(s => s.item_id === legacy.item_id)?.issue !== legacy.issue) writes.push(query(db, 'UPDATE legacy_stock SET quantity=?, issue=? WHERE item_id=?', legacy.quantity, legacy.issue, legacy.item_id));
     }
-    for (const m of stock.movements) writes.push(query(db, 'INSERT INTO outlet_stock_history (id,operation_id,item_id,outlet_id,delta,quantity,kind,reason,cuisine,vendor,item_name,unit,actor_id,actor_name,unit_cost_minor,total_cost_minor,delivery_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', crypto.randomUUID(), operationId, m.item_id, m.outlet_id, m.delta, m.quantity, m.kind, m.reason, m.cuisine, m.vendor, m.item_name, m.unit, actor.id, actor.name, m.unit_cost_minor ?? null, m.total_cost_minor ?? null, m.delivery_id ?? null));
+    for (const m of stock.movements) writes.push(query(db, 'INSERT INTO outlet_stock_history (id,operation_id,item_id,outlet_id,delta,quantity,kind,reason,cuisine,vendor,item_name,unit,actor_id,actor_name,unit_cost_minor,total_cost_minor,delivery_id,vendor_bill_type) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', crypto.randomUUID(), operationId, m.item_id, m.outlet_id, m.delta, m.quantity, m.kind, m.reason, m.cuisine, m.vendor, m.item_name, m.unit, actor.id, actor.name, m.unit_cost_minor ?? null, m.total_cost_minor ?? null, m.delivery_id ?? null, m.vendor_bill_type ?? null));
   }
   const dispatches=new Map();
   for(const delivery of stock?.deliveries || []){

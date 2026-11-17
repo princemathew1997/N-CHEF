@@ -4,6 +4,11 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 2.13.0 - 2026-11-18
+
+- Require Cash or Credit for single, bulk, and vendor-order stock receipts.
+- Carry the bill type through bulk approval and show it in Stock History.
+
 ## 2.12.4 - 2026-11-17
 
 - Show item category and receipt vendor when Admin reviews bulk stock receipts.

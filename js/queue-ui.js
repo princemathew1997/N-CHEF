@@ -113,7 +113,7 @@
         refreshDeliveries=load;await load();
     }
     function stockMovementTable(rows){
-        return table(['Date','Outlet','Item','Movement','Change','Balance','Unit','Cuisine','Vendor','Reason','Person','Unit price','Line total'],rows.map(m=>[esc(InventoryTools.timestamp(m.created_at)),esc(outletName(m.outlet_id)),esc(m.item_name),esc(m.kind==='price'?'Price update':m.kind),esc(m.delta),esc(m.quantity),esc(m.unit),esc(m.cuisine),esc(m.vendor),esc(m.reason),esc(m.actor_name),money(m.unit_cost_minor),money(m.total_cost_minor)]));
+        return table(['Date','Outlet','Item','Movement','Change','Balance','Unit','Cuisine','Vendor','Vendor bill type','Reason','Person','Unit price','Line total'],rows.map(m=>[esc(InventoryTools.timestamp(m.created_at)),esc(outletName(m.outlet_id)),esc(m.item_name),esc(m.kind==='price'?'Price update':m.kind),esc(m.delta),esc(m.quantity),esc(m.unit),esc(m.cuisine),esc(m.vendor),m.vendor_bill_type==='cash'?'Cash':m.vendor_bill_type==='credit'?'Credit':'—',esc(m.reason),esc(m.actor_name),money(m.unit_cost_minor),money(m.total_cost_minor)]));
     }
     function openStockMovement(delivery){
         const dialog=document.createElement('dialog');

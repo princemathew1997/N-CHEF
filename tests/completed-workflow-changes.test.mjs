@@ -68,11 +68,11 @@ test('review accepts revised quantities and reopens a rejected consolidated requ
 test('invoice comparison uses accepted stock only and supports optional or invalid invoice totals',()=>{
  const state={vendors:[{id:'vendor',name:'Vendor'}],purchase_orders:[{id:'po',outletId:'a',vendorId:'vendor',poNumber:'PO-1',status:'PO Raised',items:[{itemId:'rice',itemName:'Rice',qty:10}]}]};
  const actor={id:'p',role:'purchaser',assignedLocations:['a']};
- const input={poId:'po',vendorInvoiceTotal:120,lines:[{itemId:'rice',receivedQuantity:8,rejectedQuantity:2,unitPrice:12.5,reason:'Quality issues'}]};
+ const input={poId:'po',vendorBillType:'cash',vendorInvoiceTotal:120,lines:[{itemId:'rice',receivedQuantity:8,rejectedQuantity:2,unitPrice:12.5,reason:'Quality issues'}]};
  const {event}=planVendorReceipt(state,actor,input);
  assert.equal(event.stockTotalMinor,10000);assert.equal(event.vendorInvoiceTotalMinor,12000);assert.equal(event.invoiceDifferenceMinor,2000);
  assert.equal(planVendorReceipt(state,actor,{...input,vendorInvoiceTotal:undefined}).event.vendorInvoiceTotalMinor,undefined);
- assert.equal(event.vendorBillType,undefined);
+ assert.throws(()=>planVendorReceipt(state,actor,{...input,vendorBillType:undefined}),/Cash or Credit/);
  for(const vendorBillType of ['cash','credit']){
    const {po}=planVendorReceipt(state,actor,{...input,vendorBillType});
    assert.equal(po.receiptEvents.at(-1).vendorBillType,vendorBillType);
