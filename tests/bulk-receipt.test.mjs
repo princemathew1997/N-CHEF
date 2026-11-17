@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateBulkReceiptCSV, bulkReceiptHeaders } from '../shared/bulk-receipt.mjs';
+import { validateBulkReceiptCSV, bulkReceiptHeaders, bulkReceiptReviewRows } from '../shared/bulk-receipt.mjs';
 import { encodeCSV } from '../shared/legacy-import.mjs';
 import { dayIST } from '../worker/operations.mjs';
 
@@ -10,7 +10,7 @@ const state = {
     { id: 'vidyaranyapura', name: 'VIDYARANYAPURA' }
   ],
   items: [
-    { id: 'item_01', name: 'Tuna', category: 'Dry', unit: 'pcs', active: true },
+    { id: 'item_01', name: 'Tuna', category: 'Dry', vendor: 'Coastal Foods', unit: 'pcs', active: true },
     { id: 'item_02', name: 'Pasta', category: 'Dry', unit: 'kg', active: true },
     { id: 'item_inactive', name: 'Old Sauce', category: 'Sauce', unit: 'can', active: false }
   ],
@@ -26,12 +26,16 @@ test('validateBulkReceiptCSV validates normal receipt row with Date', () => {
   const date = dayIST();
   const csv = encodeCSV([
     bulkReceiptHeaders,
-    ['BRIGADE', date, 'Tuna', 'pcs', '5', '55.50', 'Fresh delivery']
+    ['BRIGADE', date, 'Tuna', 'pcs', '5', '55.50', '[Vendor: Harbor Supply] Fresh delivery']
   ]);
   const result = validateBulkReceiptCSV(csv, state, supervisor);
   assert.equal(result.errors.length, 0);
   assert.equal(result.rows.length, 1);
   assert.equal(result.rows[0].itemName, 'Tuna');
+  const [reviewRow] = bulkReceiptReviewRows(result.rows);
+  assert.equal(reviewRow.category, 'Dry');
+  assert.equal(reviewRow.vendor, 'Harbor Supply');
+  assert.equal(bulkReceiptReviewRows([{ ...result.rows[0], vendor: '' }])[0].vendor, 'Direct Delivery');
   assert.equal(result.rows[0].date, date);
   assert.equal(result.rows[0].quantity, 5);
   assert.equal(result.rows[0].unitCostMinor, 5550);

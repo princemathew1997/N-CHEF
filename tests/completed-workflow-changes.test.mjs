@@ -20,6 +20,19 @@ test('bulk delivery acceptance preserves issues and rejects unauthorized or stal
  assert.throws(()=>operationCommand(state,exec,{ids:['one']},'deliveries/accept-all'),/permission/);
 });
 
+test('delivery confirmation tolerates decimal residue while rejecting incorrect shortages',()=>{
+ const state=fixture();
+ state.operationRecords=[{...delivery('one'),quantity:0.3}];
+ const input={id:'one',receivedQuantity:0.1,affectedQuantity:0.2,reject:true,reason:'Less quantity'};
+ const result=operationCommand(state,head,input,'deliveries/confirm');
+ assert.equal(result.next.operationRecords.find(r=>r.id==='one').affectedQuantity,0.2);
+ assert.throws(()=>operationCommand(state,head,{...input,affectedQuantity:0.21},'deliveries/confirm'),/must equal the missing quantity/);
+
+ state.operationRecords[0].quantity=0.3-0.1;
+ const full=operationCommand(state,head,{id:'one',receivedQuantity:0.2},'deliveries/confirm');
+ assert.equal(full.next.operationRecords.find(r=>r.id==='one').status,'Received');
+});
+
 test('issued notifications target the requesting head, deduplicate and clear on confirmation',()=>{
  const state=fixture();state.operationRecords=[delivery('one')];
  notifyIssuedDeliveries(state,[delivery('one')]);notifyIssuedDeliveries(state,[delivery('one')]);

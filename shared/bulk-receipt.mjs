@@ -6,6 +6,21 @@ export const maxReceiptRows = 200;
 export const maxReceiptBytes = 150000;
 const key = value => String(value ?? '').trim().normalize('NFKC').toLowerCase();
 
+export function bulkReceiptReviewRows(rows) {
+  return rows.map(r => ({
+    row: r.row,
+    outlet: r.outletName,
+    date: r.date,
+    item: r.itemName,
+    category: r.category,
+    vendor: r.vendor || 'Direct Delivery',
+    unit: r.unit,
+    qty: r.quantity,
+    price: ((r.unitCostMinor ?? 0) / 100).toFixed(2),
+    notes: r.notes || ''
+  }));
+}
+
 export function validateBulkReceiptCSV(csv, state, actor) {
   const errors = [];
   const rows = [];

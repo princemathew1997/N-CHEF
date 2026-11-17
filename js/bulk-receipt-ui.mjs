@@ -1,6 +1,6 @@
 // Bulk Receipt CSV Validation, Approval & History Component (attached to Receive Stock)
 import { encodeCSV } from '../shared/legacy-import.mjs';
-import { bulkReceiptHeaders, maxReceiptRows, maxReceiptBytes } from '../shared/bulk-receipt.mjs';
+import { bulkReceiptHeaders, bulkReceiptReviewRows, maxReceiptRows, maxReceiptBytes, validateBulkReceiptCSV } from '../shared/bulk-receipt.mjs';
 
 const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -291,22 +291,35 @@ window.renderBulkReceiptApprovalAndHistory = (container) => {
           if (!targetReq) return;
 
           if (act === 'view') {
+            const preview = targetReq.itemsPreview || [];
+            let reviewRows = preview;
+            if (preview.length < targetReq.rowCount || preview.some(row => !Object.hasOwn(row, 'vendor'))) {
+              const validation = validateBulkReceiptCSV(targetReq.csv, {
+                items: masterItemsData, outlets: outletsData
+              }, currentUser);
+              const byRow = new Map(bulkReceiptReviewRows(validation.rows).map(row => [row.row, row]));
+              for (const row of preview) byRow.set(row.row, { ...byRow.get(row.row), ...row });
+              reviewRows = [...byRow.values()].sort((a, b) => a.row - b.row);
+            }
             const dialog = document.createElement('dialog');
             dialog.className = 'operations-dialog';
             dialog.innerHTML = `
               <h2>Batch ${escapeHTML(targetReq.batchId)} Details</h2>
               <p>Supervisor: <strong>${escapeHTML(targetReq.supervisorName)}</strong> | Date (IST): <strong>${escapeHTML(formatIST(targetReq.createdAt))}</strong></p>
               <p>Outlets: <strong>${escapeHTML(targetReq.outletNames)}</strong> | Rows: <strong>${escapeHTML(targetReq.rowCount)}</strong> | Value: <strong>${escapeHTML(formatCost(targetReq.totalCostMinor || 0))}</strong></p>
+              ${reviewRows.length < targetReq.rowCount ? '<p>Some rows are unavailable because their items or outlets could not be matched to current records.</p>' : ''}
               <div class="table-container" style="max-height: 320px; overflow-y: auto;">
                 <table>
-                  <thead><tr><th>Row</th><th>Outlet</th><th>Date</th><th>Item</th><th>Unit</th><th>Qty</th><th>Price (INR)</th><th>Notes</th></tr></thead>
+                  <thead><tr><th>Row</th><th>Outlet</th><th>Date</th><th>Item</th><th>Category</th><th>Vendor</th><th>Unit</th><th>Qty</th><th>Price (INR)</th><th>Notes</th></tr></thead>
                   <tbody>
-                    ${(targetReq.itemsPreview || []).map(r => `
+                    ${reviewRows.map(r => `
                       <tr>
                         <td>${escapeHTML(r.row)}</td>
                         <td>${escapeHTML(r.outlet)}</td>
                         <td>${escapeHTML(r.date)}</td>
                         <td>${escapeHTML(r.item)}</td>
+                        <td>${escapeHTML(r.category || '—')}</td>
+                        <td>${escapeHTML(r.vendor || '—')}</td>
                         <td>${escapeHTML(r.unit)}</td>
                         <td>${escapeHTML(r.qty)}</td>
                         <td>${escapeHTML(r.price)}</td>

@@ -1,6 +1,6 @@
 import { canPurchase, operationCommand, notify, putRecord, dayIST, editCuisineRequest, recallConsolidatedRequest, reviewChefRequests } from './operations.mjs';
 import { validateLegacyCSV } from '../shared/legacy-import.mjs';
-import { validateBulkReceiptCSV } from '../shared/bulk-receipt.mjs';
+import { bulkReceiptReviewRows, validateBulkReceiptCSV } from '../shared/bulk-receipt.mjs';
 import { stockCommand } from './stock.mjs';
 import { releaseInfo, requireCurrentClient } from './release.mjs';
 import { raiseVendorOrders, planVendorReceipt } from './purchase-orders.mjs';
@@ -289,7 +289,7 @@ export default {
             rowCount: validation.rows.length,
             totalCostMinor,
             csv: input.csv,
-            itemsPreview: validation.rows.slice(0, 10).map(r => ({ row: r.row, outlet: r.outletName, date: r.date, item: r.itemName, unit: r.unit, qty: r.quantity, price: r.unitCostMinor ? (r.unitCostMinor / 100).toFixed(2) : '0.00', notes: r.notes || '' })),
+            itemsPreview: bulkReceiptReviewRows(validation.rows),
             status: 'Pending',
             createdAt: nowIso
           };

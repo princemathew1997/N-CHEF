@@ -216,7 +216,8 @@ export function operationCommand(state, actor, input, action, transact) {
     const r=get('delivery',input.id);outlet(r.outletId);
     if(actor.role!=='cuisine_head' || !(actor.assignedSections || actor.assignedCuisines || []).includes(r.cuisine) || (r.recipientId && r.recipientId!==actor.id))fail('Delivery access denied.',403);
     if(r.status!=='Issued')fail('Delivery already confirmed.',409);
-    const received=number(input.receivedQuantity,'Received quantity');
+    const submitted=number(input.receivedQuantity,'Received quantity');
+    const received=Math.abs(submitted-r.quantity)<=1e-8?r.quantity:submitted;
     if(received>r.quantity)fail('Received quantity exceeds issued quantity.');
     const rejected=input.reject===true;
     if(!rejected && received!==r.quantity)fail('Report a reason for partial receipt.');
@@ -224,8 +225,9 @@ export function operationCommand(state, actor, input, action, transact) {
     if(rejected) {
       if(!['Less quantity','Not available','Quality issues','Other'].includes(input.reason))fail('Choose a rejection reason.');
       affected=number(input.affectedQuantity,'Affected quantity',true);
+      if(affected>r.quantity && affected<=r.quantity+1e-8)affected=r.quantity;
       if(affected>r.quantity)fail('Affected quantity exceeds issued quantity.');
-      if(['Less quantity','Not available'].includes(input.reason) && affected!==r.quantity-received)fail('Affected quantity must equal the missing quantity.');
+      if(['Less quantity','Not available'].includes(input.reason) && Math.abs(affected-(r.quantity-received))>1e-8)fail('Affected quantity must equal the missing quantity.');
       if(input.reason==='Quality issues' && affected>received)fail('Quality issues cannot exceed the quantity physically received.');
       if(input.message || input.reason==='Other')safeText(input.message,'Issue message',500);
     }

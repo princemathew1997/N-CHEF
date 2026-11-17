@@ -4,6 +4,11 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 2.12.4 - 2026-11-17
+
+- Show item category and receipt vendor when Admin reviews bulk stock receipts.
+- Accept decimal rounding differences in distribution, vendor receiving, and delivery confirmation.
+
 ## 2.12.3 - 2026-11-16
 
 - Filter the stock report by low remaining stock from its summary card.
