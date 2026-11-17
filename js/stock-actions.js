@@ -311,7 +311,7 @@
             const remainingFormatted = formatQty(r.remaining);
             const availableFormatted = formatQty(r.available);
             const allocatedFormatted = formatQty(allocated);
-            return [esc(item?.name || r.itemName)+' ('+esc(item?.unit || r.unit)+')',esc(r.cuisine),esc(remainingFormatted),esc(availableFormatted),`<input aria-label="Issue ${esc(item?.name || r.itemName)} to ${esc(r.cuisine)}" name="quantity_${index}" type="number" min="0" max="${r.remaining}" step="any" value="${allocatedFormatted}" required>`,`<input aria-label="Comment ${esc(item?.name || r.itemName)} ${esc(r.cuisine)}" name="comment_${index}" maxlength="500" placeholder="Required if quantity changes">`];
+            return [esc(item?.name || r.itemName)+' ('+esc(item?.unit || r.unit)+')',esc(r.cuisine),esc(remainingFormatted),esc(availableFormatted),`<input aria-label="Issue ${esc(item?.name || r.itemName)} to ${esc(r.cuisine)}" name="quantity_${index}" type="number" min="0" step="any" value="${allocatedFormatted}" required>`,`<input aria-label="Comment ${esc(item?.name || r.itemName)} ${esc(r.cuisine)}" name="comment_${index}" maxlength="500" placeholder="Required if quantity changes">`];
         }))}<p id="distributionAvailabilityMessage" role="status"></p><button class="btn btn-primary">Distribute order</button></form>`;
         const form=target.querySelector('form');
         const validate=()=>{
@@ -319,7 +319,14 @@
             rows.forEach((r,index)=>{
                 const quantity=form.elements['quantity_'+index],note=form.elements['comment_'+index],changed=Math.abs(Number(quantity.value)-r.remaining)>1e-8;
                 note.required=changed;note.setCustomValidity(changed && !note.value.trim()?'Explain the changed issue quantity.':'');
-                quantity.setCustomValidity(totals.get(r.itemId)>r.available+1e-8?'Total allocation exceeds available outlet stock.':'');
+                // Match the server's tolerance when subtraction leaves a floating-point residue.
+                let quantityError='';
+                if(Number(quantity.value)>r.remaining+1e-8){
+                    quantityError='Issue quantity exceeds the remaining approved quantity.';
+                }else if(totals.get(r.itemId)>r.available+1e-8){
+                    quantityError='Total allocation exceeds available outlet stock.';
+                }
+                quantity.setCustomValidity(quantityError);
             });
         };
         form.oninput=validate;form.onchange=validate;validate();
