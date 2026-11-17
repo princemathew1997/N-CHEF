@@ -263,3 +263,7 @@ export function operationCommand(state, actor, input, action, transact) {
   } else fail('Unknown operation.',404);
   return {next,changes};
 }
+
+export function requireVendorBillType(value) {
+  if (value !== 'cash' && value !== 'credit') fail('Choose Cash or Credit for the vendor bill.');
+}

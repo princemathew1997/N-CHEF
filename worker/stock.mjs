@@ -1,4 +1,4 @@
-import { canPurchase, money, lineCost } from './operations.mjs';
+import { canPurchase, money, lineCost, requireVendorBillType } from './operations.mjs';
 import { clone, fail, hasOutlet, number, safeText } from './model.mjs';
 
 export function stockCommand(state, actor, input, kind, internal = false) {
@@ -46,6 +46,7 @@ export function stockCommand(state, actor, input, kind, internal = false) {
       delta = -delta;
     } else if (kind === 'receipt') {
       if (!state.vendors.some(v => v.name === input.vendor)) fail('Choose an existing vendor.');
+      requireVendorBillType(input.vendorBillType);
     } else if(kind==='opening') {
       // Opening stock is ordinary outlet inventory; its origin is the vendor label.
     } else if (kind === 'return') {
@@ -62,6 +63,6 @@ export function stockCommand(state, actor, input, kind, internal = false) {
   balance.quantity = Math.max(0, quantity);
   if(kind==='receipt' || (kind==='opening' && balance.unit_cost_minor==null))balance.unit_cost_minor=unitCostMinor;
   if (input.reason) safeText(input.reason, 'Reason', 500);
-  const movement = { item_id: item.id, outlet_id: input.outletId, delta, quantity: balance.quantity, kind, reason: input.reason || '', cuisine: kind === 'distribute' ? input.cuisine : '', vendor: kind==='opening' || kind==='assign'?'Legacy Stock':kind === 'receipt' ? input.vendor : '', item_name: item.name, unit: item.unit, actor_id: actor.id, actor_name: actor.name, unit_cost_minor:unitCostMinor,total_cost_minor:unitCostMinor===null?null:lineCost(Math.abs(delta),unitCostMinor),delivery_id:deliveries[0]?.id || input.deliveryId || null };
+  const movement = { item_id: item.id, outlet_id: input.outletId, delta, quantity: balance.quantity, kind, reason: input.reason || '', cuisine: kind === 'distribute' ? input.cuisine : '', vendor: kind==='opening' || kind==='assign'?'Legacy Stock':kind === 'receipt' ? input.vendor : '', item_name: item.name, unit: item.unit, actor_id: actor.id, actor_name: actor.name, unit_cost_minor:unitCostMinor,total_cost_minor:unitCostMinor===null?null:lineCost(Math.abs(delta),unitCostMinor),vendor_bill_type:kind==='receipt'?input.vendorBillType:null,delivery_id:deliveries[0]?.id || input.deliveryId || null };
   return { outletStock: stock, legacyStock: legacy, movements: [movement], deliveries };
 }

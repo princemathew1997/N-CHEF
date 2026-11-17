@@ -76,10 +76,14 @@ test('secure setup, login, permissions, atomic approval and conflicts', async ()
     assert.equal((await request('state')).data.indents[0].status, 'Pending Approval');
     const stockAction = async (path, input, cookie = adminCookie) => request(path, 'POST', { ...input, operationId: crypto.randomUUID(), revision: (await request('state', 'GET', undefined, cookie)).data.revision }, cookie);
     assert.equal((await request('state')).data.indents.find(i=>i.id===indentId).status,'Pending Approval');
-    const receiptInput = { itemId:'item_01',outletId:'brigade',vendor:item.vendor,quantity:10,unitPrice:12.50 };
+    const receiptInput = { vendorBillType:'cash', itemId:'item_01',outletId:'brigade',vendor:item.vendor,quantity:10,unitPrice:12.50 };
     assert.equal((await stockAction('stock/receipt',receiptInput,chefCookie)).status,403);
     assert.equal((await stockAction('stock/receipt',{...receiptInput,outletId:'cafe'},supervisorCookie)).status,403);
-    assert.equal((await stockAction('stock/receipt',receiptInput,purchaserCookie)).status,200);
+    assert.equal((await stockAction('stock/receipt',{...receiptInput,vendorBillType:undefined},purchaserCookie)).status,400);
+    assert.equal((await stockAction('stock/receipt',{...receiptInput,vendorBillType:'invalid'},purchaserCookie)).status,400);
+    const manualReceipt = await stockAction('stock/receipt',receiptInput,purchaserCookie);
+    assert.equal(manualReceipt.status,200);
+    assert.equal(manualReceipt.data.stockHistory.find(m=>m.kind==='receipt' && m.item_id===receiptInput.itemId).vendor_bill_type,'cash');
     const before = (await request('state')).data;
     assert.equal((await stockAction('indents/approve',{indentId},supervisorCookie)).status,403);
     const approval = {indentId,operationId:crypto.randomUUID(),revision:before.revision};
@@ -101,7 +105,7 @@ test('secure setup, login, permissions, atomic approval and conflicts', async ()
     const po = { id: poId, poNumber: 'PO-TEST-1', vendorId: 'v_01', outletId: 'brigade', items: [{ itemId: 'item_01', qty: 4 }], status: 'PO Raised' };
     assert.equal((await save([{ entity: 'purchase_orders', key: poId, value: po }])).status, 200);
     const poRevision = (await request('state', 'GET', undefined, supervisorCookie)).data.revision;
-    const receipt = { poId, prices:{item_01:15}, operationId: crypto.randomUUID(), revision: poRevision };
+    const receipt = { poId, vendorBillType:'cash', prices:{item_01:15}, operationId: crypto.randomUUID(), revision: poRevision };
     assert.equal((await request('purchase-orders/receive', 'POST', receipt, purchaserCookie)).status, 200);
     assert.equal((await request('purchase-orders/receive', 'POST', receipt, purchaserCookie)).status, 200);
     assert.equal((await stockAction('purchase-orders/receive', { poId }, purchaserCookie)).status, 409);
@@ -165,7 +169,7 @@ test('secure setup, login, permissions, atomic approval and conflicts', async ()
     // Chef and supervisor requirements consolidate together; edited cuisine quantities drive approval.
     const catalogState=(await request('state')).data;
     const second=catalogState.items.find(i=>i.id==='item_02');
-    assert.equal((await stockAction('stock/receipt',{itemId:second.id,outletId:'brigade',vendor:second.vendor,quantity:20,unitPrice:10},purchaserCookie)).status,200);
+    assert.equal((await stockAction('stock/receipt',{itemId:second.id,outletId:'brigade',vendor:second.vendor,vendorBillType:'cash',quantity:20,unitPrice:10},purchaserCookie)).status,200);
     const chefRequirement={id:crypto.randomUUID(),itemId:second.id,outletId:'brigade',cuisine:'Indian',qty:6,status:'Pending'};
     const ownRequirement={id:crypto.randomUUID(),itemId:second.id,outletId:'brigade',cuisine:'Chinese',qty:4,status:'Pending'};
     const chefSaved=await save([{entity:'requests',key:chefRequirement.id,value:chefRequirement}],chefCookie);
@@ -240,7 +244,7 @@ test('vendor orders save atomically, retry safely and receive per supplier', asy
     assert.equal((await request('state')).data.purchase_orders.filter(p=>p.indentId===indent.id).length,2);
     const duplicate={...input,revision:(await request('state')).data.revision,operationId:crypto.randomUUID()};
     assert.equal((await request('purchase-orders/raise','POST',duplicate)).status,409);
-    const receive={poId:orders[0].id,prices:{[orders[0].items[0].itemId]:20},revision:(await request('state')).data.revision,operationId:crypto.randomUUID()};
+    const receive={poId:orders[0].id,vendorBillType:'credit',prices:{[orders[0].items[0].itemId]:20},revision:(await request('state')).data.revision,operationId:crypto.randomUUID()};
     const received=await request('purchase-orders/receive','POST',receive);
     assert.equal(received.status,200,JSON.stringify(received.data));
     assert.equal(received.data.purchase_orders.find(p=>p.id===orders[0].id).status,'Received');
@@ -267,7 +271,7 @@ test('four-role workflow, receipt costs, thresholds, delivery issues and approve
     chefCookie=(await request('login','POST',{username:'chef_test',password:userPassword},'')).cookie;
     assert.equal((await request('session','GET',undefined,supervisorCookie)).data.user.role,'executive_chef');
     const state=await ok(request('state')),item=state.items.find(i=>i.id==='item_03');
-    const receipt={itemId:item.id,outletId:'brigade',vendor:item.vendor,quantity:20,unitPrice:10.25};
+    const receipt={itemId:item.id,outletId:'brigade',vendor:item.vendor,vendorBillType:'credit',quantity:20,unitPrice:10.25};
     assert.equal((await cmd('stock/receipt',receipt,supervisorCookie)).status,403);
     assert.equal((await cmd('stock/receipt',{...receipt,unitPrice:1.001},purchaserCookie)).status,400);
     const priced=await ok(cmd('stock/receipt',receipt,purchaserCookie));
@@ -303,11 +307,11 @@ test('four-role workflow, receipt costs, thresholds, delivery issues and approve
     await ok(cmd('stock/receipt',{...receipt,quantity:10,unitPrice:12},purchaserCookie));
     await ok(cmd('stock/adjust',{itemId:item.id,outletId:'brigade',quantity:5,reason:'Physical count'},purchaserCookie));assert.equal(await alerts(),2);
     const other=state.items.find(i=>i.id==='item_04');
-    await ok(cmd('stock/receipt',{itemId:other.id,outletId:'brigade',vendor:other.vendor,quantity:10,unitPrice:15},purchaserCookie));
+    await ok(cmd('stock/receipt',{itemId:other.id,outletId:'brigade',vendor:other.vendor,vendorBillType:'credit',quantity:10,unitPrice:15},purchaserCookie));
     const quality=await ok(cmd('stock/distribute',{itemId:other.id,outletId:'brigade',cuisine:'Indian',quantity:4},purchaserCookie));
     const bad=quality.operationRecords.filter(r=>r.kind==='delivery' && r.itemId===other.id).at(-1);
     await ok(cmd('operations/deliveries/confirm',{id:bad.id,receivedQuantity:4,reject:true,reason:'Quality issues',affectedQuantity:2},chefCookie));
-    await ok(cmd('stock/receipt',{itemId:other.id,outletId:'brigade',vendor:other.vendor,quantity:1,unitPrice:20},purchaserCookie));
+    await ok(cmd('stock/receipt',{itemId:other.id,outletId:'brigade',vendor:other.vendor,vendorBillType:'credit',quantity:1,unitPrice:20},purchaserCookie));
     const operationId=crypto.randomUUID(),revision=(await request('state')).data.revision;
     const resolve={id:bad.id,resolution:'wastage',note:'Spoilage confirmed',operationId,revision};
     const wasted=await ok(request('operations/deliveries/resolve','POST',resolve,purchaserCookie));
@@ -477,7 +481,7 @@ test('vendor receiving saves partial usable quantities, prices and rejection aud
  const po={id:crypto.randomUUID(),poNumber:'PO-QUALITY-TEST',outletId:'brigade',vendorId:vendor.id,vendorName:vendor.name,status:'PO Raised',items:[{itemId:item.id,itemName:item.name,unit:item.unit,qty:10}]};
  assert.equal((await save([{entity:'purchase_orders',key:po.id,value:po}])).status,200);
  const before=(await request('state')).data,quantity=before.outletStock.find(b=>b.outlet_id==='brigade' && b.item_id===item.id)?.quantity || 0;
- const input={poId:po.id,revision:before.revision,operationId:crypto.randomUUID(),lines:[{itemId:item.id,receivedQuantity:8,rejectedQuantity:2,reason:'Quality issues',unitPrice:12.5}]};
+ const input={poId:po.id,vendorBillType:'cash',revision:before.revision,operationId:crypto.randomUUID(),lines:[{itemId:item.id,receivedQuantity:8,rejectedQuantity:2,reason:'Quality issues',unitPrice:12.5}]};
  const partial=await request('purchase-orders/receive','POST',input,purchaserCookie);assert.equal(partial.status,200,JSON.stringify(partial.data));
  assert.equal(partial.data.outletStock.find(b=>b.outlet_id==='brigade' && b.item_id===item.id).quantity,quantity+8);assert.equal(partial.data.purchase_orders.find(p=>p.id===po.id).status,'Partially Received');
  assert.equal(partial.data.stockHistory.find(m=>m.operation_id===input.operationId).total_cost_minor,10000);
@@ -528,7 +532,7 @@ test('admin and purchaser correct entered prices with audit, scope, validation a
  const state=(await request('state')).data,item=state.items.find(i=>i.active!==false);
  const cmd=async(path,input,cookie=adminCookie)=>request(path,'POST',{...input,operationId:crypto.randomUUID(),revision:(await request('state')).data.revision},cookie);
  const receive=async(unitPrice,outletId='brigade',kind='receipt')=>{
-   const result=await cmd('stock/'+kind,{itemId:item.id,outletId,vendor:item.vendor,quantity:2.5,unitPrice});
+   const result=await cmd('stock/'+kind,{itemId:item.id,outletId,vendor:item.vendor,vendorBillType:'cash',quantity:2.5,unitPrice});
    assert.equal(result.status,200,JSON.stringify(result.data));
    return result.data.stockHistory.find(m=>m.item_id===item.id && m.outlet_id===outletId && m.unit_cost_minor===unitPrice*100 && m.kind===kind);
  };
@@ -602,7 +606,7 @@ test('available-stock price menu updates valuation with zero movement and can be
  const old=after.stockHistory.find(m=>m.item_id===item.id && m.outlet_id==='brigade' && m.kind==='receipt' && m.delta>0);
  assert.ok(old);
  const historical=await cmd('stock/price',{historyId:old.id,unitPrice:12,reason:'Correct historical invoice',expectedUnitCostMinor:old.unit_cost_minor});assert.equal(historical.status,200);assert.equal(balance(historical.data).unit_cost_minor,1725);
- const received=await cmd('stock/receipt',{itemId:item.id,outletId:'brigade',quantity:1,vendor:item.vendor,unitPrice:25});assert.equal(received.status,200);assert.equal(balance(received.data).unit_cost_minor,2500);
+ const received=await cmd('stock/receipt',{itemId:item.id,outletId:'brigade',quantity:1,vendor:item.vendor,vendorBillType:'cash',unitPrice:25});assert.equal(received.status,200);assert.equal(balance(received.data).unit_cost_minor,2500);
  const current=(await request('state')).data;
  const worker=(await import('../worker/index.mjs')).default;
  const disabledEnv={DB:db,NCHEF_STOCK_PRICE_EDITING:'disabled',NCHEF_RELEASE_COMMIT:testReleaseCommit};
@@ -613,4 +617,32 @@ test('available-stock price menu updates valuation with zero movement and can be
   assert.equal(response.status,404);
  }
  const final=(await request('state')).data;assert.equal(final.revision,current.revision);assert.deepEqual(final.outletStock,current.outletStock);
+});
+
+test('bulk stock receipt requires Cash or Credit and keeps the submitted type through approval', async () => {
+    const state = (await request('state')).data;
+    const item = state.items.find(item => item.active !== false);
+    const outlet = state.outlets.find(outlet => outlet.id === 'brigade');
+    const csv = quantity => [
+        ['Outlet Name', 'Item', 'Unit', 'Quantity', 'Unit Price'],
+        [outlet.name, item.name, item.unit, quantity, 17]
+    ].map(row => row.map(cell => '"' + String(cell).replaceAll('"', '""') + '"').join(',')).join('\n');
+    const submit = (path, input, cookie) => request('stock/bulk-receipt' + path, 'POST',
+        { revision: state.revision, operationId: crypto.randomUUID(), ...input }, cookie);
+
+    assert.equal((await submit('', { csv: csv(41) })).status, 400);
+    assert.equal((await submit('/request', { csv: csv(42), vendorBillType: 'invalid' }, purchaserCookie)).status, 400);
+
+    const direct = await submit('', { csv: csv(41), vendorBillType: 'cash' });
+    assert.equal(direct.status, 200, JSON.stringify(direct.data));
+    const requested = await submit('/request', { revision: direct.data.revision, csv: csv(42), vendorBillType: 'credit' }, purchaserCookie);
+    assert.equal(requested.status, 200, JSON.stringify(requested.data));
+    const pending = (await request('state')).data.operationRecords.find(row => row.batchId === requested.data.batchSummary.batchId);
+    assert.equal(pending.vendorBillType, 'credit');
+
+    const approved = await submit('/resolve', { revision: requested.data.revision, requestId: pending.id, approve: true, vendorBillType: 'cash' });
+    assert.equal(approved.status, 200, JSON.stringify(approved.data));
+    const history = approved.data.stockHistory;
+    assert.equal(history.find(row => row.reason.includes(direct.data.batchSummary.batchId)).vendor_bill_type, 'cash');
+    assert.equal(history.find(row => row.reason.includes(pending.batchId)).vendor_bill_type, 'credit');
 });

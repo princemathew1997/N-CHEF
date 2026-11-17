@@ -1,4 +1,4 @@
-import { canPurchase, operationCommand, notify, putRecord, dayIST, editCuisineRequest, recallConsolidatedRequest, reviewChefRequests } from './operations.mjs';
+import { requireVendorBillType, canPurchase, operationCommand, notify, putRecord, dayIST, editCuisineRequest, recallConsolidatedRequest, reviewChefRequests } from './operations.mjs';
 import { validateLegacyCSV } from '../shared/legacy-import.mjs';
 import { bulkReceiptReviewRows, validateBulkReceiptCSV } from '../shared/bulk-receipt.mjs';
 import { stockCommand } from './stock.mjs';
@@ -229,6 +229,8 @@ export default {
           const priorApproved = await env.DB.prepare("SELECT id FROM audit_events WHERE action='bulk_receipt' AND entity_id=?").bind(reqRecord.fingerprint).first();
           if (priorApproved) return send({ error: 'This bulk stock batch has already been approved and received into stock.', errors: [{ row: 1, column: 'File', message: 'These exact stock items have already been received. Check Stock History.' }] }, 422);
 
+          const vendorBillType = reqRecord.vendorBillType ?? input.vendorBillType;
+          requireVendorBillType(vendorBillType);
           const batchId = reqRecord.batchId;
           const stock = { outletStock: clone(state.outletStock), legacyStock: clone(state.legacyStock), movements: [], importSummary: { fingerprint: reqRecord.fingerprint, rows: validation.rows.length, action: 'bulk_receipt', batchId, receivedBy: reqRecord.supervisorName, receivedById: reqRecord.requestedBy, approvedBy: actor.name, receivedAt: nowIso } };
           for (const row of validation.rows) {
@@ -240,10 +242,10 @@ export default {
             const rowVendor = row.vendor || 'Direct Delivery';
             const userNote = row.noteOnly || row.notes || `Row ${row.row}`;
             const noteText = `[${batchId}] ${userNote}${noteDate}`;
-            stock.movements.push({ item_id: row.itemId, outlet_id: row.outletId, delta: row.quantity, quantity: balance.quantity, kind: 'receipt', reason: noteText, cuisine: '', vendor: rowVendor, item_name: row.itemName, unit: row.unit, unit_cost_minor: row.unitCostMinor, total_cost_minor: row.unitCostMinor === null ? null : Math.round(row.quantity * row.unitCostMinor) });
+            stock.movements.push({ item_id: row.itemId, outlet_id: row.outletId, delta: row.quantity, quantity: balance.quantity, kind: 'receipt', reason: noteText, cuisine: '', vendor: rowVendor, vendor_bill_type: vendorBillType, item_name: row.itemName, unit: row.unit, unit_cost_minor: row.unitCostMinor, total_cost_minor: row.unitCostMinor === null ? null : Math.round(row.quantity * row.unitCostMinor) });
           }
 
-          putRecord(next, 'notification', { ...reqRecord, status: 'Approved', resolvedAt: nowIso, resolvedBy: actor.id, resolvedByName: actor.name });
+          putRecord(next, 'notification', { ...reqRecord, vendorBillType, status: 'Approved', resolvedAt: nowIso, resolvedBy: actor.id, resolvedByName: actor.name });
           putRecord(next, 'notification', { id: crypto.randomUUID(), userId: reqRecord.requestedBy, outletId: reqRecord.outletId, message: `Bulk stock receipt batch ${batchId} was approved by Admin. Stock added to inventory.`, sourceId: reqRecord.id, read: false, createdAt: nowIso });
           const savedState = await persistChanges(env.DB, state, next, [], actor, input.operationId, stock);
           return send({ ...savedState, batchSummary: { batchId, rowsCount: validation.rows.length, receivedBy: reqRecord.supervisorName, receivedAt: nowIso } });
@@ -264,6 +266,7 @@ export default {
         }
 
         if(path.endsWith('/validate'))return send({...validation,revision:state.revision});
+        requireVendorBillType(input.vendorBillType);
         if(input.revision!==state.revision)fail('Data changed since validation. Validate the complete sheet again before receiving.',409);
         const batchId = 'BR-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
 
@@ -286,6 +289,7 @@ export default {
             supervisorRole: actor.role,
             outletId: validation.rows[0]?.outletId || '',
             outletNames,
+            vendorBillType: input.vendorBillType,
             rowCount: validation.rows.length,
             totalCostMinor,
             csv: input.csv,
@@ -315,7 +319,7 @@ export default {
           const rowVendor = row.vendor || 'Direct Delivery';
           const userNote = row.noteOnly || row.notes || `Row ${row.row}`;
           const noteText = `[${batchId}] ${userNote}${noteDate}`;
-          stock.movements.push({item_id:row.itemId,outlet_id:row.outletId,delta:row.quantity,quantity:balance.quantity,kind:'receipt',reason:noteText,cuisine:'',vendor:rowVendor,item_name:row.itemName,unit:row.unit,unit_cost_minor:row.unitCostMinor,total_cost_minor:row.unitCostMinor===null?null:Math.round(row.quantity*row.unitCostMinor)});
+          stock.movements.push({item_id:row.itemId,outlet_id:row.outletId,delta:row.quantity,quantity:balance.quantity,kind:'receipt',reason:noteText,cuisine:'',vendor:rowVendor,vendor_bill_type:input.vendorBillType,item_name:row.itemName,unit:row.unit,unit_cost_minor:row.unitCostMinor,total_cost_minor:row.unitCostMinor===null?null:Math.round(row.quantity*row.unitCostMinor)});
         }
         const savedState = await persistChanges(env.DB,state,clone(state),[],actor,input.operationId,stock);
         return send({ ...savedState, batchSummary: { batchId, rowsCount: validation.rows.length, receivedBy: actor.name, receivedAt: new Date().toISOString() } });

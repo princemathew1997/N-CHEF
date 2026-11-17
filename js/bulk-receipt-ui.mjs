@@ -275,6 +275,7 @@ window.renderBulkReceiptApprovalAndHistory = (container) => {
               <div style="display: flex; gap: 8px;">
                 <button type="button" class="btn btn-outline" data-admin-action="view" data-id="${escapeHTML(req.id)}">View Items (${req.rowCount})</button>
                 <button type="button" class="btn btn-outline" data-admin-action="reject" data-id="${escapeHTML(req.id)}" style="color: #f87171; border-color: rgba(248, 113, 113, 0.4);">Reject</button>
+                ${req.vendorBillType ? `<span>Vendor bill type: ${req.vendorBillType === 'cash' ? 'Cash' : 'Credit'}</span>` : `<label>Vendor bill type <select name="vendorBillType" required><option value="">Choose Cash or Credit</option><option value="cash">Cash</option><option value="credit">Credit</option></select></label>`}
                 <button type="button" class="btn btn-primary" data-admin-action="approve" data-id="${escapeHTML(req.id)}">Approve & Receive Stock</button>
               </div>
             </div>
@@ -364,12 +365,15 @@ window.renderBulkReceiptApprovalAndHistory = (container) => {
           }
 
           if (act === 'approve') {
+            const billType = btn.closest('[data-request-id]').querySelector('[name=vendorBillType]');
+            if (billType && !billType.reportValidity()) return;
             if (!confirm(`Approve batch ${targetReq.batchId} submitted by ${targetReq.supervisorName}? All ${targetReq.rowCount} items will be received into stock immediately.`)) return;
             btn.disabled = true;
             try {
               const state = await apiRequest('stock/bulk-receipt/resolve', 'POST', {
                 requestId: reqId,
                 approve: true,
+                vendorBillType: billType?.value,
                 operationId: crypto.randomUUID()
               });
               applyServerState(state);

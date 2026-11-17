@@ -1,6 +1,7 @@
 // Catalog metadata and outlet stock use separate server commands.
 (() => {
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const billTypeOptions = '<option value="">Choose Cash or Credit</option><option value="cash">Cash</option><option value="credit">Credit</option>';
     const titles = { overview:'Stock Overview', 'bulk-receipt':'Receive Bulk Stock', catalog:'Item Catalog', receipt:'Receive Stock', distribute:'Distribute to Cuisine', adjust:'Stock Adjustments', history:'Stock History', assign:'Add Legacy Stock', cuisines:'Cuisine Sections' };
     titles.prices='Price History';
     titles['stock-prices']='Edit Stock Prices';
@@ -438,7 +439,7 @@
             ${canBulk?`<div id="bulkReceiptDateField" class="${bulkReceiptMode?'':'hidden'}">${field('Receipt Date (IST)',`<input name="receiptDate" type="date" value="${InventoryTools.day()}" max="${InventoryTools.day()}">`)}</div>`:''}
             ${field('Item','<div id="stockItemPicker"></div>')}
             <p id="availableStock"></p>
-            ${page==='receipt'?field('Vendor',select('vendor',options(vendorsData,v=>v.name,v=>v.name)))+field('<span id="receiptPriceLabel">Unit price (INR)</span>','<input name="unitPrice" type="number" min="0" step="0.01" required>')+'<p id="receiptTotal">Total: ₹0.00</p>':''}
+            ${page==='receipt'?field('Vendor',select('vendor',options(vendorsData,v=>v.name,v=>v.name)))+field('<span id="receiptPriceLabel">Unit price (INR)</span>','<input name="unitPrice" type="number" min="0" step="0.01" required>')+`<div id="singleReceiptBillType" ${bulkReceiptMode?'hidden':''}>${field('Vendor bill type',`<select name="vendorBillType" ${bulkReceiptMode?'disabled':'required'}>${billTypeOptions}</select>`)}</div>`+'<p id="receiptTotal">Total: ₹0.00</p>':''}
             ${page==='assign'?'<p>Vendor: <strong>Legacy Stock</strong>. Quantity is added directly to this outlet’s available stock.</p>'+field('Unit price (optional, INR)','<input name="unitPrice" type="number" min="0" step="0.01">'):''}
             ${page==='distribute'?field('Cuisine',select('cuisine',options(cuisinesData,c=>c.name,c=>c.name)))+'<input type="hidden" name="requestId"><label id="requestChoiceLabel" class="hidden">Approved cuisine request<select name="requestChoice"></select></label><p id="distributionRequestHint"></p><a href="#" data-operations="deliveries">View cuisine deliveries and receipt issues</a>':''}
             ${field(page==='adjust'?'Actual on-hand quantity':'Quantity',`<span class="quantity-entry"><input name="quantity" type="number" step="any" min="${page==='adjust'?'0':'0.00000001'}" required><span class="stock-unit" aria-label="Unit"></span></span>`)}
@@ -460,6 +461,7 @@
                     </div>
                 </div>
                 <div id="bulkBatchTableContainer"></div>
+                ${field('Vendor bill type for this batch',`<select id="bulkBatchBillType" required>${billTypeOptions}</select>`)}
                 <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 12px; flex-wrap: wrap;">
                     <button type="button" class="btn btn-outline" id="bulkBatchClearBtn" ${bulkReceiptItems.length ? '' : 'disabled'}>Clear List</button>
                     ${currentUser.role === 'admin' ? `
@@ -489,12 +491,17 @@
                 const modeStatus = content.querySelector('#bulkReceiptModeStatus');
                 const submitBtn = content.querySelector('#stockSubmitBtn');
                 const batchSection = content.querySelector('#bulkBatchSection');
+                const batchBillType = content.querySelector('#bulkBatchBillType');
+                const singleBillType = form.elements.vendorBillType;
 
                 modeToggle.onchange = () => {
                     bulkReceiptMode = modeToggle.checked;
                     modeStatus.textContent = bulkReceiptMode ? 'On' : 'Off';
                     submitBtn.textContent = bulkReceiptMode ? '+ Add to Batch List' : titles.receipt;
                     batchSection.classList.toggle('hidden', !bulkReceiptMode);
+                    content.querySelector('#singleReceiptBillType').hidden = bulkReceiptMode;
+                    singleBillType.disabled = bulkReceiptMode;
+                    singleBillType.required = !bulkReceiptMode;
                     const dateField = content.querySelector('#bulkReceiptDateField');
                     if (dateField) dateField.classList.toggle('hidden', !bulkReceiptMode);
                     const csvBtn = content.querySelector('#btnToggleCsvUpload');
@@ -505,6 +512,7 @@
 
                 const setBatchBusy = (busy) => {
                     isBatchSubmissionInFlight = !!busy;
+                    batchBillType.disabled = busy;
                     const clearBtn = content.querySelector('#bulkBatchClearBtn');
                     const sendApprovalBtn = content.querySelector('#bulkBatchSendApprovalBtn');
                     const receiveBtn = content.querySelector('#bulkBatchReceiveBtn');
@@ -633,7 +641,7 @@
                 const sendApprovalBtn = content.querySelector('#bulkBatchSendApprovalBtn');
                 if (sendApprovalBtn) {
                     sendApprovalBtn.onclick = async () => {
-                        if (!bulkReceiptItems.length) return;
+                        if (!bulkReceiptItems.length || !batchBillType.reportValidity()) return;
                         if (databaseWritePending || pendingChanges().length) {
                             window.showUiModal?.({ title: 'Pending changes', message: 'Finish your other pending changes before submitting.', type: 'warning' });
                             return;
@@ -646,6 +654,7 @@
                             const valResult = await apiRequest('stock/bulk-receipt/validate', 'POST', { csv: csvString });
                             const state = await apiRequest('stock/bulk-receipt/request', 'POST', {
                                 csv: csvString,
+                                vendorBillType: batchBillType.value,
                                 revision: valResult.revision,
                                 operationId: crypto.randomUUID()
                             });
@@ -653,6 +662,7 @@
                             window.onLiveSyncReceived?.();
                             // Remove only the items that were submitted in this batch, keeping any newly added items
                             bulkReceiptItems = bulkReceiptItems.slice(batchInFlight.length);
+                            batchBillType.value = '';
                             renderBatchTable();
                             window.renderBulkReceiptApprovalAndHistory?.(content.querySelector('#bulkReceiptApprovalAndHistoryContainer'));
                             window.showUiModal?.({
@@ -672,7 +682,7 @@
                 const receiveBtn = content.querySelector('#bulkBatchReceiveBtn');
                 if (receiveBtn) {
                     receiveBtn.onclick = async () => {
-                        if (!bulkReceiptItems.length) return;
+                        if (!bulkReceiptItems.length || !batchBillType.reportValidity()) return;
                         if (databaseWritePending || pendingChanges().length) {
                             window.showUiModal?.({ title: 'Pending changes', message: 'Finish your other pending changes before receiving.', type: 'warning' });
                             return;
@@ -685,12 +695,14 @@
                             const valResult = await apiRequest('stock/bulk-receipt/validate', 'POST', { csv: csvString });
                             const state = await apiRequest('stock/bulk-receipt', 'POST', {
                                 csv: csvString,
+                                vendorBillType: batchBillType.value,
                                 revision: valResult.revision,
                                 operationId: crypto.randomUUID()
                             });
                             applyServerState(state);
                             window.onLiveSyncReceived?.();
                             bulkReceiptItems = bulkReceiptItems.slice(batchInFlight.length);
+                            batchBillType.value = '';
                             renderBatchTable();
                             window.renderBulkReceiptApprovalAndHistory?.(content.querySelector('#bulkReceiptApprovalAndHistoryContainer'));
                             window.showToast?.(`Received ${batchInFlight.length} bulk stock items successfully!`, 'success');

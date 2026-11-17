@@ -42,5 +42,9 @@
   {
     "name": "0011_price_corrections.sql",
     "sha256": "4ef9443f1086c6945b368d8b04bea80ff2bec035dbef3f7b558cbb8c4d94951c"
+  },
+  {
+    "name": "0012_vendor_bill_type.sql",
+    "sha256": "687d0c7a6f1ea857713288f859c1e309f7828e64c1c93c2813b760caacc9fed2"
   }
 ]
