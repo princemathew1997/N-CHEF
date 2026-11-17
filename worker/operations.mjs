@@ -165,7 +165,17 @@ export function operationCommand(state, actor, input, action, transact) {
       decisions.push({requestId:request.id,itemId:request.itemId,cuisine:request.cuisine,approvedRemaining:expected,quantity,comment});
     }
     if(!decisions.some(d=>d.quantity>0))fail('Enter a quantity greater than zero for at least one item.');
-    for(const line of decisions.filter(d=>d.quantity>0))transact('distribute',{outletId:indent.outletId,itemId:line.itemId,cuisine:line.cuisine,requestId:line.requestId,quantity:line.quantity,reason:line.comment});
+    const issues=decisions.filter(d=>d.quantity>0);
+    const totals=new Map();
+    for(const {itemId,quantity} of issues)totals.set(itemId,(totals.get(itemId) ?? 0)+quantity);
+    for(const [itemId,quantity] of totals){
+      const available=(state.outletStock || []).find(s=>s.item_id===itemId && s.outlet_id===indent.outletId)?.quantity ?? 0;
+      if(quantity-available>1e-8){
+        const item=state.items?.find(i=>i.id===itemId);
+        fail(`Insufficient outlet stock for ${item?.name || itemId}. Available: ${available}${item?.unit ? ' '+item.unit : ''}.`,409);
+      }
+    }
+    for(const line of issues)transact('distribute',{outletId:indent.outletId,itemId:line.itemId,cuisine:line.cuisine,requestId:line.requestId,quantity:line.quantity,reason:line.comment});
     putRecord(next,'notification',{id:crypto.randomUUID(),system:true,eventType:'consolidated_distribution',outletId:indent.outletId,indentId:indent.id,actorId:actor.id,createdAt:now,lines:decisions});
   } else if(['category/add','unit/add'].includes(action)) {
     if(actor.role!=='admin')fail('Administrator permission required.',403);

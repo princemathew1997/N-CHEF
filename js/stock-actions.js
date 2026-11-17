@@ -314,20 +314,26 @@
             return [esc(item?.name || r.itemName)+' ('+esc(item?.unit || r.unit)+')',esc(r.cuisine),esc(remainingFormatted),esc(availableFormatted),`<input aria-label="Issue ${esc(item?.name || r.itemName)} to ${esc(r.cuisine)}" name="quantity_${index}" type="number" min="0" step="any" value="${allocatedFormatted}" required>`,`<input aria-label="Comment ${esc(item?.name || r.itemName)} ${esc(r.cuisine)}" name="comment_${index}" maxlength="500" placeholder="Required if quantity changes">`];
         }))}<p id="distributionAvailabilityMessage" role="status"></p><button class="btn btn-primary">Distribute order</button></form>`;
         const form=target.querySelector('form');
+        const availabilityMessage=form.querySelector('#distributionAvailabilityMessage');
         const validate=()=>{
             const totals=new Map();rows.forEach((r,index)=>totals.set(r.itemId,(totals.get(r.itemId) || 0)+Number(form.elements['quantity_'+index].value || 0)));
+            const shortages=new Map();
             rows.forEach((r,index)=>{
                 const quantity=form.elements['quantity_'+index],note=form.elements['comment_'+index],changed=Math.abs(Number(quantity.value)-r.remaining)>1e-8;
                 note.required=changed;note.setCustomValidity(changed && !note.value.trim()?'Explain the changed issue quantity.':'');
                 // Match the server's tolerance when subtraction leaves a floating-point residue.
+                if(totals.get(r.itemId)-r.available>1e-8){
+                    shortages.set(r.itemId,`${r.itemName}: ${formatQty(r.available)} ${r.unit || ''} available`);
+                }
                 let quantityError='';
                 if(Number(quantity.value)>r.remaining+1e-8){
                     quantityError='Issue quantity exceeds the remaining approved quantity.';
-                }else if(totals.get(r.itemId)>r.available+1e-8){
+                }else if(shortages.has(r.itemId)){
                     quantityError='Total allocation exceeds available outlet stock.';
                 }
                 quantity.setCustomValidity(quantityError);
             });
+            availabilityMessage.textContent=shortages.size?`Reduce the total issue quantity. ${[...shortages.values()].join(', ')}.`:'';
         };
         form.oninput=validate;form.onchange=validate;validate();
         form.onsubmit=e=>{e.preventDefault();if(content.querySelector('[name=distributionOrder]').value!==distributionOrder){content.querySelector('#distributionOrder [role=combobox]').reportValidity();return;}validate();if(!form.reportValidity())return;submit(form,()=>runDatabaseAction('operations/distribution/issue',{indentId:distributionOrder,lines:rows.map((r,index)=>({requestId:r.id,quantity:Number(form.elements['quantity_'+index].value),comment:form.elements['comment_'+index].value.trim()}))}));};
