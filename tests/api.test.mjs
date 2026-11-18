@@ -492,6 +492,49 @@ test('vendor receiving saves partial usable quantities, prices and rejection aud
  const finished=await request('purchase-orders/receive','POST',complete,purchaserCookie);assert.equal(finished.status,200,JSON.stringify(finished.data));assert.equal(finished.data.purchase_orders.find(p=>p.id===po.id).status,'Received');assert.equal(finished.data.outletStock.find(b=>b.outlet_id==='brigade' && b.item_id===item.id).quantity,quantity+10);
 });
 
+test('admin cancellation is atomic, audited, and blocks receiving', async () => {
+    const state = (await request('state')).data;
+    const item = state.items.find(i => i.active !== false);
+    const vendor = state.vendors.find(v => v.name === item.vendor);
+    const orders = ['PO-CANCEL-1', 'PO-CANCEL-2'].map(poNumber => ({
+        id: crypto.randomUUID(), poNumber, outletId: 'brigade', vendorId: vendor.id,
+        status: 'PO Raised', items: [{ itemId: item.id, itemName: item.name, qty: 10 }],
+    }));
+    const saved = await save(orders.map(po => ({ entity: 'purchase_orders', key: po.id, value: po })));
+    assert.equal(saved.status, 200);
+    const before = saved.data;
+    const input = {
+        poNumbers: orders.map(po => po.poNumber), reason: 'Raised by mistake',
+        revision: before.revision, operationId: crypto.randomUUID(),
+    };
+    const cancel = (body, cookie) => request('purchase-orders/cancel', 'POST', body, cookie);
+    assert.equal((await cancel(input, purchaserCookie)).status, 403);
+    assert.equal((await cancel({ ...input, poNumbers: [...input.poNumbers, 'PO-MISSING'] })).status, 404);
+    assert.equal((await cancel({ ...input, poNumbers: [...input.poNumbers, 'PO-QUALITY-TEST'] })).status, 409);
+    assert.equal((await request('state')).data.revision, before.revision);
+
+    const result = await cancel(input);
+    assert.equal(result.status, 200, JSON.stringify(result.data));
+    assert.deepEqual(result.data.outletStock, before.outletStock);
+    assert.deepEqual(result.data.stockHistory, before.stockHistory);
+    for (const order of orders) {
+        const cancelled = result.data.purchase_orders.find(po => po.id === order.id);
+        assert.equal(cancelled.status, 'Cancelled');
+        assert.equal(cancelled.cancelledBy, adminId);
+        assert.equal(cancelled.cancellationReason, input.reason);
+        assert.deepEqual(cancelled.items, order.items);
+        const audit = await db.prepare("SELECT actor_id FROM audit_events WHERE entity_id=? AND action='cancel'").bind(order.id).first();
+        assert.equal(audit.actor_id, adminId);
+    }
+    assert.equal((await cancel(input)).data.revision, result.data.revision);
+    const receive = await request('purchase-orders/receive', 'POST', {
+        poId: orders[0].id, revision: result.data.revision, operationId: crypto.randomUUID(),
+    }, purchaserCookie);
+    assert.equal(receive.status, 409);
+    const original = before.purchase_orders.find(po => po.id === orders[0].id);
+    assert.equal((await save([{ entity: 'purchase_orders', key: original.id, value: original }])).status, 409);
+});
+
 test('consolidated distribution enforces notes, shared stock, request links and retry safety',async()=>{
  const ok=async promise=>{const r=await promise;assert.equal(r.status,200,JSON.stringify(r.data));return r.data;};
  const cmd=async(path,input,cookie=adminCookie)=>request(path,'POST',{...input,operationId:crypto.randomUUID(),revision:(await request('state')).data.revision},cookie);

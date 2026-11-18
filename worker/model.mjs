@@ -319,6 +319,11 @@ export function validateChanges(state, changes, actor, stockAction = false) {
   }
   for (const t of touched.filter(t => t.entity === 'purchase_orders')) {
     if (!t.data) continue;
+    if (t.old?.status === 'Cancelled' && !same(t.data, t.old)) fail('Cancelled orders cannot be changed.', 409);
+    if (t.data.status === 'Cancelled') {
+      if (!stockAction || t.old?.status !== 'PO Raised') fail('Use the purchase order cancellation action.', 409);
+      continue;
+    }
     if (!['PO Raised', 'Partially Received', 'Received'].includes(t.data.status)) fail('Invalid purchase order status.');
     if (t.old?.status === 'Received' && !same(t.data, t.old)) fail('Received orders cannot be changed.', 409);
     if (['Received','Partially Received'].includes(t.data.status) && stockAction) {

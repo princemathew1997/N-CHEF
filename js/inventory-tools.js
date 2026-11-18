@@ -111,8 +111,9 @@
     }
     function purchaseOrderList(orders,section,from='',to=''){
         if(from && to && from>to)throw new Error('From date must be on or before To date.');
-        const date=po=>{const value=section==='received'?po.receivedAt:po.createdAt || po.date;return value?day(value):'';};
-        return orders.filter(po=>(section==='received'?po.status==='Received':po.status!=='Received') && (!from || date(po)>=from) && (!to || (date(po) && date(po)<=to))).sort((a,b)=>date(b).localeCompare(date(a)));
+        const status = { received: 'Received', cancelled: 'Cancelled' }[section];
+        const date=po=>{const value=section==='received'?po.receivedAt:section==='cancelled'?po.cancelledAt:po.createdAt || po.date;return value?day(value):'';};
+        return orders.filter(po=>(status ? po.status===status : !['Received','Cancelled'].includes(po.status)) && (!from || date(po)>=from) && (!to || (date(po) && date(po)<=to))).sort((a,b)=>date(b).localeCompare(date(a)));
     }
     function consolidatedDistributionRows(state,indentId){
         const indent=(state.indents || []).find(i=>i.id===indentId && i.status==='Approved');

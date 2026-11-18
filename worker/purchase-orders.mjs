@@ -45,10 +45,33 @@ export function raiseVendorOrders(state, actor, input) {
   return [...changes, ...orders.map(p=>valueChange('purchase_orders',p))];
 }
 
+export function planPurchaseOrderCancellation(state, actor, input) {
+  if (actor.role !== 'admin') fail('Admin permission required.', 403);
+  const { poNumbers } = input;
+  if (!Array.isArray(poNumbers) || poNumbers.length < 1 || poNumbers.length > 150 ||
+      new Set(poNumbers).size !== poNumbers.length) fail('Supply unique purchase order numbers.');
+  for (const poNumber of poNumbers) safeText(poNumber, 'PO number');
+  const reason = safeText(input.reason, 'Cancellation reason', 500).trim();
+  const cancelledAt = new Date().toISOString();
+  return poNumbers.map(poNumber => {
+    const po = state.purchase_orders.find(order => order.poNumber === poNumber);
+    if (!po || !hasOutlet(actor, po.outletId)) fail('Purchase order unavailable: ' + poNumber, 404);
+    if (po.status !== 'PO Raised' || po.receiptEvents?.length || po.receivedAt || po.receivedBy ||
+        po.items.some(line => (line.receivedQty ?? 0) !== 0 || (line.rejectedQty ?? 0) !== 0)) {
+      fail('Purchase order is no longer eligible for cancellation: ' + poNumber, 409);
+    }
+    return {
+      entity: 'purchase_orders', key: po.id,
+      value: { ...po, status: 'Cancelled', cancelledAt, cancelledBy: actor.id, cancellationReason: reason },
+    };
+  });
+}
+
 export function planVendorReceipt(state,actor,input){
   if(!['admin','purchaser'].includes(actor.role))fail('Purchaser permission required.',403);
   const source=state.purchase_orders.find(p=>p.id===input.poId);
   if(!source || !hasOutlet(actor,source.outletId))fail('Purchase order access denied.',403);
+  if(source.status==='Cancelled')fail('This order has been cancelled.',409);
   if(source.status==='Received')fail('This order has already been received.',409);
   requireVendorBillType(input.vendorBillType);
   const po=structuredClone(source),seen=new Set(),receipts=[],events=[];
