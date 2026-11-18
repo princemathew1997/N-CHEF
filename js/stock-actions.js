@@ -185,7 +185,7 @@
                     quickEditor.innerHTML = '';
                     draw();
                     window.renderOutletDashboard?.();
-                    window.showToast?.('Stock values updated successfully', 'success');
+                    window.showToast?.('Stock values updated successfully', 'success', 3000);
                 } catch (err) {
                     errP.textContent = err.message;
                 } finally {
