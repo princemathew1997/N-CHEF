@@ -197,8 +197,8 @@ window.alert = function(msg) {
 };
 
 // Lightweight, non-intrusive floating toast notification
-window.showToast = function(msg, type = 'success') {
-    if (window.deferDatabaseSuccess?.(msg, type)) return;
+window.showToast = function(msg, type = 'success', durationMs = 2650) {
+    if (window.deferDatabaseSuccess?.(msg, type, durationMs)) return;
     let toast = document.getElementById('uiFloatingToast');
     if (!toast) {
         toast = document.createElement('div');
@@ -206,6 +206,7 @@ window.showToast = function(msg, type = 'success') {
         document.body.appendChild(toast);
     }
     
+    const transitionMs = 250;
     const icon = type === 'success' ? 'check-circle' : (type === 'danger' ? 'alert-triangle' : 'info');
     const color = type === 'success' ? '#2ec4b6' : (type === 'danger' ? '#ff6b6b' : 'var(--primary)');
     const border = type === 'success' ? 'rgba(46,196,182,0.4)' : (type === 'danger' ? 'rgba(230,57,70,0.4)' : 'rgba(255,190,11,0.4)');
@@ -228,7 +229,7 @@ window.showToast = function(msg, type = 'success') {
         gap: 10px;
         z-index: 99999999;
         opacity: 0;
-        transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        transition: all ${transitionMs}ms cubic-bezier(0.16, 1, 0.3, 1);
         pointer-events: none;
     `;
     
@@ -244,7 +245,7 @@ window.showToast = function(msg, type = 'success') {
     window._toastTimeout = setTimeout(() => {
         toast.style.opacity = '0';
         toast.style.transform = 'translateX(-50%) translateY(-15px)';
-    }, 2400);
+    }, Math.max(0, durationMs - transitionMs));
 };
 
 // ============================================================

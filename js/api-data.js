@@ -68,9 +68,9 @@ function pendingChanges() {
     }
     return changes;
 }
-window.deferDatabaseSuccess = (message, type) => {
+window.deferDatabaseSuccess = (message, type, durationMs) => {
     if (type === 'success' && committedState && (databaseWritePending || pendingChanges().length)) {
-        successNotifications.push({ message, type });
+        successNotifications.push({ message, type, durationMs });
         return true;
     }
     return false;
@@ -88,7 +88,7 @@ async function saveData() {
         const messages = successNotifications;
         successNotifications = [];
         databaseWritePending = false;
-        for (const notification of messages) window.showToast?.(notification.message, notification.type);
+        for (const notification of messages) window.showToast?.(notification.message, notification.type, notification.durationMs);
     } catch (error) {
         successNotifications = [];
         applyServerState(committedState);

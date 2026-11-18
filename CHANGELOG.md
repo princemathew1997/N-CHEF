@@ -4,6 +4,10 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 2.13.4 - 2026-11-18
+
+- Dismiss the Quick Edit Stock success message after three seconds.
+
 ## 2.13.3 - 2026-11-18
 
 - Keep Quick Edit Stock open during live updates and refresh Stock Overview after saving.
