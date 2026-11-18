@@ -1,3 +1,4 @@
+const { tabAuth } = require('./qa-tab-auth.cjs');
 // Requires qa-operations.cjs fixtures on a disposable local test server.
 const assert=require('node:assert/strict');
 const openNavigation=require('./qa-nav.cjs');
@@ -13,7 +14,7 @@ assert.match(base || '', /^http:\/\/127\.0\.0\.1:889[0-9]$/);
   const errors=[];
   async function login(username){const page=await browser.newPage({viewport:{width:1440,height:1000}});page.setDefaultTimeout(15000);page.on('pageerror',error=>errors.push(error.message));await page.goto(base);await page.locator('#username').fill(username);await page.locator('#password').fill('qa-only-password-2026');await page.locator('#loginBtn').click();await page.waitForFunction(()=>currentUser!==null);await page.locator('#page-loader').waitFor({state:'hidden'});return page;}
   const admin=await login('qa_admin'),head=await login('qa_head'),purchaser=await login('qa_purchaser'),executivePage=await login('qa_exec');
-  const api=async(page,path,input)=>{const r=await page.request.fetch(base+'/api/'+path,{method:input?'POST':'GET',headers:{Origin:base,'Content-Type':'application/json','X-NCHEF-Workspace':'paged'},data:input});const data=await r.json();assert.equal(r.status(),200,JSON.stringify(data));return data;};
+  const api=async(page,path,input)=>{const r=await page.request.fetch(base+'/api/'+path,{method:input?'POST':'GET',headers:{Origin: base, ...await tabAuth(page),'Content-Type':'application/json','X-NCHEF-Workspace':'paged'},data:input});const data=await r.json();assert.equal(r.status(),200,JSON.stringify(data));return data;};
   const cmd=async(page,path,input)=>api(page,path,{...input,revision:(await api(page,'state')).revision,operationId:crypto.randomUUID()});
   const state=await api(admin,'state'),recipient=state.users.find(u=>u.username==='qa_head'),executive=state.users.find(u=>u.username==='qa_exec');
   const items=state.items.filter(i=>i.active!==false).slice(0,2),date=await admin.evaluate(()=>InventoryTools.day());

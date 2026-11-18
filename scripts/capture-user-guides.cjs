@@ -1,3 +1,4 @@
+const { tabAuth } = require('./qa-tab-auth.cjs');
 // Local-only documentation fixture and screenshots. Start scripts/qa-server.mjs first.
 const { mkdirSync, writeFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -12,14 +13,14 @@ const checks = [];
 const limitations = [];
 let browser, page;
 async function api(path, input) {
-  const response = await page.request.fetch(base + '/api/' + path, { method: input ? 'POST' : 'GET', headers: { Origin: base }, data: input });
+  const response = await page.request.fetch(base + '/api/' + path, { method: input ? 'POST' : 'GET', headers: { Origin: base, ...await tabAuth(page) }, data: input });
   const result = await response.json();
   assert.equal(response.status(), 200, JSON.stringify(result));
   return result;
 }
 async function command(path, input) { const s = await api('state'); return api(path, {...input, revision:s.revision, operationId:crypto.randomUUID()}); }
 async function login(username, secret=password) {
-  await page.goto(base); await page.request.post(base+'/api/logout',{headers:{Origin:base}}); await page.reload();
+  await page.goto(base); await page.request.post(base+'/api/logout',{headers:{Origin: base, ...await tabAuth(page)}}); await page.reload();
   await page.locator('#username').fill(username); await page.locator('#password').fill(secret); await page.locator('#loginBtn').click();
   await page.waitForFunction(()=>document.querySelector('#page-dashboard').classList.contains('active'));
 }

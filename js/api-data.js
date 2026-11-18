@@ -1,4 +1,14 @@
-// D1 is authoritative. Browser storage is used only for view preferences.
+// D1 is authoritative. Keep the second half of the session in this tab.
+const tabSessionKey = 'nchef_tab_session';
+let tabSession = '';
+try { tabSession = sessionStorage.getItem(tabSessionKey) || ''; } catch { /* Memory-only when storage is blocked. */ }
+function setTabSession(value) {
+    tabSession = value;
+    try {
+        if (value) sessionStorage.setItem(tabSessionKey, value);
+        else sessionStorage.removeItem(tabSessionKey);
+    } catch { /* Memory-only when storage is blocked. */ }
+}
 const outletsData = [];
 const usersData = [];
 const vendorsData = [];
@@ -16,7 +26,7 @@ const copyData = value => JSON.parse(JSON.stringify(value));
 async function apiRequest(path, method = 'GET', value) {
     const res = await fetch('/api/' + path, {
         method, credentials: 'same-origin', cache: 'no-store',
-        headers: { 'X-NCHEF-Workspace':'paged',...(value ? { 'Content-Type': 'application/json' } : {}), ...(window.NCHEF_RELEASE?.commit ? { 'X-NCHEF-Client-Release': window.NCHEF_RELEASE.commit } : {}) },
+        headers: { 'X-NCHEF-Workspace':'paged', ...(tabSession ? { 'X-NCHEF-Tab-Session': tabSession } : {}),...(value ? { 'Content-Type': 'application/json' } : {}), ...(window.NCHEF_RELEASE?.commit ? { 'X-NCHEF-Client-Release': window.NCHEF_RELEASE.commit } : {}) },
         body: value ? JSON.stringify(value) : undefined
     });
     let data;

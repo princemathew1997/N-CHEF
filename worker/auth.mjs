@@ -34,3 +34,9 @@ export function getSessionToken(request) {
   const name = new URL(request.url).protocol === 'https:' ? '__Host-nchef_session' : 'nchef_session';
   return (request.headers.get('Cookie') || '').split(';').map(p => p.trim()).find(p => p.startsWith(name + '='))?.slice(name.length + 1) || '';
 }
+
+export function getSessionKey(request) {
+  const token = getSessionToken(request);
+  const tab = request.headers.get('X-NCHEF-Tab-Session');
+  return token && tab && /^[a-f0-9]{64}$/.test(tab) ? `${token}:${tab}` : '';
+}

@@ -4,7 +4,7 @@ import { bulkReceiptReviewRows, validateBulkReceiptCSV } from '../shared/bulk-re
 import { stockCommand } from './stock.mjs';
 import { releaseInfo, requireCurrentClient } from './release.mjs';
 import { raiseVendorOrders, planVendorReceipt, planPurchaseOrderCancellation } from './purchase-orders.mjs';
-import { digest, equalSecret, getSessionToken, hashPassword, randomToken, sessionCookie, verifyPassword } from './auth.mjs';
+import { digest, equalSecret, getSessionKey, hashPassword, randomToken, sessionCookie, verifyPassword } from './auth.mjs';
 import { clone, fail, hasOutlet, id, number, project, safeText, validateChanges } from './model.mjs';
 import { persistChanges as persistDatabaseChanges, readState, readClientState, markAllNotifications } from './database.mjs';
 import { dispatchList, dispatchItems, stockHistoryPage, stockReport } from './queues.mjs';
@@ -39,9 +39,9 @@ async function limitLogin(db, key, limit = 15) {
   if (row.attempts > limit) fail('Too many attempts. Try again in 15 minutes.', 429);
 }
 async function actorFor(request, db) {
-  const token = getSessionToken(request);
-  if (!token) fail('Sign in to continue.', 401);
-  const row = await db.prepare('SELECT users.id, users.username, users.name, users.effective_role AS role, users.title, users.profile_json FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.token_hash = ? AND sessions.expires_at > ? AND users.active = 1').bind(await digest(token), Math.floor(Date.now() / 1000)).first();
+  const key = getSessionKey(request);
+  if (!key) fail('Sign in to continue.', 401);
+  const row = await db.prepare('SELECT users.id, users.username, users.name, users.effective_role AS role, users.title, users.profile_json FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.token_hash = ? AND sessions.expires_at > ? AND users.active = 1').bind(await digest(key), Math.floor(Date.now() / 1000)).first();
   if (!row) fail('Your session expired. Sign in again.', 401);
   return { ...JSON.parse(row.profile_json), id: row.id, username: row.username, name: row.name, role: row.role, title: row.title };
 }
@@ -111,16 +111,16 @@ export default {
         const user = await env.DB.prepare('SELECT id, password_hash FROM users WHERE username = ? AND active = 1').bind(username).first();
         const valid = await verifyPassword(input.password, user?.password_hash || 'pbkdf2-sha256:100000:invalid-account-salt:0000000000000000000000000000000000000000000000000000000000000000');
         if (!user || !valid) fail('Invalid username or password.', 401);
-        const token = randomToken(), now = Math.floor(Date.now() / 1000);
+        const token = randomToken(), tabSession = randomToken(), now = Math.floor(Date.now() / 1000);
         await env.DB.batch([
           env.DB.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(now),
           env.DB.prepare('DELETE FROM login_attempts WHERE expires_at <= ?').bind(now),
           env.DB.prepare('DELETE FROM login_attempts WHERE key = ?').bind(await digest('user:' + username)),
-          env.DB.prepare('INSERT INTO sessions VALUES (?, ?, ?, ?)').bind(await digest(token), user.id, now + 28800, now),
+          env.DB.prepare('INSERT INTO sessions VALUES (?, ?, ?, ?)').bind(await digest(`${token}:${tabSession}`), user.id, now + 28800, now),
         ]);
         const state = await readState(env.DB, paged ? { compact: true, actor: { id: user.id } } : {});
         const actor = state.users.find(u => u.id === user.id);
-        return send({ user: actor, state: project(state, actor) }, 200, { 'Set-Cookie': sessionCookie(request, token) });
+        return send({ user: actor, state: project(state, actor), tabSession }, 200, { 'Set-Cookie': sessionCookie(request, token) });
       }
       const actor = await actorFor(request, env.DB);
       sessionActor = actor;
@@ -144,7 +144,7 @@ export default {
       }
       if (path === '/api/revision' && request.method === 'GET') return send(await env.DB.prepare('SELECT revision FROM app_revision WHERE id=1').first());
       if (path === '/api/logout' && request.method === 'POST') {
-        await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await digest(getSessionToken(request))).run();
+        await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await digest(getSessionKey(request))).run();
         return send({ ok: true }, 200, { 'Set-Cookie': sessionCookie(request, '', 0) });
       }
       if (path === '/api/cuisines/add' && request.method === 'POST') {

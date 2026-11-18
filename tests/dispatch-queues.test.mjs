@@ -11,7 +11,13 @@ let mf,db,cookie,headCookie,itemId;
 const head={id:'queue_head',name:'Queue Head',username:'queue_head',role:'cuisine_head',assignedLocations:['brigade'],assignedSections:['Indian']};
 const purchaser={id:'queue_purchaser',role:'purchaser',assignedLocations:['brigade']};
 const now=new Date().toISOString();
-async function api(path,method='GET',input,session=cookie){const response=await mf.dispatchFetch('http://localhost/api/'+path,{method,headers:{Origin:'http://localhost','Content-Type':'application/json','X-NCHEF-Workspace':'paged',...(session?{Cookie:session}:{})},body:input?JSON.stringify(input):undefined});return {status:response.status,data:await response.json(),cookie:response.headers.get('set-cookie')?.split(';')[0]};}
+const tabSessions=new Map();
+async function api(path,method='GET',input,session=cookie){
+ const response=await mf.dispatchFetch('http://localhost/api/'+path,{method,headers:{Origin:'http://localhost','Content-Type':'application/json','X-NCHEF-Workspace':'paged',...(session?{Cookie:session,'X-NCHEF-Tab-Session':tabSessions.get(session)}:{})},body:input?JSON.stringify(input):undefined});
+ const result={status:response.status,data:await response.json(),cookie:response.headers.get('set-cookie')?.split(';')[0]};
+ if(result.cookie && result.data.tabSession)tabSessions.set(result.cookie,result.data.tabSession);
+ return result;
+}
 async function record(value){await db.prepare('INSERT INTO operation_records(id,kind,payload_json) VALUES (?,?,?)').bind(value.id,value.kind || 'delivery',JSON.stringify(value)).run();}
 const delivery=(id,dispatchId,status='Issued',extra={})=>({id,dispatchId,kind:'delivery',itemId,itemName:'Rice',unit:'kg',quantity:2,outletId:'brigade',cuisine:'Indian',recipientId:head.id,status,createdAt:now,issuedBy:'admin',...extra});
 before(async()=>{

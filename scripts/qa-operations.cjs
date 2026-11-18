@@ -1,3 +1,4 @@
+const { tabAuth } = require('./qa-tab-auth.cjs');
 // Run against the disposable qa-server only. No production credentials or cloud writes.
 const {createRequire}=require('node:module');
 const {resolve}=require('node:path');
@@ -16,7 +17,7 @@ const base=process.env.NCHEF_QA_URL || 'http://127.0.0.1:8888';
  admin.on('pageerror',e=>errors.push(e.message));
  const login=async(page,user)=>{await page.goto(base);await page.locator('#username').fill(user);await page.locator('#password').fill('qa-only-password-2026');await page.locator('#loginBtn').click();await page.waitForFunction(()=>currentView===({qa_admin:'viewMasterOrders',qa_purchaser:'operations:approvals',qa_exec:'viewRequests',qa_head:'viewChefPortal'}[currentUser?.username]));await page.locator('#page-loader').waitFor({state:'hidden'});};
  await login(admin,'qa_admin');assert.equal(await admin.locator('.user-profile').evaluate(el=>el.closest('nav')===null),true);assert.equal(await admin.locator('[data-operations=dashboard]').count(),0);assert.equal(await admin.locator('#appSidebar > a').count(),0);
- const api=async(page,path,input)=>{const r=await page.request.fetch(base+'/api/'+path,{method:input?'POST':'GET',headers:{Origin:base,'Content-Type':'application/json'},data:input});const data=await r.json();assert.equal(r.status(),200,JSON.stringify(data));return data;};
+ const api=async(page,path,input)=>{const r=await page.request.fetch(base+'/api/'+path,{method:input?'POST':'GET',headers:{Origin: base, ...await tabAuth(page),'Content-Type':'application/json'},data:input});const data=await r.json();assert.equal(r.status(),200,JSON.stringify(data));return data;};
  const cmd=async(page,path,input)=>api(page,path,{...input,revision:(await api(page,'state')).revision,operationId:crypto.randomUUID()});
  await admin.locator('#navUsers').click();
  const form=admin.locator('#operationsContent form');

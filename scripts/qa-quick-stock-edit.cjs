@@ -1,3 +1,4 @@
+const { tabAuth } = require('./qa-tab-auth.cjs');
 // Writes only to a disposable local QA instance.
 const assert = require('node:assert/strict');
 const { mkdirSync, readFileSync } = require('node:fs');
@@ -53,10 +54,10 @@ async function main() {
         await page.waitForFunction(() => currentUser?.username === 'qa_admin');
         await page.locator('#page-loader').waitFor({ state: 'hidden' });
 
-        const state = async () => (await page.request.get(base + '/api/state')).json();
+        const state = async () => (await page.request.get(base + '/api/state', { headers: await tabAuth(page) })).json();
         const command = async (path, input) => {
             const response = await page.request.post(base + '/api/' + path, {
-                headers: { Origin: base },
+                headers: { Origin: base, ...await tabAuth(page) },
                 data: { ...input, revision: (await state()).revision, operationId: crypto.randomUUID() },
             });
             assert.equal(response.status(), 200, await response.text());

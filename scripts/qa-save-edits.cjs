@@ -1,10 +1,11 @@
+const { tabAuth } = require('./qa-tab-auth.cjs');
 const assert=require('node:assert/strict');const {createRequire}=require('node:module');const {resolve}=require('node:path');
 const {chromium}=createRequire(resolve(process.env.NCHEF_PLAYWRIGHT_ROOT,'package.json'))('playwright');const base=process.env.NCHEF_QA_URL || 'http://127.0.0.1:8889';
 (async()=>{const browser=await chromium.launch({headless:true,channel:'msedge'});try{
  const admin=await browser.newPage(),exec=await browser.newPage();
  const login=async(page,username)=>{await page.goto(base);await page.locator('#username').fill(username);await page.locator('#password').fill('qa-only-password-2026');await page.locator('#loginBtn').click();await page.waitForFunction(()=>currentUser!==null);};
- const state=async page=>(await page.request.get(base+'/api/state')).json();
- const save=async changes=>{const response=await admin.request.post(base+'/api/changes',{headers:{Origin:base},data:{changes,revision:(await state(admin)).revision,operationId:crypto.randomUUID()}});assert.equal(response.status(),200,await response.text());return response.json();};
+ const state=async page=>(await page.request.get(base+'/api/state', { headers: await tabAuth(page) })).json();
+ const save=async changes=>{const response=await admin.request.post(base+'/api/changes',{headers:{Origin: base, ...await tabAuth(admin)},data:{changes,revision:(await state(admin)).revision,operationId:crypto.randomUUID()}});assert.equal(response.status(),200,await response.text());return response.json();};
  await login(admin,'qa_admin');const outlet=crypto.randomUUID(),user=crypto.randomUUID(),username='save_'+Date.now();
  await save([{entity:'outlets',key:outlet,value:{id:outlet,name:'SAVE EDITS QA'}},{entity:'users',key:user,value:{id:user,username,name:'Save Edits QA',role:'executive_chef',assignedLocations:[outlet],password:'qa-only-password-2026'}}]);
  const item=(await state(admin)).items.find(i=>i.active!==false);const id=crypto.randomUUID();

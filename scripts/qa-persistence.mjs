@@ -8,7 +8,7 @@ const canonical=value=>Array.isArray(value)?value.map(canonical).sort((a,b)=>JSO
 async function state(username){
  const login=await fetch(base+'/api/login',{method:'POST',headers:{Origin:base,'Content-Type':'application/json'},body:JSON.stringify({username,password:'qa-only-password-2026'})});
  assert.equal(login.status,200);
- const response=await fetch(base+'/api/state',{headers:{Cookie:login.headers.get('set-cookie').split(';')[0]}});
+ const response=await fetch(base+'/api/state',{headers:{Cookie:login.headers.get('set-cookie').split(';')[0],'X-NCHEF-Tab-Session':(await login.json()).tabSession}});
  assert.equal(response.status,200);
  return canonical(await response.json());
 }

@@ -1,10 +1,11 @@
+const { tabAuth } = require('./qa-tab-auth.cjs');
 const assert=require('node:assert/strict');
 module.exports=async function reviewFlow(browser,base){
  console.log('Review flow: login and same-day request');
  const head=await browser.newPage(),exec=await browser.newPage();
  const errors=[];for(const page of [head,exec])page.on('pageerror',error=>errors.push(error.message));
  const login=async(page,username)=>{await page.goto(base);await page.locator('#username').fill(username);await page.locator('#password').fill('qa-only-password-2026');await page.locator('#loginBtn').click();await page.locator('#page-loader').waitFor({state:'hidden'});await page.waitForFunction(()=>currentUser!==null);};
- const state=async page=>(await page.request.get(base+'/api/state')).json();
+ const state=async page=>(await page.request.get(base+'/api/state', { headers: await tabAuth(page) })).json();
  await login(head,'qa_head');await login(exec,'qa_exec');
  const item=(await state(head)).items.find(i=>i.name==='QA live item');
  await head.evaluate(()=>openRequestWizard());await head.locator('#requestWizardModal').waitFor({state:'visible'});
