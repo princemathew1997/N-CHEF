@@ -65,7 +65,7 @@
                     const onHandQty = quantity(i.id, o.id);
                     const availQty = availableQuantity(i.id, o.id);
                     if ((i.active!==false || onHandQty>0 || availQty>0) && (!category.value || i.category===category.value) && (!overviewFilters.item || i.id===overviewFilters.item)) {
-                        filteredItems.push({ outlet: o, item: i, qty: availQty, onHandQty: onHandQty, unitCost: cost(i.id, o.id) });
+                    filteredItems.push({ outlet: o, item: i, qty: availQty, unitCost: cost(i.id, o.id) });
                     }
                 }
             }
@@ -124,7 +124,10 @@
             `;
 
             const form = quickEditor.querySelector('form');
-            form.querySelectorAll('[data-quick-cancel]').forEach(b => b.onclick = () => { quickEditor.innerHTML = ''; });
+            form.querySelectorAll('[data-quick-cancel]').forEach(b => b.onclick = () => {
+                quickEditor.innerHTML = '';
+                draw();
+            });
 
             form.onsubmit = async (e) => {
                 e.preventDefault();
@@ -141,27 +144,29 @@
                     const newCost = rawCost !== '' ? Number(rawCost) : null;
                     const reason = form.elements.quickReason.value.trim();
 
-                    // 1. If Available quantity changed, execute stock/adjust
+                    // Stock adjustments set on-hand stock, including quantities reserved for cuisine requests.
                     if (newQty !== target.qty) {
-                        await runDatabaseAction('stock/adjust', {
-                            itemId: target.item.id,
-                            outletId: target.outlet.id,
-                            quantity: newQty,
-                            reason: reason
-                        });
+                        const onHand = newQty + allocatedToCuisine(target.item.id, target.outlet.id);
+                        if (onHand !== quantity(target.item.id, target.outlet.id)) {
+                            await runDatabaseAction('stock/adjust', {
+                                itemId: target.item.id,
+                                outletId: target.outlet.id,
+                                quantity: onHand,
+                                reason
+                            });
+                        }
                     }
 
                     // 2. If Current unit cost changed or was provided
                     if (newCost !== null) {
                         const targetMinor = Math.round(newCost * 100);
-                        if (targetMinor !== (target.unitCost ?? null)) {
-                            // Find the latest snapshot quantity (if we adjusted, it's newQty, else target.qty)
-                            const currentQty = newQty !== target.qty ? newQty : target.qty;
+                        const currentCost = cost(target.item.id, target.outlet.id) ?? null;
+                        if (targetMinor !== (target.unitCost ?? null) && targetMinor !== currentCost) {
                             await runDatabaseAction('stock/current-price', {
                                 itemId: target.item.id,
                                 outletId: target.outlet.id,
-                                expectedQuantity: currentQty,
-                                expectedUnitCostMinor: target.unitCost ?? null,
+                                expectedQuantity: quantity(target.item.id, target.outlet.id),
+                                expectedUnitCostMinor: currentCost,
                                 unitPrice: newCost,
                                 reason: reason
                             });
@@ -848,7 +853,20 @@
             e.preventDefault();
             button.disabled=true;try {window.openVendorOrderReceiving();}catch(e){error(e);}finally{button.disabled=false;}
         });
-        const oldSync=window.onLiveSyncReceived;window.onLiveSyncReceived=()=>{oldSync?.();if(currentView==='inventory:stock-prices'){window.CurrentStockPrices.refresh();return;}if(currentView==='inventory:history' && !document.activeElement?.closest('.queue-filters'))window.StockHistoryQueues.refresh();if(currentView.startsWith('inventory:') && (!panel.querySelector('form') || currentView==='inventory:overview') && !panel.contains(document.activeElement))render();};
+        const oldSync = window.onLiveSyncReceived;
+        window.onLiveSyncReceived = () => {
+            oldSync?.();
+            if (currentView === 'inventory:stock-prices') {
+                window.CurrentStockPrices.refresh();
+                return;
+            }
+            if (currentView === 'inventory:history' && !document.activeElement?.closest('.queue-filters')) {
+                window.StockHistoryQueues.refresh();
+            }
+            if (currentView.startsWith('inventory:') && !panel.querySelector('form') && !panel.contains(document.activeElement)) {
+                render();
+            }
+        };
         window.openAddItemModal=()=>{editing=null;window.switchToView('inventory:catalog');};
     });
 })();
