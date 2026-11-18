@@ -125,7 +125,7 @@
             if(purchaseSection==='received')content.innerHTML='<div class="received-order-list">'+table(['Received on (IST)','PO number','Vendor','Outlet','Items','Action'],filteredOrders.map(po=>[esc(InventoryTools.timestamp(po.receivedAt)),esc(po.poNumber),esc(po.vendorName),esc(outletName(po.outletId)),esc(po.items.length),button('view-received-po',po.id,'View details')+button('pdf',po.id,'Download PDF')]))+'</div>';
             if(purchaseSection==='cancelled')content.innerHTML=table(['Cancelled on (IST)','PO number','Vendor','Outlet','Reason'],filteredOrders.map(po=>[esc(InventoryTools.timestamp(po.cancelledAt)),esc(po.poNumber),esc(po.vendorName),esc(outletName(po.outletId)),esc(po.cancellationReason)]));
             if(!filteredOrders.length)content.innerHTML='<p>No '+(purchaseSection==='received'?'received orders':purchaseSection==='cancelled'?'cancelled orders':'outstanding purchase orders')+' match the selected dates.</p>';
-            const controls=`<div class="purchase-order-tabs"><button type="button" class="btn ${purchaseSection==='open'?'btn-primary':'btn-outline'}" data-purchase-section="open">PO Raised (${InventoryTools.purchaseOrderList(purchaseOrdersData,'open').length})</button><button type="button" class="btn ${purchaseSection==='received'?'btn-primary':'btn-outline'}" data-purchase-section="received">Received (${purchaseOrdersData.filter(p=>p.status==='Received').length})</button><button type="button" class="btn ${purchaseSection==='cancelled'?'btn-primary':'btn-outline'}" data-purchase-section="cancelled">Cancelled</button></div><div class="user-table-filters"><label>From date (IST)<input id="purchaseFrom" type="date" value="${esc(purchaseFrom)}"></label><label>To date (IST)<input id="purchaseTo" type="date" value="${esc(purchaseTo)}"></label><button type="button" class="btn btn-outline" id="purchaseClearDates">Clear dates</button><span>${purchaseSection==='received'?'Filter by received date':purchaseSection==='cancelled'?'Filter by cancellation date':'Filter by order date'} · ${filteredOrders.length} order(s)</span></div>`;
+            const controls=`<div class="purchase-order-tabs"><button type="button" class="btn ${purchaseSection==='open'?'btn-primary':'btn-outline'}" data-purchase-section="open">PO Raised (${InventoryTools.purchaseOrderList(purchaseOrdersData,'open').length})</button><button type="button" class="btn ${purchaseSection==='received'?'btn-primary':'btn-outline'}" data-purchase-section="received">Received (${purchaseOrdersData.filter(p=>p.status==='Received').length})</button></div><div class="user-table-filters"><label>From date (IST)<input id="purchaseFrom" type="date" value="${esc(purchaseFrom)}"></label><label>To date (IST)<input id="purchaseTo" type="date" value="${esc(purchaseTo)}"></label><button type="button" class="btn btn-outline" id="purchaseClearDates">Clear dates</button><button type="button" class="btn btn-outline" data-purchase-section="${purchaseSection==='cancelled'?'open':'cancelled'}">${purchaseSection==='cancelled'?'Back to raised orders':'View cancelled orders'}</button><span>${purchaseSection==='received'?'Filter by received date':purchaseSection==='cancelled'?'Filter by cancellation date':'Filter by order date'} · ${filteredOrders.length} order(s)</span></div>`;
             content.insertAdjacentHTML('afterbegin',controls);
             content.querySelectorAll('[data-purchase-section]').forEach(b=>b.onclick=()=>{
                 purchaseDates[purchaseSection]={from:purchaseFrom,to:purchaseTo};
@@ -311,14 +311,20 @@
     };
     window.homeViewForRole=role=>({admin:'viewMasterOrders',executive_chef:'viewRequests',purchaser:'operations:approvals',cuisine_head:'viewChefPortal'}[role] || 'viewMasterOrders');
     window.goHome=()=>window.switchToView(window.homeViewForRole(currentUser?.role));
-    window.showOperationsView=view=>{
+    window.showOperationsView=(view, _subDivision, previousView)=>{
         if(view==='operations:dashboard'){window.goHome();return true;}
         if(view==='viewRequests' && currentUser?.role==='purchaser')view='operations:approvals';
 
         const aliases={viewUsers:'users',viewVendors:'vendors',viewIndents:'purchases',viewAddChef:'accounts'};
         if(aliases[view])view='operations:'+aliases[view];
         if(!view.startsWith('operations:'))return false;
-        page=view.slice(11);if(!titles[page] || !allowed(page)){window.goHome();return true;}editor=null;currentView='operations:'+page;localStorage.setItem('nchef_active_view',currentView);panel?.classList.remove('hidden');
+        page=view.slice(11);if(!titles[page] || !allowed(page)){window.goHome();return true;}
+        if (page === 'purchases' && previousView !== view && purchaseSection === 'cancelled') {
+            purchaseDates.cancelled = { from: purchaseFrom, to: purchaseTo };
+            purchaseSection = 'open';
+            ({ from: purchaseFrom, to: purchaseTo } = purchaseDates.open || { from: '', to: '' });
+        }
+        editor=null;currentView='operations:'+page;localStorage.setItem('nchef_active_view',currentView);panel?.classList.remove('hidden');
         document.getElementById('mobileActivePage').textContent=pageTitle(page);
         document.querySelectorAll('[data-operations-nav]').forEach(a=>a.classList.toggle('active',a.dataset.operations===page));
         if(page==='users')document.getElementById('navUsers')?.classList.add('active');

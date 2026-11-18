@@ -601,6 +601,7 @@ window.switchToView = function(viewName, subDivision = null) {
         if (navStockChevron) navStockChevron.style.transform = 'rotate(0deg)';
     }
 
+    const previousView = currentView;
     currentView = viewName;
     localStorage.setItem('nchef_active_view', viewName);
 
@@ -625,7 +626,7 @@ window.switchToView = function(viewName, subDivision = null) {
     if (mobileDrawer) mobileDrawer.classList.remove('mobile-open');
     if (mobileBackdrop) mobileBackdrop.classList.add('hidden');
 
-    if (window.showOperationsView?.(viewName, subDivision)) return;
+    if (window.showOperationsView?.(viewName, subDivision, previousView)) return;
     if (window.showInventoryView?.(viewName)) return;
     switch(viewName) {
         case 'viewMasterOrders':
@@ -3151,12 +3152,13 @@ function renderVendorPOTable() {
     const tbody = document.getElementById('vendorPOTableBody');
     if (!tbody) return;
     
-    if (!purchaseOrdersData || purchaseOrdersData.length === 0) {
+    const orders = (purchaseOrdersData || []).filter(po => po.status !== 'Cancelled');
+    if (orders.length === 0) {
         tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 24px;">No purchase orders yet. Use Raise to Vendor on a pending consolidated request to create separate vendor orders.</td></tr>`;
         return;
     }
     
-    tbody.innerHTML = purchaseOrdersData.map(po => {
+    tbody.innerHTML = orders.map(po => {
         const itemsSummary = (po.items || []).map(it => `${it.itemName}: ${it.qty} ${it.unit || ''}`).join(', ');
         const countText = `${(po.items || []).length} items`;
         
