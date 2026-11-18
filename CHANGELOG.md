@@ -4,6 +4,10 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 2.13.6 - 2026-11-18
+
+- Require sign-in in a fresh tab on shared computers. Existing sessions require sign-in again after this release.
+
 ## 2.13.5 - 2026-11-18
 
 - Focus the quantity field when Quick Edit Stock opens and restore focus to Edit after saving or cancelling.

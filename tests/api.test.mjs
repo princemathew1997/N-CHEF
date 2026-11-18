@@ -10,9 +10,13 @@ const adminPassword = 'test-admin-password-2026';
 const userPassword = 'test-outlet-password-2026';
 const testReleaseCommit = 'a'.repeat(40);
 let adminCookie, adminId, chefCookie, supervisorCookie, chefId, supervisorId, purchaserCookie;
+const tabSessions = new Map();
+const authHeaders = cookie => ({ Cookie: cookie, 'X-NCHEF-Tab-Session': tabSessions.get(cookie) });
 async function request(path, method = 'GET', input, cookie = adminCookie, clientRelease = testReleaseCommit) {
-    const res = await mf.dispatchFetch(origin + '/api/' + path, { method, headers: { Origin: origin, 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}), ...(clientRelease ? {'X-NCHEF-Client-Release':clientRelease} : {}) }, body: input ? JSON.stringify(input) : undefined });
-    return { status: res.status, data: await res.json(), cookie: res.headers.get('set-cookie')?.split(';')[0] };
+    const res = await mf.dispatchFetch(origin + '/api/' + path, { method, headers: { Origin: origin, 'Content-Type': 'application/json', ...(cookie ? authHeaders(cookie) : {}), ...(clientRelease ? {'X-NCHEF-Client-Release':clientRelease} : {}) }, body: input ? JSON.stringify(input) : undefined });
+    const result = { status: res.status, data: await res.json(), cookie: res.headers.get('set-cookie')?.split(';')[0] };
+    if (result.cookie && result.data.tabSession) tabSessions.set(result.cookie, result.data.tabSession);
+    return result;
 }
 async function save(changes, cookie = adminCookie, revision) {
     if (revision === undefined) revision = (await request('state', 'GET', undefined, cookie)).data.revision;
@@ -39,6 +43,12 @@ test('secure setup, login, permissions, atomic approval and conflicts', async ()
     assert.equal(login.status, 200);
     adminCookie = login.cookie; adminId = login.data.user.id;
     assert.ok(adminCookie); assert.ok(!JSON.stringify(login.data).includes('password'));
+    for (const path of ['session', 'state']) {
+        for (const headers of [{ Cookie: adminCookie }, { Cookie: adminCookie, 'X-NCHEF-Tab-Session': '0'.repeat(64) }, { 'X-NCHEF-Tab-Session': login.data.tabSession }]) {
+            assert.equal((await mf.dispatchFetch(origin + '/api/' + path, { headers })).status, 401);
+        }
+    }
+    assert.equal((await request('session')).data.user.id, adminId);
     assert.ok((await db.prepare('SELECT password_hash FROM users WHERE id = ?').bind(adminId).first()).password_hash.startsWith('pbkdf2-sha256:'));
     const chef = { id: crypto.randomUUID(), username: 'chef_test', name: 'Chef Test', role: 'cuisine_head', assignedLocations: ['brigade'], assignedSections: ['Indian'], password: userPassword };
     const sup = { id: crypto.randomUUID(), username: 'supervisor_test', name: 'Supervisor Test', role: 'executive_chef', assignedLocations: ['brigade'], password: userPassword };
@@ -204,7 +214,7 @@ test('secure setup, login, permissions, atomic approval and conflicts', async ()
         save([{ entity: 'vendors', key: 'vendor_b', value: { id: 'vendor_b', name: 'Vendor B' } }], adminCookie, sameRevision),
     ]);
     assert.deepEqual(simultaneous.map(r => r.status).sort(), [200, 409]);
-    const wrongOrigin = await mf.dispatchFetch(origin + '/api/logout', { method: 'POST', headers: { Origin: 'https://evil.example', 'Content-Type': 'application/json', Cookie: adminCookie }, body: '{}' });
+    const wrongOrigin = await mf.dispatchFetch(origin + '/api/logout', { method: 'POST', headers: { Origin: 'https://evil.example', 'Content-Type': 'application/json', ...authHeaders(adminCookie) }, body: '{}' });
     assert.equal(wrongOrigin.status, 403);
     assert.equal((await request('logout', 'POST', {}, chefCookie)).status, 200);
     assert.equal((await request('state', 'GET', undefined, chefCookie)).status, 401);
@@ -553,7 +563,7 @@ test('consolidated distribution enforces notes, shared stock, request links and 
 });
 
 test('price history routes restrict roles and use receipt records for both purchase flows',async()=>{
- const pagedResponse=await mf.dispatchFetch(origin+'/api/prices?from=2020-01-01&to=2099-12-31',{headers:{Cookie:adminCookie,'X-NCHEF-Workspace':'paged'}});
+ const pagedResponse=await mf.dispatchFetch(origin+'/api/prices?from=2020-01-01&to=2099-12-31',{headers:{...authHeaders(adminCookie),'X-NCHEF-Workspace':'paged'}});
  assert.equal(pagedResponse.status,200);
  const pagedReport=await pagedResponse.json();assert.ok(pagedReport.items.every(i=>Number.isInteger(i.receiptCount)));
  assert.equal(pagedReport.from,'2020-01-01');assert.equal(pagedReport.historyPaged,undefined);
@@ -619,7 +629,7 @@ test('admin and purchaser correct entered prices with audit, scope, validation a
  const first=added.data.stockHistory.find(m=>m.item_id===unused.id && m.kind==='opening');
  const initial=await cmd('stock/price',{...correction,historyId:first.id,unitPrice:8,expectedUnitCostMinor:700},purchaserCookie);
  assert.equal(initial.status,200);assert.equal(initial.data.outletStock.find(b=>b.item_id===unused.id && b.outlet_id==='brigade').unit_cost_minor,800);
- const pagedResponse=await mf.dispatchFetch(origin+'/api/stock/price',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',Cookie:purchaserCookie,'X-NCHEF-Workspace':'paged','X-NCHEF-Client-Release':testReleaseCommit},body:JSON.stringify({...correction,historyId:first.id,unitPrice:9,expectedUnitCostMinor:800,revision:initial.data.revision,operationId:crypto.randomUUID()})});
+ const pagedResponse=await mf.dispatchFetch(origin+'/api/stock/price',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',...authHeaders(purchaserCookie),'X-NCHEF-Workspace':'paged','X-NCHEF-Client-Release':testReleaseCommit},body:JSON.stringify({...correction,historyId:first.id,unitPrice:9,expectedUnitCostMinor:800,revision:initial.data.revision,operationId:crypto.randomUUID()})});
  const paged=await pagedResponse.json();assert.equal(pagedResponse.status,200,JSON.stringify(paged));assert.equal(paged.historyPaged,true);assert.equal(paged.stockHistory.length,0);
  assert.equal(paged.outletStock.find(b=>b.item_id===unused.id && b.outlet_id==='brigade').unit_cost_minor,900);
 });
@@ -653,10 +663,10 @@ test('available-stock price menu updates valuation with zero movement and can be
  const current=(await request('state')).data;
  const worker=(await import('../worker/index.mjs')).default;
  const disabledEnv={DB:db,NCHEF_STOCK_PRICE_EDITING:'disabled',NCHEF_RELEASE_COMMIT:testReleaseCommit};
- const disabledState=await worker.fetch(new Request(origin+'/api/state',{headers:{Cookie:adminCookie,'X-NCHEF-Workspace':'paged'}}),disabledEnv);
+ const disabledState=await worker.fetch(new Request(origin+'/api/state',{headers:{...authHeaders(adminCookie),'X-NCHEF-Workspace':'paged'}}),disabledEnv);
  assert.equal(disabledState.status,200);assert.equal((await disabledState.json()).features.stockPriceEditing,false);
  for(const path of ['stock/current-price','stock/price']){
-  const response=await worker.fetch(new Request(origin+'/api/'+path,{method:'POST',headers:{Origin:origin,Cookie:adminCookie,'Content-Type':'application/json','X-NCHEF-Client-Release':testReleaseCommit},body:JSON.stringify({...details,operationId:crypto.randomUUID(),revision:current.revision})}),disabledEnv);
+  const response=await worker.fetch(new Request(origin+'/api/'+path,{method:'POST',headers:{Origin:origin,...authHeaders(adminCookie),'Content-Type':'application/json','X-NCHEF-Client-Release':testReleaseCommit},body:JSON.stringify({...details,operationId:crypto.randomUUID(),revision:current.revision})}),disabledEnv);
   assert.equal(response.status,404);
  }
  const final=(await request('state')).data;assert.equal(final.revision,current.revision);assert.deepEqual(final.outletStock,current.outletStock);

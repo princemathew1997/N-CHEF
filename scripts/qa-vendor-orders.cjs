@@ -1,3 +1,4 @@
+const { tabAuth } = require('./qa-tab-auth.cjs');
 // Requires a fresh disposable scripts/qa-server.mjs instance. Never runs against production.
 const {createRequire}=require('node:module');
 const {resolve}=require('node:path');
@@ -18,7 +19,7 @@ let browser;
  };
  await page.goto(base);await page.locator('#username').fill('qa_admin');await page.locator('#password').fill('qa-only-password-2026');await page.locator('#loginBtn').click();
  await page.waitForFunction(()=>currentUser?.role==='admin');await page.locator('#page-loader').waitFor({state:'hidden'});
- const api=async(path,input)=>{const r=await page.request.fetch(base+'/api/'+path,{method:input?'POST':'GET',headers:{Origin:base},data:input});const data=await r.json();assert.equal(r.status(),200,JSON.stringify(data));return data;};
+ const api=async(path,input)=>{const r=await page.request.fetch(base+'/api/'+path,{method:input?'POST':'GET',headers:{Origin: base, ...await tabAuth(page)},data:input});const data=await r.json();assert.equal(r.status(),200,JSON.stringify(data));return data;};
  const initial=await api('state');
  if(process.argv.includes('--refresh')){
    const saved=initial;

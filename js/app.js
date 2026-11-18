@@ -454,11 +454,13 @@ function initLogin() {
     const errDiv   = document.getElementById('loginError');
 
     const doLogin = async () => {
+        if (loginBtn?.disabled) return;
         const u = userIn ? userIn.value.trim() : '';
         const p = passIn ? passIn.value : '';
         if (loginBtn) loginBtn.disabled = true;
         try {
             const result = await apiRequest('login', 'POST', { username: u, password: p });
+            setTabSession(result.tabSession);
             applyServerState(result.state);
             if (errDiv) errDiv.classList.remove('active');
             if (passIn) passIn.value = '';
@@ -479,6 +481,7 @@ function initLogin() {
     if (logoutBtn) {
         logoutBtn.addEventListener('click', async () => {
             try { await apiRequest('logout', 'POST', {}); } catch (error) { if (error.status !== 401) throw error; }
+            setTabSession('');
             committedState = null;
             for (const values of Object.values(collectionMap)) values.length = 0;
             currentUser = null;
@@ -501,11 +504,21 @@ function initLogin() {
         });
     }
 
-    apiRequest('session').then(result => {
-        applyServerState(result.state);
-        applyLoggedInUser(result.user);
-    }).catch(async error => {
-        if (error.status !== 401 && errDiv) { errDiv.textContent = error.message; errDiv.classList.add('active'); }
+    (async () => {
+        if (tabSession) {
+            if (loginBtn) loginBtn.disabled = true;
+            try {
+                const result = await apiRequest('session');
+                applyServerState(result.state);
+                applyLoggedInUser(result.user);
+                return;
+            } catch (error) {
+                if (error.status === 401) setTabSession('');
+                else if (errDiv) { errDiv.textContent = error.message; errDiv.classList.add('active'); }
+            } finally {
+                if (loginBtn) loginBtn.disabled = false;
+            }
+        }
         try {
             const setup = await apiRequest('setup-status');
             if (setup.required && errDiv) {
@@ -513,7 +526,7 @@ function initLogin() {
                 errDiv.classList.add('active');
             }
         } catch { /* Keep the connection error visible. */ }
-    });
+    })();
 }
 
 // ============================================================

@@ -1,3 +1,4 @@
+const { tabAuth } = require('./qa-tab-auth.cjs');
 const assert=require('node:assert/strict');
 const {createRequire}=require('node:module');const {resolve}=require('node:path');
 const {chromium}=createRequire(resolve(process.env.NCHEF_PLAYWRIGHT_ROOT,'package.json'))('playwright');
@@ -12,9 +13,9 @@ const base=process.env.NCHEF_QA_URL || 'http://127.0.0.1:8889';
  await admin.locator('[data-operations=notifications]').click();
  assert.equal(await admin.locator('#operationsContent tbody tr').count(),await admin.evaluate(()=>Math.max(1,getVisibleNotifications().length)));
  await login(exec,'qa_exec');
- const state=await (await exec.request.get(base+'/api/state')).json();const item=state.items.find(i=>i.active!==false);const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+ const state=await (await exec.request.get(base+'/api/state', { headers: await tabAuth(exec) })).json();const item=state.items.find(i=>i.active!==false);const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
  const id=crypto.randomUUID(),value={id,itemId:item.id,itemName:item.name,outletId:'brigade',cuisine:'Indian',qty:1,status:'Pending',date:new Date(Date.parse(today+'T00:00:00Z')-86400000).toISOString().slice(0,10),backdateJustification:'Notification regression check'};
- const result=await exec.request.post(base+'/api/changes',{headers:{Origin:base},data:{operationId:crypto.randomUUID(),revision:state.revision,changes:[{entity:'requests',key:id,value}]}});assert.equal(result.status(),200,await result.text());
+ const result=await exec.request.post(base+'/api/changes',{headers:{Origin: base, ...await tabAuth(exec)},data:{operationId:crypto.randomUUID(),revision:state.revision,changes:[{entity:'requests',key:id,value}]}});assert.equal(result.status(),200,await result.text());
  await admin.bringToFront();await admin.evaluate(()=>refreshDatabase());await admin.locator('#requestNoticeOverlay').waitFor({state:'visible'});assert.match(await admin.locator('#requestNoticeOverlay').innerText(),/1 new notification/);
  const notification=await admin.evaluate(source=>getVisibleNotifications().find(n=>n.sourceId===source),id);
  await admin.locator('[data-action=read][data-id="'+notification.id+'"]').click();await admin.locator('#requestNoticeOverlay').waitFor({state:'hidden'});
