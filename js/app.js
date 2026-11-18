@@ -3171,7 +3171,7 @@ function renderVendorPOTable() {
                     <div style="font-size: 0.75rem; color: var(--text-muted); max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${itemsSummary}">${itemsSummary}</div>
                 </td>
                 <td><span class="status ok" style="background: rgba(67, 97, 238, 0.15); color: #4895ef; border: 1px solid rgba(67, 97, 238, 0.3); font-weight: 600; padding: 3px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;"><i data-lucide="truck" style="width: 12px; height: 12px;"></i> ${po.status}</span></td>
-                <td>${po.expectedDelivery || 'Not specified'} ${po.status !== 'Received' ? `<button class="btn btn-outline" data-receive-po="${po.id}">Receive</button>` : ''}</td>
+                <td>${po.expectedDelivery || 'Not specified'} ${!['Received', 'Cancelled'].includes(po.status) ? `<button class="btn btn-outline" data-receive-po="${po.id}">Receive</button>` : ''}</td>
                 <td><button class="btn btn-primary" data-po-pdf="${VendorOrders.escape(po.id)}">Download PDF</button> <button class="btn btn-outline" data-po-print="${VendorOrders.escape(po.id)}">View / Print</button></td>
             </tr>
         `;

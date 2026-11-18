@@ -110,6 +110,12 @@ export async function persistChanges(db, state, next, touched, actor, operationI
         const cuisine = next.cuisines.find(c => c.name === data.cuisine) || next.cuisines[0];
         writes.push(query(db, 'INSERT INTO requests (id, item_id, outlet_id, cuisine_id, chef_id, quantity, revised_quantity, supervisor_note, status, indent_id, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET quantity = excluded.quantity, revised_quantity = excluded.revised_quantity, supervisor_note = excluded.supervisor_note, status = excluded.status, indent_id = excluded.indent_id, payload_json = excluded.payload_json, version = requests.version + 1', key, data.itemId, data.outletId, cuisine.id, data.ownerId || old?.ownerId || actor.id, data.qty, data.revisedQty ?? null, data.supervisorNote || '', data.status, data.indentId || null, JSON.stringify(data)));
       } else if (entity === 'purchase_orders') {
+        if (data.status === 'Cancelled') {
+          writes.push(query(db, 'UPDATE purchase_orders SET status = ?, payload_json = ? WHERE id = ?', data.status, JSON.stringify(data), key));
+          writes.push(query(db, 'INSERT INTO audit_events (id, actor_id, action, entity_type, entity_id, details_json) VALUES (?, ?, ?, ?, ?, ?)',
+            crypto.randomUUID(), actor.id, 'cancel', entity, key, JSON.stringify({ operationId, reason: data.cancellationReason })));
+          continue;
+        }
         writes.push(query(db, 'INSERT INTO purchase_orders (id, po_number, vendor_id, indent_id, created_by, status, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET status = excluded.status, payload_json = excluded.payload_json', key, data.poNumber, data.vendorId, data.indentId || null, data.ownerId || old?.ownerId || actor.id, data.status, JSON.stringify(data)));
         writes.push(query(db, 'DELETE FROM purchase_order_items WHERE purchase_order_id = ?', key));
         for (const row of data.items) writes.push(query(db, 'INSERT INTO purchase_order_items (purchase_order_id, item_id, quantity, received_quantity) VALUES (?, ?, ?, ?)', key, row.itemId, row.qty, row.receivedQty || 0));

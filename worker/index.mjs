@@ -3,7 +3,7 @@ import { validateLegacyCSV } from '../shared/legacy-import.mjs';
 import { bulkReceiptReviewRows, validateBulkReceiptCSV } from '../shared/bulk-receipt.mjs';
 import { stockCommand } from './stock.mjs';
 import { releaseInfo, requireCurrentClient } from './release.mjs';
-import { raiseVendorOrders, planVendorReceipt } from './purchase-orders.mjs';
+import { raiseVendorOrders, planVendorReceipt, planPurchaseOrderCancellation } from './purchase-orders.mjs';
 import { digest, equalSecret, getSessionToken, hashPassword, randomToken, sessionCookie, verifyPassword } from './auth.mjs';
 import { clone, fail, hasOutlet, id, number, project, safeText, validateChanges } from './model.mjs';
 import { persistChanges as persistDatabaseChanges, readState, readClientState, markAllNotifications } from './database.mjs';
@@ -341,7 +341,7 @@ export default {
         if (derived.changes.length) { const privileged = editingCuisineRequest || recallingIndent || reviewingChefRequests; const validated = validateChanges(next, derived.changes, privileged ? { ...actor, role: 'admin' } : actor, privileged); next = validated.next; touched = validated.touched; }
         return send(await persistChanges(env.DB, state, next, touched, actor, input.operationId, stock));
       }
-      if (path === '/api/purchase-orders/raise' && request.method === 'POST') {
+      if (['/api/purchase-orders/raise', '/api/purchase-orders/cancel'].includes(path) && request.method === 'POST') {
         const input = await body(request);
         id(input.operationId);
         const prior = await env.DB.prepare('SELECT actor_id FROM command_receipts WHERE id = ?').bind(input.operationId).first();
@@ -353,7 +353,9 @@ export default {
         if (!Number.isSafeInteger(input.revision) || input.revision !== state.revision) fail('Data changed. Refresh and try again.', 409);
         const current = state.users.find(u => u.id === actor.id);
         if (!current) fail('Account is inactive.', 401);
-        const changes = raiseVendorOrders(state, current, input);
+        const changes = path.endsWith('/cancel')
+          ? planPurchaseOrderCancellation(state, current, input)
+          : raiseVendorOrders(state, current, input);
         const { next, touched } = validateChanges(state, changes, { ...current, role: 'admin' }, true);
         return send(await persistChanges(env.DB, state, next, touched, current, input.operationId));
       }
