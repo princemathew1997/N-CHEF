@@ -4,6 +4,10 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 2.13.2 - 2026-11-18
+
+- Keep cancelled purchase orders out of the default view and provide a View cancelled orders option.
+
 ## 2.13.1 - 2026-11-18
 
 - Allow admins to cancel unreceived purchase orders through the backend.
