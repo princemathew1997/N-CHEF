@@ -56,7 +56,7 @@
         if(outlet.tagName==='SELECT')outlet.value=overviewFilters.outlet;
         let picker;
         const quickEditor = content.querySelector('#overviewQuickEditor');
-        const draw=()=>{
+        const draw=(focusTarget=null)=>{
             overviewFilters.outlet=outlet.value;overviewFilters.category=category.value;
             const outletList = allowedOutlets().filter(o=>!outlet.value || o.id===outlet.value);
             const filteredItems = [];
@@ -83,7 +83,9 @@
             content.querySelector('#overviewRows').innerHTML=table(headers, rows);
             if (canQuickEdit) {
                 content.querySelectorAll('[data-quick-edit]').forEach(btn => {
-                    btn.onclick = () => openQuickEdit(filteredItems[Number(btn.dataset.quickEdit)]);
+                    const row = filteredItems[Number(btn.dataset.quickEdit)];
+                    btn.onclick = () => openQuickEdit(row);
+                    if (focusTarget && row.item.id === focusTarget.item.id && row.outlet.id === focusTarget.outlet.id) btn.focus();
                 });
             }
         };
@@ -126,7 +128,7 @@
             const form = quickEditor.querySelector('form');
             form.querySelectorAll('[data-quick-cancel]').forEach(b => b.onclick = () => {
                 quickEditor.innerHTML = '';
-                draw();
+                draw(target);
             });
 
             form.onsubmit = async (e) => {
@@ -183,7 +185,7 @@
                     }
 
                     quickEditor.innerHTML = '';
-                    draw();
+                    draw(target);
                     window.renderOutletDashboard?.();
                     window.showToast?.('Stock values updated successfully', 'success', 3000);
                 } catch (err) {
@@ -194,10 +196,11 @@
             };
 
             quickEditor.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            form.elements.quickQty.focus({ preventScroll: true });
         }
 
         const mountPicker=()=>{const items=masterItemsData.filter(i=>!category.value || i.category===category.value);if(!items.some(i=>i.id===overviewFilters.item))overviewFilters.item='';picker=createItemPicker(content.querySelector('#overviewItemPicker'),items,{optional:true,selected:overviewFilters.item,onChange:id=>{overviewFilters.item=id;draw();}});};
-        category.onchange=()=>{mountPicker();draw();};outlet.onchange=draw;mountPicker();draw();
+        category.onchange=()=>{mountPicker();draw();};outlet.onchange=()=>draw();mountPicker();draw();
     }
     window.renderOutletDashboard = () => {
         OutletSelection.restore();

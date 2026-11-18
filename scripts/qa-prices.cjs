@@ -16,10 +16,11 @@ if(!/^http:\/\/127\.0\.0\.1:\d+$/.test(base))throw Error('Disposable local QA se
   await page.goto(base);await page.locator('#username').fill('qa_admin');await page.locator('#password').fill('qa-only-password-2026');await page.locator('#loginBtn').click();
   await page.waitForFunction(()=>currentUser?.role==='admin');await page.locator('#page-loader').waitFor({state:'hidden'});
   const {itemId,expectedCount}=await page.evaluate(async()=>{
-   const item=masterItemsData.find(i=>i.active!==false),vendor=vendorsData[0].name;
-   const before=(await apiRequest('prices')).items.find(i=>i.id===item.id).receiptCount;
-   for(let i=0;i<27;i++)await runDatabaseAction('stock/receipt',{outletId:'brigade',itemId:item.id,quantity:i%2+1,vendor,unitPrice:i===0?0:10+i});
-   return {itemId:item.id,expectedCount:before+27};
+   const template=masterItemsData.find(i=>i.active!==false),vendor=vendorsData[0].name;
+   const item={id:crypto.randomUUID(),name:'QA Price History '+Date.now(),category:template.category,unit:template.unit,vendor};
+   await runDatabaseAction('changes',{changes:[{entity:'items',key:item.id,value:item}]});
+   for(let i=0;i<27;i++)await runDatabaseAction('stock/receipt',{outletId:'brigade',itemId:item.id,quantity:i%2+1,vendor,vendorBillType:'cash',unitPrice:i===0?0:10+i});
+   return {itemId:item.id,expectedCount:27};
   });
   await openNavigation(page,'[data-inventory=prices]');
   await page.locator('[data-price-item]').first().waitFor();
