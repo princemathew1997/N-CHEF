@@ -4,7 +4,7 @@ const {resolve}=require('node:path');
 const {mkdirSync}=require('node:fs');
 const {chromium}=createRequire(resolve(process.env.NCHEF_PLAYWRIGHT_ROOT,'package.json'))('playwright');
 const base=process.env.NCHEF_QA_URL;
-if(!/^http:\/\/127\.0\.0\.1:889[01]$/.test(base))throw new Error('Use a disposable test preview on 8890 or 8891.');
+assert.match(base || '', /^http:\/\/127\.0\.0\.1:889[0-9]$/);
 (async()=>{
  const browser=await chromium.launch({headless:true,channel:'msedge'});
  try{

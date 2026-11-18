@@ -2,8 +2,8 @@
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync} from 'node:fs';
 const base=process.env.NCHEF_QA_URL;
-assert.equal(base,'http://127.0.0.1:8891');
-const file='.wrangler/extended-qa-persistence.json';
+assert.match(base || '', /^http:\/\/127\.0\.0\.1:889[0-9]$/);
+const file=process.env.NCHEF_QA_SNAPSHOT || '.wrangler/extended-qa-persistence.json';
 const canonical=value=>Array.isArray(value)?value.map(canonical).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))):value && typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
 async function state(username){
  const login=await fetch(base+'/api/login',{method:'POST',headers:{Origin:base,'Content-Type':'application/json'},body:JSON.stringify({username,password:'qa-only-password-2026'})});

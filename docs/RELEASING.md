@@ -238,6 +238,9 @@ was previously published under the new version number.
 
 ## Prepare the next version
 
+For major releases, run the [major release QA matrix](MAJOR_RELEASE_QA.md)
+against the release candidate before publishing.
+
 On a normal development branch:
 
 ```powershell

@@ -662,6 +662,31 @@ test('available-stock price menu updates valuation with zero movement and can be
  const final=(await request('state')).data;assert.equal(final.revision,current.revision);assert.deepEqual(final.outletStock,current.outletStock);
 });
 
+test('concurrent stock adjustments reject the stale writer and a replay creates no extra movement', async () => {
+    const before = (await request('state')).data;
+    const item = before.items.find(item => item.active !== false);
+    const outletId = 'brigade';
+    const startingQuantity = before.outletStock.find(row => row.item_id === item.id && row.outlet_id === outletId)?.quantity || 0;
+    const requests = [adminCookie, purchaserCookie].map((cookie, index) => ({
+        cookie,
+        input: {
+            itemId: item.id, outletId, quantity: startingQuantity + index + 1,
+            reason: 'Concurrent physical count', revision: before.revision, operationId: crypto.randomUUID(),
+        },
+    }));
+    const submit = ({ cookie, input }) => request('stock/adjust', 'POST', input, cookie);
+    const results = await Promise.all(requests.map(submit));
+    assert.deepEqual(results.map(result => result.status).sort(), [200, 409]);
+    const winner = requests[results.findIndex(result => result.status === 200)];
+    const replay = await submit(winner);
+    assert.equal(replay.status, 200);
+    const after = (await request('state')).data;
+    assert.equal(after.revision, before.revision + 1);
+    assert.equal(after.outletStock.find(row => row.item_id === item.id && row.outlet_id === outletId).quantity, winner.input.quantity);
+    const movements = after.stockHistory.filter(row => requests.some(entry => entry.input.operationId === row.operation_id));
+    assert.deepEqual(movements.map(row => row.operation_id), [winner.input.operationId]);
+});
+
 test('bulk stock receipt requires Cash or Credit and keeps the submitted type through approval', async () => {
     const state = (await request('state')).data;
     const item = state.items.find(item => item.active !== false);

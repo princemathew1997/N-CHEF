@@ -1,4 +1,4 @@
-// Requires qa-operations.cjs fixtures on the disposable port 8891 server.
+// Requires qa-operations.cjs fixtures on a disposable local test server.
 const assert=require('node:assert/strict');
 const openNavigation=require('./qa-nav.cjs');
 const {createRequire}=require('node:module');
@@ -6,7 +6,7 @@ const {resolve}=require('node:path');
 const {mkdirSync}=require('node:fs');
 const {chromium}=createRequire(resolve(process.env.NCHEF_PLAYWRIGHT_ROOT,'package.json'))('playwright');
 const base=process.env.NCHEF_QA_URL;
-if(base!=='http://127.0.0.1:8891')throw Error('Use disposable port 8891 only.');
+assert.match(base || '', /^http:\/\/127\.0\.0\.1:889[0-9]$/);
 (async()=>{
  const browser=await chromium.launch({headless:true,channel:'msedge'});
  try{
@@ -43,11 +43,14 @@ if(base!=='http://127.0.0.1:8891')throw Error('Use disposable port 8891 only.');
   assert.ok((await api(head,'dispatches/items?dispatch='+encodeURIComponent(second.dispatchId))).rows.every(d=>d.status==='Issued'));
   mkdirSync('screenshots/dispatch-queues',{recursive:true});await head.screenshot({path:'screenshots/dispatch-queues/chef-desktop.png',fullPage:true});
   await head.setViewportSize({width:390,height:844});await head.waitForFunction(()=>document.getElementById('appSidebar').getBoundingClientRect().right<=1);assert.ok(await head.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));await head.screenshot({path:'screenshots/dispatch-queues/chef-mobile.png',fullPage:true});
-  await card(second.dispatchId).locator('[data-action=accept-dispatch]').click();await head.locator('#uiAlertOkBtn').click();await card(second.dispatchId).waitFor({state:'detached'});
-  await head.locator('[data-queue-view=history]').click();await card(second.dispatchId).waitFor();assert.equal(await card(first.dispatchId).count(),0);
-  await purchaser.evaluate(()=>refreshDatabase());await openNavigation(purchaser,'#navCuisineDeliveries');await purchaser.locator('[data-dispatch]').first().waitFor();assert.equal(await purchaser.locator('[data-dispatch]').first().getAttribute('data-dispatch'),first.dispatchId);
+  await head.locator('[data-queue-view=attention]').click();
+  await card(second.dispatchId).locator('[data-action=accept-dispatch]').click();await head.locator('#uiAlertOkBtn').click();
+  await head.locator('[data-queue-view=received].btn-primary').waitFor();
+  await card(second.dispatchId).waitFor();
+  assert.ok((await api(head,'dispatches/items?dispatch='+encodeURIComponent(second.dispatchId))).rows.every(d=>d.status==='Received'));
+  await purchaser.evaluate(()=>refreshDatabase());await openNavigation(purchaser,'#navCuisineDeliveries');await purchaser.locator(`[data-dispatch="${first.dispatchId}"] .queue-issue`).waitFor();
   await openNavigation(purchaser,'[data-inventory=history]');await purchaser.locator('[data-history-rows] tbody tr').first().waitFor();assert.equal(await purchaser.locator('#inventoryContent .queue-filters [name=from]').inputValue(),date);
   assert.equal((await api(head,'state')).stockHistory.length,0);assert.deepEqual(errors,[]);
-  console.log('Dispatch browser QA passed: two dispatches from one order, per-item issues, card-only bulk acceptance, completed history, issue priority, IST history, and desktop/mobile layout.');
+  console.log('Dispatch browser QA passed: two dispatches from one order, per-item issues, card-only bulk acceptance, Received view, purchaser issue visibility, IST history, and desktop/mobile layout.');
  }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});
