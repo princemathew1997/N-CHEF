@@ -26,15 +26,24 @@ export function notify(state, roles, outletId, message, sourceId) {
     putRecord(state,'notification',{id:crypto.randomUUID(),userId:user.id,outletId,message,sourceId,read:false,createdAt:new Date().toISOString()});
   }
 }
+function recheckDetails(actor, input, now) {
+  const recheckReason = safeText(input.reason, 'Recheck note', 500).trim();
+  if (recheckReason.length < 3) fail('Provide a recheck note of at least 3 characters.');
+  return {status:'Recheck Requested',recheckReason,recheckRequestedBy:actor.id,recheckRequestedAt:now};
+}
+function notifyRecheck(state, status, userId, outletId, sourceId, label, link) {
+  putRecord(state,'notification',{id:crypto.randomUUID(),userId,outletId,sourceId,message:`Admin requested a recheck of ${label}. ${status.recheckReason}`,read:false,createdAt:status.recheckRequestedAt,...link});
+}
 export function clearHandledNotifications(previous,next,actor){
   const closed=new Set();
   for(const entity of ['requests','indents','purchase_orders'])for(const row of next[entity] || []){
     const old=(previous[entity] || []).find(r=>r.id===row.id);
-    if(old && old.status!==row.status && ['Accepted','Approved','Rejected','PO Raised','Consolidated','Sent to Admin','Received'].includes(row.status))closed.add(row.id);
+    if(old && old.status!==row.status && ['Accepted','Approved','Rejected','Recheck Requested','PO Raised','Consolidated','Sent to Admin','Received'].includes(row.status))closed.add(row.id);
   }
   for(const row of next.operationRecords || []){
     const old=(previous.operationRecords || []).find(r=>r.id===row.id);
-    if(old && old.status!==row.status && ((row.kind==='account_request' && ['Approved','Rejected'].includes(row.status)) || (row.kind==='notification' && row.eventType==='bulk_receipt_request' && ['Approved','Rejected'].includes(row.status)) || (row.kind==='delivery' && ['Received','Resolved'].includes(row.status))))closed.add(row.id);
+    const approval = row.kind==='account_request' || (row.kind==='notification' && row.eventType==='bulk_receipt_request');
+    if(old && old.status!==row.status && ((approval && (['Approved','Rejected','Recheck Requested'].includes(row.status) || old.status==='Recheck Requested' && row.status==='Pending')) || (row.kind==='delivery' && ['Received','Resolved'].includes(row.status))))closed.add(row.id);
   }
   for(const notification of next.operationRecords || [])if(notification.kind==='notification' && !notification.read && closed.has(notification.sourceId) && (previous.operationRecords || []).some(r=>r.id===notification.id)){
     notification.read=true;notification.handledAt=new Date().toISOString();notification.handledBy=actor.id;
@@ -89,12 +98,13 @@ export function reviewChefRequests(state,actor,input){
     if(!request || !hasOutlet(actor,request.outletId))fail('Request access denied.',403);
     if(seen.has(request.id))fail('Duplicate request.');
     seen.add(request.id);
-    if(!['Pending','Rejected'].includes(request.status))fail('Request changed. Reopen the review.',409);
+    if(!['Pending','Rejected','Recheck Requested'].includes(request.status))fail('Request changed. Reopen the review.',409);
+    if(request.status==='Recheck Requested' && !request.indentId)fail('Resubmit the individual request through its recheck action.',409);
     if(line.expectedQuantity!==request.qty || line.expectedStatus!==request.status)fail('Request changed. Reopen the review.',409);
     number(line.quantity,'Reviewed quantity',true);
     if(request.indentId){
       const parent=state.indents.find(i=>i.id===request.indentId);
-      if(!parent || parent.status!=='Rejected' || parent.ownerId!==actor.id || state.purchase_orders.some(p=>p.indentId===parent.id))fail('This consolidated request cannot be reopened.',409);
+      if(!parent || !['Rejected','Recheck Requested'].includes(parent.status) || parent.ownerId!==actor.id || state.purchase_orders.some(p=>p.indentId===parent.id))fail('This consolidated request cannot be reopened.',409);
       parents.add(parent.id);
     }
     const value={...request,revisedQty:line.quantity,status:'Accepted',acceptedBy:actor.name,acceptedAt:new Date().toISOString()};
@@ -102,8 +112,10 @@ export function reviewChefRequests(state,actor,input){
     changes.push({entity:'requests',key:value.id,value});
   }
   for(const id of parents){
-    if(state.requests.some(r=>r.indentId===id && !seen.has(r.id)))fail('Review all items in the rejected consolidated request together.',409);
-    putRecord(next,'notification',{id:crypto.randomUUID(),system:true,eventType:'rejected_indent_review',indent:state.indents.find(i=>i.id===id),reviewedBy:actor.id,reviewedAt:new Date().toISOString()});
+    if(state.requests.some(r=>r.indentId===id && !seen.has(r.id)))fail('Review all items in the consolidated request together.',409);
+    const indent=state.indents.find(i=>i.id===id);
+    const eventType=indent.status==='Recheck Requested'?'rechecked_indent_review':'rejected_indent_review';
+    putRecord(next,'notification',{id:crypto.randomUUID(),system:true,eventType,indent,reviewedBy:actor.id,reviewedAt:new Date().toISOString()});
     changes.push({entity:'indents',key:id,value:null});
   }
   return {next,changes};
@@ -148,6 +160,66 @@ export function operationCommand(state, actor, input, action, transact) {
     const value={...request,status:'Rejected',rejectReason:reason,rejectedBy:actor.name,rejectedAt:now};
     changes.push({entity:'requests',key:value.id,value});
     putRecord(next,'notification',{id:crypto.randomUUID(),userId:request.ownerId,outletId:request.outletId,message:`${actor.name} rejected ${request.itemName} (${request.qty} ${request.unit || ''}). Reason: ${reason}`,sourceId:request.id,read:false,createdAt:now});
+  } else if(action==='indents/request-recheck'){
+    if(actor.role!=='admin')fail('Administrator permission required.',403);
+    const indent=state.indents.find(i=>i.id===input.id);
+    if(!indent)fail('Consolidated request not found.',404);
+    outlet(indent.outletId);
+    if(indent.status!=='Pending Approval' || state.purchase_orders.some(p=>p.indentId===indent.id))fail('Only requests awaiting approval can be sent back for recheck.',409);
+    const owner=state.users.find(u=>u.id===indent.ownerId && ['executive_chef','purchaser'].includes(u.role) && hasOutlet(u,indent.outletId));
+    const linked=state.requests.filter(r=>r.indentId===indent.id);
+    if(!owner || !linked.length)fail('This consolidated request needs an assigned submitter and linked items for recheck.',409);
+    if(linked.some(r=>!['Consolidated','Sent to Admin'].includes(r.status)))fail('The linked requests have changed. Refresh and try again.',409);
+    const recheck=recheckDetails(actor,input,now);
+    changes.push({entity:'indents',key:indent.id,value:{...indent,...recheck}});
+    for(const request of linked)changes.push({entity:'requests',key:request.id,value:{...request,status:recheck.status}});
+    notifyRecheck(next,recheck,owner.id,indent.outletId,linked[0].id,indent.indentNumber,{eventType:'indent_recheck_requested',indentId:indent.id});
+  } else if(action==='requests/request-recheck'){
+    if(actor.role!=='admin')fail('Administrator permission required.',403);
+    const request=state.requests.find(r=>r.id===input.id);
+    if(!request || request.indentId || request.status!=='Sent to Admin')fail('Choose an individual request awaiting approval.',409);
+    const recipients=state.users.filter(u=>u.role!=='admin' && hasOutlet(u,request.outletId));
+    const recipient=recipients.find(u=>u.id===request.forwardedById) || recipients.find(u=>u.name===request.forwardedBy && u.role==='executive_chef') || recipients.find(u=>u.id===request.ownerId);
+    if(!recipient)fail('The request needs an assigned submitter for recheck.',409);
+    const recheck=recheckDetails(actor,input,now);
+    changes.push({entity:'requests',key:request.id,value:{...request,...recheck,recheckAssigneeId:recipient.id}});
+    notifyRecheck(next,recheck,recipient.id,request.outletId,request.id,request.itemName,{eventType:'request_recheck_requested'});
+  } else if(action==='requests/resubmit-recheck'){
+    const request=state.requests.find(r=>r.id===input.id);
+    if(!request || request.recheckAssigneeId!==actor.id)fail('Request access denied.',403);
+    outlet(request.outletId);
+    if(request.indentId || request.status!=='Recheck Requested')fail('This request is no longer awaiting recheck.',409);
+    const quantity=number(input.quantity,'Reviewed quantity',true);
+    changes.push({entity:'requests',key:request.id,value:{...request,status:'Sent to Admin',revisedQty:quantity,recheckSubmittedAt:now}});
+    notify(next,['admin'],request.outletId,`${actor.name} resubmitted ${request.itemName} for approval.`,request.id);
+  } else if(action==='indents/resubmit-recheck'){
+    const indent=state.indents.find(i=>i.id===input.id);
+    if(actor.role!=='purchaser' || !indent || indent.ownerId!==actor.id)fail('Request access denied.',403);
+    outlet(indent.outletId);
+    const linked=state.requests.filter(r=>r.indentId===indent.id);
+    if(indent.status!=='Recheck Requested' || !linked.length || linked.some(r=>r.status!=='Recheck Requested'))fail('This request is no longer awaiting recheck.',409);
+    if(state.indents.some(i=>i.outletId===indent.outletId && i.status==='Pending Approval'))fail('This outlet already has a request awaiting approval.',409);
+    if(!Array.isArray(input.lines) || input.lines.length!==linked.length)fail('Review all items before resubmitting.');
+    const quantities=new Map(input.lines.map(line=>[line.id,line.quantity]));
+    const revised=linked.map(r=>({...r,status:'Consolidated',revisedQty:number(quantities.get(r.id),'Reviewed quantity',true)}));
+    const items=indent.items.map(item=>{
+      const lines=revised.filter(r=>r.itemId===item.itemId);
+      if(!lines.length)return item;
+      return {...item,revisedQty:lines.reduce((sum,r)=>sum+r.revisedQty,0),cuisineBreakdown:[...new Set(lines.map(r=>r.cuisine))].map(cuisine=>({cuisine,qty:lines.filter(r=>r.cuisine===cuisine).reduce((sum,r)=>sum+r.revisedQty,0)}))};
+    });
+    changes.push({entity:'indents',key:indent.id,value:{...indent,items,status:'Pending Approval',recheckSubmittedAt:now}});
+    for(const request of revised)changes.push({entity:'requests',key:request.id,value:request});
+    notify(next,['admin'],indent.outletId,`${actor.name} resubmitted ${indent.indentNumber} for approval.`,indent.id);
+  } else if(action==='accounts/request-recheck' || action==='bulk-receipts/request-recheck'){
+    if(actor.role!=='admin')fail('Administrator permission required.',403);
+    const account=action==='accounts/request-recheck';
+    const request=get(account?'account_request':'notification',input.id);
+    if(!account && request.eventType!=='bulk_receipt_request')fail('Bulk receipt request not found.',404);
+    if(request.status!=='Pending')fail('This request is no longer awaiting approval.',409);
+    if(!state.users.some(u=>u.id===request.requestedBy && u.role==='purchaser'))fail('The request needs an active purchaser for recheck.',409);
+    const recheck=recheckDetails(actor,input,now);
+    putRecord(next,request.kind,{...request,...recheck});
+    notifyRecheck(next,recheck,request.requestedBy,request.outletId,request.id,account?`the account request for ${request.name}`:`bulk receipt ${request.batchId}`,{eventType:account?'account_recheck_requested':'bulk_receipt_recheck_requested'});
   } else if(action==='distribution/issue'){
     purchase();
     const indent=state.indents.find(i=>i.id===input.indentId);
@@ -179,11 +251,14 @@ export function operationCommand(state, actor, input, action, transact) {
     putRecord(next,'notification',{...r,read:true});
   } else if(action==='accounts/request') {
     if(actor.role!=='purchaser')fail('Only purchasers can request accounts.',403);
+    const returned=input.id?get('account_request',input.id):null;
+    if(returned && returned.requestedBy!==actor.id)fail('Request access denied.',403);
+    if(returned && returned.status!=='Recheck Requested')fail('This request is no longer awaiting recheck.',409);
     outlet(input.outletId);
     if(!['cuisine_head','executive_chef'].includes(input.role))fail('Choose a Cuisine Head or Executive Chef.');
     const name=safeText(input.name,'Name');
     if(input.role==='cuisine_head' && !state.cuisines.some(c=>c.name===input.cuisine))fail('Choose a cuisine.');
-    const r=putRecord(next,'account_request',{id:crypto.randomUUID(),name,role:input.role,outletId:input.outletId,cuisine:input.cuisine || '',requestedBy:actor.id,status:'Pending',createdAt:now});
+    const r=putRecord(next,'account_request',{...(returned || {id:crypto.randomUUID(),createdAt:now}),name,role:input.role,outletId:input.outletId,cuisine:input.cuisine || '',requestedBy:actor.id,status:'Pending',...(returned?{recheckSubmittedAt:now}:{})});
     notify(next,['admin'],input.outletId,`Account requested for ${name} (${roleNames[input.role]}).`,r.id);
   } else if(action==='accounts/resolve') {
     if(actor.role!=='admin')fail('Administrator permission required.',403);

@@ -7,7 +7,7 @@ import { raiseVendorOrders, planVendorReceipt, planPurchaseOrderCancellation } f
 import { digest, equalSecret, getSessionKey, hashPassword, randomToken, sessionCookie, verifyPassword } from './auth.mjs';
 import { clone, fail, hasOutlet, id, number, project, safeText, validateChanges } from './model.mjs';
 import { persistChanges as persistDatabaseChanges, readState, readClientState, markAllNotifications } from './database.mjs';
-import { dispatchList, dispatchItems, stockHistoryPage, stockReport } from './queues.mjs';
+import { dailyCuisineIssues, dispatchList, dispatchItems, stockHistoryPage, stockReport } from './queues.mjs';
 import { priceHistory, correctStockPrice } from './prices.mjs';
 import { setAvailableStockPrice, stockPriceEditingEnabled } from './stock-prices.mjs';
 
@@ -133,6 +133,7 @@ export default {
         if (path === '/api/dispatches') return send(await dispatchList(env.DB, actor, query));
         if (path === '/api/dispatches/items') return send(await dispatchItems(env.DB, actor, query));
         if (path === '/api/stock/history') return send(await stockHistoryPage(env.DB, actor, query));
+        if (path === '/api/stock/cuisine-issues') return response(await dailyCuisineIssues(env.DB, actor, query));
         if (path === '/api/stock/report') return send(await stockReport(env.DB, actor, query));
       }
       if (['/api/session', '/api/state'].includes(path) && request.method === 'GET') {
@@ -251,6 +252,13 @@ export default {
           return send({ ...savedState, batchSummary: { batchId, rowsCount: validation.rows.length, receivedBy: reqRecord.supervisorName, receivedAt: nowIso } });
         }
 
+        let returned;
+        if (path === '/api/stock/bulk-receipt/request' && input.requestId) {
+          id(input.requestId);
+          returned = state.operationRecords.find(r => r.id === input.requestId && r.eventType === 'bulk_receipt_request');
+          if (!returned || actor.role !== 'purchaser' || returned.requestedBy !== actor.id) fail('Bulk receipt request access denied.', 403);
+          if (returned.status !== 'Recheck Requested') fail('This batch is no longer awaiting recheck.', 409);
+        }
         const validation=validateBulkReceiptCSV(input.csv,state,actor);
         if(validation.errors.length)return send({error:`Found ${validation.errors.length} errors. No stock has been received.`,errors:validation.errors,unrecognizedItems:validation.unrecognizedItems,dateAuditFlags:validation.dateAuditFlags},422);
         const fingerprint=await digest(JSON.stringify(validation.rows.map(r=>[r.outletId,r.itemId,r.quantity,r.unitCostMinor]).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)))));
@@ -268,7 +276,7 @@ export default {
         if(path.endsWith('/validate'))return send({...validation,revision:state.revision});
         requireVendorBillType(input.vendorBillType);
         if(input.revision!==state.revision)fail('Data changed since validation. Validate the complete sheet again before receiving.',409);
-        const batchId = 'BR-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+        const batchId = returned?.batchId || 'BR-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
 
         if (path === '/api/stock/bulk-receipt/request') {
           // Supervisor sending to admin for approval
@@ -276,8 +284,9 @@ export default {
           const nowIso = new Date().toISOString();
           const outletNames = [...new Set(validation.rows.map(r => r.outletName))].join(', ');
           const totalCostMinor = validation.rows.reduce((sum, r) => sum + (r.unitCostMinor ? r.quantity * r.unitCostMinor : 0), 0);
-          const reqId = crypto.randomUUID();
+          const reqId = returned?.id || crypto.randomUUID();
           const reqRecord = {
+            ...returned,
             id: reqId,
             kind: 'notification',
             eventType: 'bulk_receipt_request',
@@ -295,7 +304,8 @@ export default {
             csv: input.csv,
             itemsPreview: bulkReceiptReviewRows(validation.rows),
             status: 'Pending',
-            createdAt: nowIso
+            createdAt: returned?.createdAt || nowIso,
+            ...(returned ? {recheckSubmittedAt: nowIso} : {})
           };
           putRecord(next, 'notification', reqRecord);
           // Notify admins
@@ -338,7 +348,13 @@ export default {
         const recallingIndent = path === '/api/operations/indents/recall';
         const derived = reviewingChefRequests ? reviewChefRequests(state, actor, input) : recallingIndent ? recallConsolidatedRequest(state, actor, input) : editingCuisineRequest ? editCuisineRequest(state, actor, input) : operationCommand(state, actor, input, path.slice('/api/operations/'.length), transact);
         let next = derived.next, touched = [];
-        if (derived.changes.length) { const privileged = editingCuisineRequest || recallingIndent || reviewingChefRequests; const validated = validateChanges(next, derived.changes, privileged ? { ...actor, role: 'admin' } : actor, privileged); next = validated.next; touched = validated.touched; }
+        if (derived.changes.length) {
+          const rechecking = ['/api/operations/indents/request-recheck','/api/operations/indents/resubmit-recheck','/api/operations/requests/request-recheck','/api/operations/requests/resubmit-recheck'].includes(path);
+          const privileged = editingCuisineRequest || recallingIndent || reviewingChefRequests || rechecking;
+          const validated = validateChanges(next, derived.changes, privileged ? { ...actor, role: 'admin' } : actor, privileged);
+          next = validated.next;
+          touched = validated.touched;
+        }
         return send(await persistChanges(env.DB, state, next, touched, actor, input.operationId, stock));
       }
       if (['/api/purchase-orders/raise', '/api/purchase-orders/cancel'].includes(path) && request.method === 'POST') {

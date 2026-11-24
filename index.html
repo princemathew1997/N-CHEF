@@ -106,6 +106,7 @@
                         <a href="#" class="nav-item hidden" data-inventory="stock-prices"><i data-lucide="badge-indian-rupee"></i>Edit Stock Prices</a>
                         <a href="#" class="nav-item" data-inventory="distribute"><i data-lucide="send"></i>Distribute to Cuisine</a>
                         <a href="#" class="nav-item" id="navCuisineDeliveries" data-operations="deliveries" data-operations-nav="true"><i data-lucide="package-check"></i>Cuisine Deliveries</a>
+                        <a href="#" class="nav-item admin-only" data-operations="cuisine-issues" data-operations-nav="true"><i data-lucide="clipboard-list"></i>Daily Cuisine Issues</a>
                         <a href="#" class="nav-item" data-inventory="assign"><i data-lucide="archive"></i>Add Legacy Stock</a>
                         <a href="#" class="nav-item" data-operations="legacy" data-operations-nav="true"><i data-lucide="file-up"></i>Bulk Legacy Stock</a>
                         <a href="#" class="nav-item admin-only" data-operations="wastage" data-operations-nav="true"><i data-lucide="trash-2"></i>Wastage</a>
@@ -253,6 +254,7 @@
                             <option value="Consolidated" style="background: var(--dark);">Consolidated</option>
                             <option value="Approved" style="background: var(--dark);">Approved</option>
                             <option value="Rejected" style="background: var(--dark);">Rejected</option>
+                            <option value="Recheck Requested" style="background: var(--dark);">Recheck Requested</option>
                         </select>
                         <div class="custom-datepicker" id="customDateFilter" style="position: relative;">
                             <div class="datepicker-input panel" id="dpInputTrigger" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; padding: 6px 12px; font-size: 0.8rem; border-radius: 6px; border: 1px solid var(--border); width: 140px; background: transparent;">
@@ -461,6 +463,7 @@
                                 <option value="Consolidated">Consolidated</option>
                                 <option value="Approved">Approved</option>
                                 <option value="Rejected">Rejected</option>
+                                <option value="Recheck Requested">Recheck Requested</option>
                             </select>
                         </div>
                     </div>
@@ -500,6 +503,7 @@
                               <option value="Pending Approval">Pending Approval</option>
                               <option value="Approved">Approved</option>
                               <option value="Rejected">Rejected</option>
+                              <option value="Recheck Requested">Recheck Requested</option>
                           </select>
                           <div style="display: flex; align-items: center; gap: 6px; background: rgba(0,0,0,0.25); padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border);">
                               <span style="font-size: 0.8rem; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px;"><i data-lucide="calendar" style="width: 14px; height: 14px; color: var(--primary);"></i> Date:</span>
@@ -1307,7 +1311,7 @@
                 </div>
                 <div>
                     <h2 style="margin: 0; font-size: 1.3rem;">Consolidated Request <span id="apprModalIndentId" class="text-primary">REQ-001</span></h2>
-                    <p id="apprModalSubtitle" style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">Review consolidated items, kitchen section breakdown, and approve or reject.</p>
+                    <p id="apprModalSubtitle" style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">Review consolidated items and the kitchen section breakdown.</p>
                 </div>
             </div>
 
@@ -1331,16 +1335,19 @@
                 </div>
             </div>
 
+            <p id="apprModalRecheckNote" class="hidden"></p>
+
             <!-- Ingredients with Cuisine Breakdown Containers -->
             <div id="apprModalIngredientsContainer" style="display: flex; flex-direction: column; gap: 20px;">
                 <!-- Dynamically populated ingredient cards with cuisine breakdown tables -->
             </div>
 
             <!-- Footer Actions -->
-            <div id="apprModalFooterActions" style="margin-top: 24px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); padding-top: 16px;">
+            <div id="apprModalFooterActions" style="margin-top: 24px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); padding-top: 16px;">
                 <button class="btn btn-outline" id="apprModalCloseBtn">Close</button>
-                <div id="apprModalAdminButtons" style="display: flex; gap: 10px;">
+                <div id="apprModalAdminButtons" style="display: flex; flex-wrap: wrap; gap: 10px;">
                     <button class="btn btn-outline" id="btnRejectIndent" style="border-color: var(--danger); color: var(--danger);">Reject Request</button>
+                    <button class="btn btn-outline" id="btnRequestIndentRecheck">Request recheck</button>
                     <button class="btn btn-outline" id="btnRaiseVendorPO" style="border-color: var(--primary); color: var(--primary); display: inline-flex; align-items: center; gap: 6px;">
                         <i data-lucide="truck" style="width: 14px; height: 14px;"></i> Raise to Vendor
                     </button>

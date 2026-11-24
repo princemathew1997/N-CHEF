@@ -352,7 +352,16 @@ test('four-role workflow, receipt costs, thresholds, delivery issues and approve
     assert.equal((await cmd('operations/unit/add',{name:' TEST UNIT '})).status,409);
     const requested=await ok(cmd('operations/accounts/request',{name:'New Cuisine Head',role:'cuisine_head',outletId:'brigade',cuisine:'Indian'},purchaserCookie));
     const account=requested.operationRecords.find(r=>r.kind==='account_request' && r.name==='New Cuisine Head');
-    const user={username:'approved_head',name:account.name,role:'cuisine_head',assignedLocations:['brigade'],assignedSections:['Indian'],password:userPassword};
+    const revisedAccount={id:account.id,name:'Revised Cuisine Head',role:'cuisine_head',outletId:'brigade',cuisine:'Indian'};
+    assert.equal((await cmd('operations/accounts/request-recheck',{id:account.id,reason:'Verify the name'},purchaserCookie)).status,403);
+    await ok(cmd('operations/accounts/request-recheck',{id:account.id,reason:'Verify the name'}));
+    const accountNotice=(await request('state','GET',undefined,purchaserCookie)).data.operationRecords.find(r=>r.eventType==='account_recheck_requested' && r.sourceId===account.id);
+    assert.match(accountNotice.message,/Verify the name/);
+    assert.equal((await cmd('operations/accounts/resolve',{id:account.id,approve:false,reason:'Reject'})).status,409);
+    const accountResubmitted=await ok(cmd('operations/accounts/request',revisedAccount,purchaserCookie));
+    assert.equal(accountResubmitted.operationRecords.find(r=>r.id===account.id).status,'Pending');
+    assert.equal(accountResubmitted.operationRecords.find(r=>r.id===accountNotice.id).read,true);
+    const user={username:'approved_head',name:revisedAccount.name,role:'cuisine_head',assignedLocations:['brigade'],assignedSections:['Indian'],password:userPassword};
     assert.equal((await cmd('operations/accounts/resolve',{id:account.id,approve:true,user},purchaserCookie)).status,403);
     assert.equal((await save([{entity:'users',key:'forged_head',value:{...user,id:'forged_head'}}],supervisorCookie)).status,403);
     await ok(cmd('operations/accounts/resolve',{id:account.id,approve:true,user}));
@@ -465,11 +474,60 @@ test('review workflow: four-character credentials, date rules, edit cutoff, cons
  const snapshot=(await request('state')).data;
  const combined={...indent,id:crypto.randomUUID(),indentNumber:'REQ-REVIEW-2',items:[{itemId:item.id,originalQty:7,revisedQty:5,comment:'Recalled and combined with new requirement',cuisineBreakdown:[{cuisine:'Indian',qty:5}]}]};
  await ok(save([{entity:'indents',key:combined.id,value:combined},...[req.id,fresh.id].map(id=>({entity:'requests',key:id,value:{...snapshot.requests.find(r=>r.id===id),status:'Consolidated',indentId:combined.id}}))],exec));
- const staleRecall={id:combined.id,operationId:crypto.randomUUID(),revision:(await request('state')).data.revision};
- await ok(cmd('indents/approve',{indentId:combined.id},purchaser));
+ const recheckPath='operations/indents/request-recheck';
+ const details={id:combined.id,reason:'Confirm the revised quantity'};
+ assert.equal((await cmd(recheckPath,details,purchaser)).status,403);
+ for(const reason of [' ','.','  No  '])assert.equal((await cmd(recheckPath,{...details,reason},adminCookie)).status,400);
+ const recheckInput={...details,operationId:crypto.randomUUID(),revision:(await request('state')).data.revision};
+ const rechecked=await ok(request(recheckPath,'POST',recheckInput));
+ assert.equal(rechecked.indents.find(i=>i.id===combined.id).recheckReason,details.reason);
+ assert.deepEqual(rechecked.requests.filter(r=>r.indentId===combined.id).map(r=>r.status),['Recheck Requested','Recheck Requested']);
+ assert.deepEqual(rechecked.outletStock,snapshot.outletStock);
+ assert.equal((await ok(request(recheckPath,'POST',recheckInput))).revision,rechecked.revision);
+ assert.equal((await cmd('indents/approve',{indentId:combined.id},adminCookie)).status,409);
+ assert.equal((await save([{entity:'indents',key:combined.id,value:null}])).status,409);
+ const chefView=await ok(request('state','GET',undefined,exec));
+ const notice=chefView.operationRecords.find(n=>n.eventType==='indent_recheck_requested' && n.indentId===combined.id);
+ assert.equal(notice.read,false);assert.match(notice.message,/Confirm the revised quantity/);
+ assert.ok(!(await ok(request('state','GET',undefined,head))).operationRecords.some(n=>n.id===notice.id));
+ const lines=chefView.requests.filter(r=>r.indentId===combined.id).map(r=>({id:r.id,expectedQuantity:r.qty,expectedStatus:r.status,quantity:r.revisedQty ?? r.qty}));
+ assert.equal((await cmd('operations/requests/review',{lines:lines.slice(0,1)},exec)).status,409);
+ const reviewResponse=await mf.dispatchFetch(origin+'/api/operations/requests/review',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',...authHeaders(exec),'X-NCHEF-Workspace':'paged','X-NCHEF-Client-Release':testReleaseCommit},body:JSON.stringify({lines,operationId:crypto.randomUUID(),revision:chefView.revision})});
+ const reviewed=await reviewResponse.json();assert.equal(reviewResponse.status,200,JSON.stringify(reviewed));
+ assert.equal(reviewed.operationRecords.find(n=>n.id===notice.id).read,true);
+ assert.ok(reviewed.requests.filter(r=>[req.id,fresh.id].includes(r.id)).every(r=>r.status==='Accepted' && !r.indentId));
+ const resubmitted={...combined,id:crypto.randomUUID(),indentNumber:'REQ-REVIEW-3'};
+ await ok(save([{entity:'indents',key:resubmitted.id,value:resubmitted},...[req.id,fresh.id].map(id=>({entity:'requests',key:id,value:{...reviewed.requests.find(r=>r.id===id),status:'Consolidated',indentId:resubmitted.id}}))],exec));
+ const staleRecall={id:resubmitted.id,operationId:crypto.randomUUID(),revision:(await request('state')).data.revision};
+ await ok(cmd('indents/approve',{indentId:resubmitted.id},purchaser));
  assert.equal((await request('operations/indents/recall','POST',staleRecall,exec)).status,409);
- assert.equal((await cmd('operations/indents/recall',{id:combined.id},exec)).status,409);
- const after=(await request('state')).data;assert.equal(after.indents.find(i=>i.id===combined.id).status,'Approved');
+ assert.equal((await cmd('operations/indents/recall',{id:resubmitted.id},exec)).status,409);
+ const after=(await request('state')).data;assert.equal(after.indents.find(i=>i.id===resubmitted.id).status,'Approved');
+ const individual={...req,id:crypto.randomUUID()};
+ const submitted=await ok(save([{entity:'requests',key:individual.id,value:individual}],head));
+ await ok(save([{entity:'requests',key:individual.id,value:{...submitted.requests.find(r=>r.id===individual.id),status:'Sent to Admin',forwardedById:users[0].id}}],exec));
+ const held=await ok(cmd('operations/requests/request-recheck',{id:individual.id,reason:'Verify serving count'},adminCookie));
+ assert.equal(held.requests.find(r=>r.id===individual.id).status,'Recheck Requested');
+ assert.equal((await cmd('requests/approve',{requestId:individual.id,quantity:4},adminCookie)).status,409);
+ assert.equal((await cmd('operations/requests/resubmit-recheck',{id:individual.id,quantity:3},head)).status,403);
+ const individualResubmitted=await ok(cmd('operations/requests/resubmit-recheck',{id:individual.id,quantity:3},exec));
+ const revised=individualResubmitted.requests.find(r=>r.id===individual.id);
+ assert.deepEqual([revised.status,revised.qty,revised.revisedQty],['Sent to Admin',4,3]);
+ assert.equal(individualResubmitted.operationRecords.find(r=>r.eventType==='request_recheck_requested' && r.sourceId===individual.id).read,true);
+ await ok(cmd('requests/approve',{requestId:individual.id,quantity:3},adminCookie));
+
+ const purchaserIndent={...indent,id:crypto.randomUUID(),indentNumber:'REQ-PURCHASER-RECHECK',items:[{itemId:item.id,originalQty:4,revisedQty:4,cuisineBreakdown:[{cuisine:'Indian',qty:4}]}]};
+ const purchaserRequest={...req,id:crypto.randomUUID(),status:'Consolidated',indentId:purchaserIndent.id};
+ await ok(save([{entity:'indents',key:purchaserIndent.id,value:purchaserIndent},{entity:'requests',key:purchaserRequest.id,value:purchaserRequest}],purchaser));
+ await ok(cmd('operations/indents/request-recheck',{id:purchaserIndent.id,reason:'Confirm quantities'},adminCookie));
+ const resubmit={id:purchaserIndent.id,lines:[{id:purchaserRequest.id,quantity:2.5}]};
+ assert.equal((await cmd('operations/indents/resubmit-recheck',resubmit,exec)).status,403);
+ const purchaserResubmitted=await ok(cmd('operations/indents/resubmit-recheck',resubmit,purchaser));
+ const revisedIndent=purchaserResubmitted.indents.find(i=>i.id===purchaserIndent.id);
+ assert.equal(revisedIndent.status,'Pending Approval');
+ assert.deepEqual(revisedIndent.items[0].cuisineBreakdown,[{cuisine:'Indian',qty:2.5}]);
+ assert.equal(purchaserResubmitted.operationRecords.find(r=>r.eventType==='indent_recheck_requested' && r.indentId===purchaserIndent.id).read,true);
+ await ok(cmd('indents/approve',{indentId:purchaserIndent.id},adminCookie));
  const later={...indent,id:crypto.randomUUID(),indentNumber:'REQ-REVIEW-NEXT',items:[{itemId:item.id,originalQty:1,revisedQty:1}]};
  await ok(save([{entity:'indents',key:later.id,value:later}],exec));
 });
@@ -560,6 +618,40 @@ test('consolidated distribution enforces notes, shared stock, request links and 
  const deliveries=issued.operationRecords.filter(d=>d.kind==='delivery' && sources.some(r=>r.id===d.requestId));assert.equal(deliveries.length,2);assert.equal(deliveries.find(d=>d.requestId===sources[1].id).issueComment,'Limited available stock');
  const retry=await ok(request('operations/distribution/issue','POST',input,purchaserCookie));assert.equal(retry.revision,issued.revision);
  assert.equal((await cmd('operations/distribution/issue',{indentId:id,lines},chefCookie)).status,403);
+});
+
+test('daily cuisine issues group recorded costs and quantities within one IST day',async()=>{
+ const {items}= (await request('state')).data;
+ const outletId='report-test';
+ assert.equal((await save([{entity:'outlets',key:outletId,value:{id:outletId,name:'Report Outlet'}}])).status,200);
+ const movement=(time,cuisine,delta,unitCost,totalCost,kind='distribute',outlet=outletId)=>db.prepare(`
+   INSERT INTO outlet_stock_history (id,operation_id,item_id,outlet_id,delta,quantity,kind,cuisine,item_name,unit,actor_name,created_at,unit_cost_minor,total_cost_minor)
+   VALUES (?,?,?,?,?,0,?,?,?,?,?,?,?,?)`).bind(crypto.randomUUID(),'report-test',items[0].id,outlet,delta,kind,cuisine,'Report Rice','kg','Admin',time,unitCost,totalCost);
+ await db.batch([
+   movement('2026-01-17T18:29:59.999Z','Indian',-10,200,2000),
+   movement('2026-01-17T18:30:00.000Z','Indian',-1.5,200,300),
+   movement('2026-01-18T12:00:00.000Z','Indian',-2,200,400),
+   movement('2026-01-18T13:00:00.000Z','Indian',-1,250,250),
+   movement('2026-01-18T14:00:00.000Z','Chinese',-2,null,null),
+   movement('2026-01-18T15:00:00.000Z','Chinese',-4,0,0),
+   movement('2026-01-18T16:00:00.000Z','Chinese',2,200,400,'return'),
+   movement('2026-01-18T17:00:00.000Z','Chinese',-1,300,300,'distribute','brigade'),
+   movement('2026-01-18T18:30:00.000Z','Indian',-10,200,2000),
+ ]);
+ const url=`stock/cuisine-issues?day=2026-01-18&outlet=${outletId}`;
+ for(const cookie of [chefCookie,supervisorCookie,purchaserCookie]) assert.equal((await request(url,'GET',undefined,cookie)).status,403);
+ const result=await request(url);
+ assert.equal(result.status,200,JSON.stringify(result.data));
+ assert.equal(result.data.day,'2026-01-18');
+ assert.deepEqual(result.data.rows.map(r=>[r.cuisine,r.outlet,r.itemName,r.quantity,r.unitCostMinor,r.totalCostMinor,r.unpricedIssues]),[
+   ['Chinese','Report Outlet','Report Rice',2,null,null,1],
+   ['Chinese','Report Outlet','Report Rice',4,0,0,0],
+   ['Indian','Report Outlet','Report Rice',3.5,200,700,0],
+   ['Indian','Report Outlet','Report Rice',1,250,250,0],
+ ]);
+ assert.equal((await request(url+'&cuisine=Indian')).data.rows.length,2);
+ assert.equal((await request('stock/cuisine-issues?day=2026-01-18&cuisine=Chinese')).data.rows.length,3);
+ assert.equal((await request('stock/cuisine-issues?day=2026-99-99')).status,400);
 });
 
 test('price history routes restrict roles and use receipt records for both purchase flows',async()=>{
@@ -718,9 +810,22 @@ test('bulk stock receipt requires Cash or Credit and keeps the submitted type th
     const pending = (await request('state')).data.operationRecords.find(row => row.batchId === requested.data.batchSummary.batchId);
     assert.equal(pending.vendorBillType, 'credit');
 
-    const approved = await submit('/resolve', { revision: requested.data.revision, requestId: pending.id, approve: true, vendorBillType: 'cash' });
+    const recheck={id:pending.id,reason:'Verify the invoice quantity',revision:requested.data.revision,operationId:crypto.randomUUID()};
+    assert.equal((await request('operations/bulk-receipts/request-recheck','POST',recheck,purchaserCookie)).status,403);
+    const returned=await request('operations/bulk-receipts/request-recheck','POST',recheck);
+    assert.equal(returned.status,200,JSON.stringify(returned.data));
+    assert.deepEqual(returned.data.outletStock.filter(row=>row.outlet_id===outlet.id),requested.data.outletStock);
+    assert.equal((await submit('/resolve',{revision:returned.data.revision,requestId:pending.id,approve:true})).status,409);
+    const batch={revision:returned.data.revision,requestId:pending.id,csv:csv(43),vendorBillType:'credit'};
+    assert.equal((await submit('/request',batch)).status,403);
+    const resubmitted=await submit('/request',batch,purchaserCookie);
+    assert.equal(resubmitted.status,200,JSON.stringify(resubmitted.data));
+    assert.equal(resubmitted.data.batchSummary.batchId,pending.batchId);
+    assert.equal(resubmitted.data.operationRecords.find(r=>r.eventType==='bulk_receipt_recheck_requested' && r.sourceId===pending.id).read,true);
+    const approved = await submit('/resolve', { revision: resubmitted.data.revision, requestId: pending.id, approve: true, vendorBillType: 'cash' });
     assert.equal(approved.status, 200, JSON.stringify(approved.data));
     const history = approved.data.stockHistory;
     assert.equal(history.find(row => row.reason.includes(direct.data.batchSummary.batchId)).vendor_bill_type, 'cash');
     assert.equal(history.find(row => row.reason.includes(pending.batchId)).vendor_bill_type, 'credit');
+    assert.equal(history.find(row => row.reason.includes(pending.batchId)).delta,43);
 });
