@@ -8,13 +8,14 @@
     const today=()=>InventoryTools.day();
     const money=value=>value==null?'—':(value/100).toLocaleString('en-IN',{style:'currency',currency:'INR'});
     const rows=new Map();
-    let owner=null,deliveryFilters,historyFilters,deliveryRender=0,historyRender=0;
+    let owner=null,deliveryFilters,historyFilters,cuisineIssueFilters,deliveryRender=0,historyRender=0;
     let refreshDeliveries,refreshHistory;
     function resetOwner(){
         if(owner===currentUser.id)return;
         owner=currentUser.id;rows.clear();
         deliveryFilters={view:'attention',outlet:'',cuisine:'',status:'',item:'',order:'',from:'',to:''};
         historyFilters={outlet:'',item:'',vendor:'',type:'',person:'',from:today(),to:today()};
+        cuisineIssueFilters={day:today(),outlet:'',cuisine:''};
     }
     function outletControl(){
         const outlets=OutletSelection.allowed();
@@ -161,6 +162,100 @@
         resetOwner();
         Object.assign(deliveryFilters,{view:'received',status:'',from:'',to:''});
     }
+    function cuisineIssueReport(day, issues, outlet) {
+        const groups = new Map();
+        for (const issue of issues) {
+            if (!groups.has(issue.cuisine)) groups.set(issue.cuisine, []);
+            groups.get(issue.cuisine).push(issue);
+        }
+        const total = rows => money(rows.reduce((sum, row) => sum + (row.totalCostMinor ?? 0), 0));
+        const unknown = issues.reduce((count, issue) => count + issue.unpricedIssues, 0);
+        const quantity = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 8});
+        return `<article class="cuisine-issue-report">
+            <h2>${esc(day)} (IST) · ${esc(outlet ? outletName(outlet) : 'All outlets')}</h2>
+            <p><strong>Total recorded cost ${esc(total(issues))}</strong></p>
+            ${unknown ? `<p>${unknown} ${unknown === 1 ? 'issue has' : 'issues have'} no recorded cost. Totals exclude these costs.</p>` : ''}
+            ${Array.from(groups, ([cuisine, rows]) => `<section>
+                <h3>${esc(cuisine)}</h3>
+                <p>Recorded cost ${esc(total(rows))}</p>
+                ${table(['Outlet', 'Item', 'Quantity issued', 'Unit cost', 'Recorded cost'], rows.map(row => [
+                    esc(row.outlet), esc(row.itemName), esc(`${quantity.format(row.quantity)} ${row.unit || ''}`.trim()),
+                    row.unitCostMinor == null ? 'Unavailable' : esc(money(row.unitCostMinor)),
+                    row.totalCostMinor == null ? 'Unavailable' : esc(money(row.totalCostMinor)) + (row.unpricedIssues ? ' (partial)' : '')
+                ]))}
+            </section>`).join('')}
+        </article>`;
+    }
+    function printCuisineIssues(day, report) {
+        const preview = window.open('', '_blank');
+        if (!preview) {
+            window.showToast('Allow pop-ups to export the report as a PDF.', 'warning');
+            return;
+        }
+        preview.opener = null;
+        preview.document.write(`<!doctype html><html lang="en"><head><meta charset="utf-8">
+            <title>Daily Cuisine Issues - ${esc(day)}</title>
+            <style>
+                @page { size: A4; margin: 15mm; }
+                body { font: 11pt system-ui, sans-serif; color: #18242b; margin: 0; }
+                h1 { font-size: 23pt; margin-bottom: 4pt; }
+                h2 { color: #3b525b; font-size: 13pt; }
+                h3 { margin-bottom: 3pt; }
+                section { margin-top: 18pt; }
+                h3, section p { break-after: avoid; }
+                section p { margin-top: 0; }
+                table { width: 100%; border-collapse: collapse; }
+                thead { display: table-header-group; }
+                tr { break-inside: avoid; }
+                th, td { padding: 6pt; border-bottom: 1px solid #bcc9ce; text-align: left; overflow-wrap: anywhere; }
+                th:nth-child(n+3), td:nth-child(n+3) { text-align: right; }
+                @media print { button { display: none; } }
+                @media screen { body { max-width: 48rem; margin: 2rem auto; padding: 0 1rem; } }
+            </style></head><body><button type="button" onclick="window.print()">Print / Save as PDF</button>
+            <h1>Daily Cuisine Issues</h1>${report}</body></html>`);
+        preview.document.close();
+        preview.print();
+    }
+    function renderCuisineIssues(content) {
+        resetOwner();
+        const filters = cuisineIssueFilters;
+        content.innerHTML = `<form class="queue-filters"><label>Issue date (IST)<input type="date" name="day" required max="${today()}"></label>
+            ${outletControl()}<label>Cuisine<select name="cuisine"><option value="">All cuisines</option>${options(cuisinesData, row => row.name, row => row.name)}</select></label>
+            <button type="submit" class="btn btn-primary">View report</button>
+            <button type="button" class="btn btn-outline" data-export-issues disabled>Export PDF</button></form><div data-cuisine-issues aria-live="polite"></div>`;
+        const form = content.querySelector('form');
+        const target = content.querySelector('[data-cuisine-issues]');
+        const exportButton = form.querySelector('[data-export-issues]');
+        for (const [name, value] of Object.entries(filters)) if (form.elements[name]) form.elements[name].value = value;
+        let generation = 0;
+        async function load() {
+            const token = ++generation;
+            const selected = new URLSearchParams(new FormData(form));
+            Object.assign(filters, Object.fromEntries(selected));
+            exportButton.disabled = true;
+            target.textContent = 'Loading issued items…';
+            try {
+                const { day, rows } = await apiRequest('stock/cuisine-issues?' + selected);
+                if (token !== generation || !content.isConnected) return;
+                if (!rows.length) {
+                    target.textContent = `No items were issued for these filters on ${day} (IST).`;
+                    return;
+                }
+                target.innerHTML = cuisineIssueReport(day, rows, selected.get('outlet'));
+                exportButton.disabled = false;
+                exportButton.onclick = () => printCuisineIssues(day, target.innerHTML);
+            } catch (error) {
+                if (token === generation) target.textContent = error.message;
+            }
+        }
+        form.onsubmit = event => { event.preventDefault(); load(); };
+        form.onchange = () => {
+            generation++;
+            exportButton.disabled = true;
+            target.textContent = 'Select View report to apply these filters.';
+        };
+        load();
+    }
     window.DeliveryQueues={showReceived,render:renderDeliveries,refresh:()=>refreshDeliveries?.(),find:id=>rows.get(id),async accept(dispatchId,act){
         const deliveries=await allDispatchRows(dispatchId),remaining=deliveries.filter(d=>d.status==='Issued');
         if(!remaining.length){window.showToast('No items remain awaiting confirmation.','info');return;}
@@ -168,4 +263,5 @@
         return act('operations/deliveries/accept-all',{dispatchId,ids:remaining.map(d=>d.id)},showReceived);
     }};
     window.StockHistoryQueues={render:renderHistory,refresh:()=>refreshHistory?.()};
+    window.DailyCuisineIssues={render:renderCuisineIssues};
 })();

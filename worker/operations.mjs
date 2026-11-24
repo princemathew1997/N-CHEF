@@ -30,7 +30,7 @@ export function clearHandledNotifications(previous,next,actor){
   const closed=new Set();
   for(const entity of ['requests','indents','purchase_orders'])for(const row of next[entity] || []){
     const old=(previous[entity] || []).find(r=>r.id===row.id);
-    if(old && old.status!==row.status && ['Accepted','Approved','Rejected','PO Raised','Consolidated','Sent to Admin','Received'].includes(row.status))closed.add(row.id);
+    if(old && old.status!==row.status && ['Accepted','Approved','Rejected','Recheck Requested','PO Raised','Consolidated','Sent to Admin','Received'].includes(row.status))closed.add(row.id);
   }
   for(const row of next.operationRecords || []){
     const old=(previous.operationRecords || []).find(r=>r.id===row.id);
@@ -89,12 +89,12 @@ export function reviewChefRequests(state,actor,input){
     if(!request || !hasOutlet(actor,request.outletId))fail('Request access denied.',403);
     if(seen.has(request.id))fail('Duplicate request.');
     seen.add(request.id);
-    if(!['Pending','Rejected'].includes(request.status))fail('Request changed. Reopen the review.',409);
+    if(!['Pending','Rejected','Recheck Requested'].includes(request.status))fail('Request changed. Reopen the review.',409);
     if(line.expectedQuantity!==request.qty || line.expectedStatus!==request.status)fail('Request changed. Reopen the review.',409);
     number(line.quantity,'Reviewed quantity',true);
     if(request.indentId){
       const parent=state.indents.find(i=>i.id===request.indentId);
-      if(!parent || parent.status!=='Rejected' || parent.ownerId!==actor.id || state.purchase_orders.some(p=>p.indentId===parent.id))fail('This consolidated request cannot be reopened.',409);
+      if(!parent || !['Rejected','Recheck Requested'].includes(parent.status) || parent.ownerId!==actor.id || state.purchase_orders.some(p=>p.indentId===parent.id))fail('This consolidated request cannot be reopened.',409);
       parents.add(parent.id);
     }
     const value={...request,revisedQty:line.quantity,status:'Accepted',acceptedBy:actor.name,acceptedAt:new Date().toISOString()};
@@ -102,8 +102,10 @@ export function reviewChefRequests(state,actor,input){
     changes.push({entity:'requests',key:value.id,value});
   }
   for(const id of parents){
-    if(state.requests.some(r=>r.indentId===id && !seen.has(r.id)))fail('Review all items in the rejected consolidated request together.',409);
-    putRecord(next,'notification',{id:crypto.randomUUID(),system:true,eventType:'rejected_indent_review',indent:state.indents.find(i=>i.id===id),reviewedBy:actor.id,reviewedAt:new Date().toISOString()});
+    if(state.requests.some(r=>r.indentId===id && !seen.has(r.id)))fail('Review all items in the consolidated request together.',409);
+    const indent=state.indents.find(i=>i.id===id);
+    const eventType=indent.status==='Recheck Requested'?'rechecked_indent_review':'rejected_indent_review';
+    putRecord(next,'notification',{id:crypto.randomUUID(),system:true,eventType,indent,reviewedBy:actor.id,reviewedAt:new Date().toISOString()});
     changes.push({entity:'indents',key:id,value:null});
   }
   return {next,changes};
@@ -148,6 +150,22 @@ export function operationCommand(state, actor, input, action, transact) {
     const value={...request,status:'Rejected',rejectReason:reason,rejectedBy:actor.name,rejectedAt:now};
     changes.push({entity:'requests',key:value.id,value});
     putRecord(next,'notification',{id:crypto.randomUUID(),userId:request.ownerId,outletId:request.outletId,message:`${actor.name} rejected ${request.itemName} (${request.qty} ${request.unit || ''}). Reason: ${reason}`,sourceId:request.id,read:false,createdAt:now});
+  } else if(action==='indents/request-recheck'){
+    if(actor.role!=='admin')fail('Administrator permission required.',403);
+    const indent=state.indents.find(i=>i.id===input.id);
+    if(!indent)fail('Consolidated request not found.',404);
+    outlet(indent.outletId);
+    if(indent.status!=='Pending Approval' || state.purchase_orders.some(p=>p.indentId===indent.id))fail('Only requests awaiting approval can be sent back for recheck.',409);
+    const owner=state.users.find(u=>u.id===indent.ownerId && u.role==='executive_chef' && hasOutlet(u,indent.outletId));
+    const linked=state.requests.filter(r=>r.indentId===indent.id);
+    if(!owner || !linked.length)fail('This consolidated request needs an Executive Chef and linked items for recheck.',409);
+    if(linked.some(r=>!['Consolidated','Sent to Admin'].includes(r.status)))fail('The linked requests have changed. Refresh and try again.',409);
+    const reason=safeText(input.reason,'Recheck note',500).trim();
+    if(!reason)fail('Provide a note explaining what to recheck.');
+    const status='Recheck Requested';
+    changes.push({entity:'indents',key:indent.id,value:{...indent,status,recheckReason:reason,recheckRequestedBy:actor.id,recheckRequestedAt:now}});
+    for(const request of linked)changes.push({entity:'requests',key:request.id,value:{...request,status}});
+    putRecord(next,'notification',{id:crypto.randomUUID(),userId:owner.id,outletId:indent.outletId,eventType:'indent_recheck_requested',sourceId:linked[0].id,indentId:indent.id,message:`${actor.name} requested a recheck of ${indent.indentNumber}. ${reason}`,read:false,createdAt:now});
   } else if(action==='distribution/issue'){
     purchase();
     const indent=state.indents.find(i=>i.id===input.indentId);

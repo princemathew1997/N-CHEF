@@ -1,7 +1,7 @@
 // Workflow screens use explicit server actions; business records never live in localStorage.
 (() => {
     const names={admin:'Administrator',executive_chef:'Executive Chef',purchaser:'Purchaser (Supervisor)',cuisine_head:'Cuisine Head'};
-    const titles={legacy:'Bulk Legacy Stock',approvals:'Approval Queue','vendor-orders':'Generate Vendor Orders',purchases:'Vendor Purchase Orders',deliveries:'Cuisine Deliveries',wastage:'Wastage',receipts:'Receipt Totals',accounts:'Account Requests',users:'Users',vendors:'Vendors',category:'Categories',unit:'Units',notifications:'Notifications'};
+    const titles={legacy:'Bulk Legacy Stock',approvals:'Approval Queue','vendor-orders':'Generate Vendor Orders',purchases:'Vendor Purchase Orders',deliveries:'Cuisine Deliveries','cuisine-issues':'Daily Cuisine Issues',wastage:'Wastage',receipts:'Receipt Totals',accounts:'Account Requests',users:'Users',vendors:'Vendors',category:'Categories',unit:'Units',notifications:'Notifications'};
     const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const price=v=>v==null?'Cost unavailable':(v/100).toLocaleString('en-IN',{style:'currency',currency:'INR'});
     const records=kind=>kind==='notification'?getVisibleNotifications():(committedState?.operationRecords || []).filter(r=>r.kind===kind);
@@ -113,6 +113,11 @@
             };
             content.innerHTML=`<div class="approval-request-list">${indents.map(i=>`<section class="operations-card approval-request-card" data-approval-request="${esc(i.id)}" aria-label="${esc(i.indentNumber)}"><header class="approval-request-header"><div><small>Consolidated request</small><h3>${esc(i.indentNumber)}</h3><p>Outlet: <strong>${esc(outletName(i.outletId))}</strong> · ${i.items.length} item(s)${i.supervisorName?' · Executive Chef / Supervisor: '+esc(i.supervisorName):''}</p></div><span class="approval-request-status ${i.status==='Pending Approval'?'awaiting':'approved'}">${i.status==='Pending Approval'?'Awaiting approval':esc(i.status)}</span></header>${renderIndentTables(i)}<footer class="approval-request-actions">${i.status==='Pending Approval'?button('edit-indent',i.id,'Edit quantities')+button('approve-indent',i.id,'Approve for order')+button('reject-indent',i.id,'Reject request'):''}${ordering?button('raise-po',i.id,'Generate vendor orders'):''}</footer></section>`).join('')}</div>`;
             const direct=ordering?[]:requestsData.filter(r=>!r.indentId && r.status==='Sent to Admin');
+            if (!ordering && currentUser.role === 'admin') {
+                for (const approve of content.querySelectorAll('[data-action="approve-indent"]')) {
+                    approve.insertAdjacentHTML('beforebegin', button('recheck-indent', approve.dataset.id, 'Request recheck'));
+                }
+            }
             if(direct.length)content.innerHTML+=`<section class="operations-card approval-request-card direct-request-card"><header class="approval-request-header"><div><small>Individual requests</small><h3>Cuisine requests awaiting approval</h3></div></header>${table(['Cuisine request','Requested','Revised','Available','Shortage','Action'],direct.map(r=>[esc(r.itemName),esc(r.qty),esc(r.revisedQty ?? r.qty),esc(stock(r.itemId,r.outletId)),esc(Math.max(0,(r.revisedQty ?? r.qty)-stock(r.itemId,r.outletId))),button('approve-request',r.id,'Edit / approve')]))}</section>`;
             if(!indents.length && !direct.length)content.innerHTML=ordering?'<p>No approved requests awaiting vendor orders.</p>':'<p>No requests awaiting approval.</p>';
             if(!ordering && vendorOrders.length){
@@ -160,6 +165,7 @@
             }
         }
         if(page==='deliveries')window.DeliveryQueues.render(content);
+        if(page==='cuisine-issues')window.DailyCuisineIssues.render(content);
         if(page==='wastage'){
             content.innerHTML=`<div class="inventory-form" id="wasteFilters">${select('period','Period','<option value="daily">Daily</option><option value="weekly">Last 7 days</option><option value="custom">Custom</option>')}${input('from','From (IST)','date',wasteFrom)}${input('to','To (IST)','date',wasteTo)}<button class="btn btn-outline" id="applyWaste">Apply</button></div><div id="wasteRows"></div>`;
             const filters=content.querySelector('#wasteFilters');filters.querySelector('[name=period]').onchange=e=>{if(e.target.value!=='custom'){wasteTo=InventoryTools.day();wasteFrom=e.target.value==='daily'?wasteTo:InventoryTools.day(Date.now()-6*86400000);filters.querySelector('[name=from]').value=wasteFrom;filters.querySelector('[name=to]').value=wasteTo;}};
@@ -218,6 +224,7 @@
         }
         if(action==='read')return act('operations/notifications/read',{id});
         if(action==='approve-indent')return act('indents/approve',{indentId:id});
+        if(action==='recheck-indent')return window.requestIndentRecheck(id);
         if(action==='view-received-po'){
             const po=purchaseOrdersData.find(p=>p.id===id);if(!po)return;
             const dialog=document.createElement('dialog');dialog.className='operations-dialog';dialog.innerHTML=`<h2>${esc(po.poNumber)} · ${esc(po.vendorName)}</h2><p>Outlet: ${esc(outletName(po.outletId))} · Received: ${esc(InventoryTools.timestamp(po.receivedAt))}</p>${receiptComparisons(po)}${table(['Item','Unit','Ordered','Received','Rejected'],po.items.map(i=>[esc(i.itemName),esc(i.unit || masterItemsData.find(x=>x.id===i.itemId)?.unit),esc(i.qty),esc(i.receivedQty || 0),esc(i.rejectedQty || 0)]))}<button type="button" class="btn btn-outline" data-close>Close</button>`;document.body.append(dialog);dialog.querySelector('[data-close]').onclick=()=>dialog.close();dialog.onclose=()=>dialog.remove();dialog.showModal();return;
@@ -301,7 +308,7 @@
         });
         window.NavigationGroups?.configure();
     };
-    function allowed(p){if(p==='users')return ['admin','purchaser','executive_chef'].includes(currentUser?.role);if(['vendors','category','unit','wastage'].includes(p))return currentUser?.role==='admin';if(['legacy','approvals','vendor-orders','purchases','receipts','accounts'].includes(p))return purchaser();return true;}
+    function allowed(p){if(p==='users')return ['admin','purchaser','executive_chef'].includes(currentUser?.role);if(['vendors','category','unit','wastage','cuisine-issues'].includes(p))return currentUser?.role==='admin';if(['legacy','approvals','vendor-orders','purchases','receipts','accounts'].includes(p))return purchaser();return true;}
     window.openVendorOrderReceiving=()=>{
         if(!allowed('purchases'))return;
         purchaseDates[purchaseSection]={from:purchaseFrom,to:purchaseTo};

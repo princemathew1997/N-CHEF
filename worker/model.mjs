@@ -121,6 +121,7 @@ export function validateChanges(state, changes, actor, stockAction = false) {
       if (data.active !== undefined && typeof data.active !== 'boolean') fail('Invalid active status.');
     }
     if (!stockAction && data && ['requests','indents','purchase_orders'].includes(entity) && ((!old && ['Approved','Received','Partially Received'].includes(data.status)) || (old && old.status !== data.status && ['Approved','Received','Partially Received'].includes(data.status)))) fail('Use the approval or receiving action.');
+    if (!stockAction && ['requests','indents'].includes(entity) && (old?.status === 'Recheck Requested' || data?.status === 'Recheck Requested')) fail('Use the recheck workflow.', 409);
     if (data && !old && ['requests','indents','purchase_orders'].includes(entity)) {
       const ids = entity === 'requests' ? [data.itemId] : (data.items || []).map(i => i.itemId);
       if (ids.some(itemId => next.items.find(i => i.id === itemId)?.active === false)) fail('Choose active catalog items.');
@@ -182,7 +183,10 @@ export function validateChanges(state, changes, actor, stockAction = false) {
       if (old.status === 'Approved' && !same(data, old) && !(stockAction && same(without(data,['purchaseOrderIds']),without(old,['purchaseOrderIds'])))) fail('Approved records are immutable.', 409);
     }
     if (!data && entity === 'outlets' && ((state.outletStock || []).some(s => s.outlet_id === key && s.quantity > 0) || (state.stockHistory || []).some(s => s.outlet_id === key))) fail('An outlet with stock history cannot be removed.');
-    if (!data && old && ['requests', 'indents', 'purchase_orders'].includes(entity) && !['Pending', 'Accepted', 'Pending Approval'].includes(old.status)) fail('Completed records cannot be deleted.', 409);
+    if (!data && old && ['requests', 'indents', 'purchase_orders'].includes(entity)) {
+      const reviewingRecheck = stockAction && entity === 'indents' && old.status === 'Recheck Requested';
+      if (!reviewingRecheck && !['Pending', 'Accepted', 'Pending Approval'].includes(old.status)) fail('Completed records cannot be deleted.', 409);
+    }
     const index = next[entity].findIndex(row => row.id === key);
     if (data) {
       if (index < 0) next[entity].unshift(data); else next[entity][index] = data;
@@ -237,7 +241,7 @@ export function validateChanges(state, changes, actor, stockAction = false) {
 
   for (const r of next.requests) {
     if (!items.has(r.itemId) || !outlets.has(r.outletId)) fail('Unknown request item or outlet.');
-    if (!['Pending', 'Accepted', 'Sent to Admin', 'Consolidated', 'Approved', 'Rejected', 'PO Raised'].includes(r.status)) fail('Invalid request status.');
+    if (!['Pending', 'Accepted', 'Sent to Admin', 'Consolidated', 'Approved', 'Rejected', 'Recheck Requested', 'PO Raised'].includes(r.status)) fail('Invalid request status.');
     number(r.qty, 'Request quantity', true);
     if (r.revisedQty !== undefined) number(r.revisedQty, 'Revised request quantity');
     if (!next.cuisines.some(c => c.name === r.cuisine) && !['Supervisor Extra', 'Store Stock'].includes(r.cuisine)) fail('Choose a valid cuisine.');
@@ -246,7 +250,7 @@ export function validateChanges(state, changes, actor, stockAction = false) {
   for (const indent of next.indents) {
     if (!outlets.has(indent.outletId)) fail('Unknown indent outlet.');
     safeText(indent.indentNumber, 'Indent number');
-    if (!['Pending Approval', 'Approved', 'Rejected'].includes(indent.status) && !/^PO Raised \([^<>]+\)$/.test(indent.status)) fail('Invalid indent status.');
+    if (!['Pending Approval', 'Approved', 'Rejected', 'Recheck Requested'].includes(indent.status) && !/^PO Raised \([^<>]+\)$/.test(indent.status)) fail('Invalid indent status.');
     if (!Array.isArray(indent.items) || !indent.items.length) fail('Indent needs at least one item.');
     const seen = new Set();
     for (const row of indent.items) {

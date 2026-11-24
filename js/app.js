@@ -1486,6 +1486,13 @@ function initForms() {
         }
     });
 
+    document.getElementById('btnRequestIndentRecheck')?.addEventListener('click', async () => {
+        const indentId = activeReviewingIndentId;
+        if (await window.requestIndentRecheck(indentId)) {
+            document.getElementById('modalIndentApproval')?.classList.add('hidden');
+        }
+    });
+
     // Raise to Vendor PO Modal Handlers
     document.getElementById('btnRaiseVendorPO')?.addEventListener('click', () => {
         if (typeof openVendorPOModal === 'function') openVendorPOModal();
@@ -1787,6 +1794,8 @@ function loadChefPortalData() {
                 statusHtml = `<span class="status ok" style="background: rgba(46,196,182,0.15); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Accepted by Executive Chef</span>`;
             } else if (r.status === 'Sent to Admin') {
                 statusHtml = `<span class="status" style="background: rgba(67,97,238,0.15); color: #4895ef; border: 1px solid rgba(67,97,238,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Sent to Admin</span>`;
+            } else if (r.status === 'Recheck Requested') {
+                statusHtml = '<span class="status pending">Recheck Requested</span>';
             } else if (r.status === 'PO Raised') {
                 statusHtml = '<span class="status pending">Vendor order raised</span>';
             } else if (r.status === 'Consolidated') {
@@ -2199,6 +2208,8 @@ function loadRequestsData() {
                 let statusBadge = '';
                 if (indent.status === 'Pending Approval') {
                     statusBadge = `<span class="status pending" style="background: rgba(255,190,11,0.15); color: var(--primary); border: 1px solid rgba(255,190,11,0.3); font-weight: 600; padding: 4px 10px; border-radius: 6px;">Pending Admin Approval</span>`;
+                } else if (indent.status === 'Recheck Requested') {
+                    statusBadge = '<span class="status pending">Recheck Requested</span>';
                 } else if (indent.status === 'Approved') {
                     statusBadge = `<span class="status ok" style="background: rgba(46,196,182,0.15); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.3); font-weight: 600; padding: 4px 10px; border-radius: 6px;">Approved & Allocated</span>`;
                 } else if (indent.status && indent.status.startsWith('PO Raised')) {
@@ -2208,7 +2219,7 @@ function loadRequestsData() {
                 }
 
                 let actionBtn = '';
-                const deleteBtnHtml = (currentUser.role === 'admin' || currentUser.name === indent.supervisorName)
+                const deleteBtnHtml = indent.status !== 'Recheck Requested' && (currentUser.role === 'admin' || currentUser.name === indent.supervisorName)
                     ? `<button class="icon-btn text-danger" onclick="deleteSupervisorRequest('${indent.id}')" title="Delete this request" style="padding: 6px;"><i data-lucide="trash-2" style="width: 14px; height: 14px;"></i></button>`
                     : '';
 
@@ -2228,6 +2239,8 @@ function loadRequestsData() {
                             ${deleteBtnHtml}
                         </div>`;
                     }
+                } else if (canReviewIndentRecheck(indent)) {
+                    actionBtn = `<button class="btn btn-outline" onclick="reviewIndentRecheck('${indent.id}')">Review recheck</button>`;
                 } else {
                     actionBtn = `<div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px;">
                         <button class="btn btn-outline" onclick="openIndentApprovalModal('${indent.id}')" style="padding: 6px 14px; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 6px;">
@@ -2270,7 +2283,7 @@ function loadRequestsData() {
         const ongoingSectionRequests = viewableRequests.filter(r => {
             if (!r.cuisine || r.cuisine.toLowerCase() === 'general') return false;
             if (selStatus === 'all') {
-                return r.status === 'Pending' || r.status === 'Accepted' || r.status === 'Sent to Admin' || r.status === 'Rejected';
+                return ['Pending', 'Accepted', 'Sent to Admin', 'Rejected', 'Recheck Requested'].includes(r.status);
             }
             return true;
         });
@@ -2326,6 +2339,8 @@ function loadRequestsData() {
                         statusBadge = `<span class="status ok" style="background: rgba(46,196,182,0.15); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.35); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">✓ Accepted</span>`;
                     } else if (r.status === 'Sent to Admin' || r.status === 'Consolidated') {
                         statusBadge = `<span class="status" style="background: rgba(67,97,238,0.15); color: #4895ef; border: 1px solid rgba(67,97,238,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Sent to Admin</span>`;
+                    } else if (r.status === 'Recheck Requested') {
+                        statusBadge = '<span class="status pending">Recheck Requested</span>';
                     } else if (r.status === 'Approved') {
                         statusBadge = `<span class="status ok" style="background: rgba(46,196,182,0.15); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Approved</span>`;
                     } else {
@@ -2368,6 +2383,8 @@ function loadRequestsData() {
                                 </span>
                                 <button class="btn btn-outline" style="padding: 2px 6px; font-size: 0.68rem; margin-left: 6px; color: var(--text-muted); border-radius: 4px;" onclick="revertChefRequest('${r.id}')" title="Revert to Pending">Undo</button>
                             `;
+                        } else if (canReviewIndentRecheck(parentIndent)) {
+                            actionHtml = `<button class="btn btn-outline" onclick="reviewIndentRecheck('${r.indentId}')">Review recheck</button>`;
                         } else if (r.status === 'Rejected') {
                             actionHtml = `<button class="btn btn-outline" onclick="reviewChefRequests(['${r.id}'])">Review / edit / approve</button>`;
                         } else if (r.status === 'Sent to Admin' || r.status === 'Consolidated') {
@@ -2458,7 +2475,8 @@ function loadRequestsData() {
     // -------------------------------------------------------------
     // Review the filtered requests together before accepting their quantities.
     if (currentUser.role === 'executive_chef' && containerSec) {
-        const reviewable = viewableRequests.filter(r => ['Pending', 'Rejected'].includes(r.status));
+        const reviewable = viewableRequests.filter(r => ['Pending', 'Rejected'].includes(r.status) ||
+            (r.status === 'Recheck Requested' && canReviewIndentRecheck(indentsData.find(i => i.id === r.indentId))));
         if (reviewable.length) {
             const reviewButton = document.createElement('button');
             reviewButton.className = 'btn btn-primary';
@@ -2491,6 +2509,8 @@ function loadRequestsData() {
             statusHtml = `<span class="status" style="background: rgba(46,196,182,0.15); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">✓ Accepted (Ready to Consolidate)</span>`;
         } else if (req.status === 'Sent to Admin' || req.status === 'Consolidated') {
             statusHtml = `<span class="status" style="background: rgba(67,97,238,0.15); color: #4895ef; border: 1px solid rgba(67,97,238,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Sent to Admin</span>`;
+        } else if (req.status === 'Recheck Requested') {
+            statusHtml = '<span class="status pending">Recheck Requested</span>';
         } else if (req.status === 'Approved') {
             statusHtml = `<span class="status ok" style="background: rgba(46,196,182,0.15); color: #2ec4b6; border: 1px solid rgba(46,196,182,0.3); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Approved</span>`;
         } else {
@@ -2513,6 +2533,8 @@ function loadRequestsData() {
                 actionsHtml = `<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">Awaiting Executive Chef</span>`;
             } else if (req.status === 'Accepted') {
                 actionsHtml = `<span style="font-size: 0.75rem; color: #2ec4b6; font-style: italic;">Accepted by Executive Chef</span>`;
+            } else if (req.status === 'Recheck Requested') {
+                actionsHtml = '<span class="text-muted">Awaiting Executive Chef</span>';
             } else if (req.status === 'Approved') {
                 actionsHtml = `<span style="font-size: 0.75rem; color: var(--success); font-weight: 600;">✓ Approved</span>`;
             } else {
@@ -2533,6 +2555,8 @@ function loadRequestsData() {
                     </span>
                     <button class="btn btn-outline" style="padding: 2px 6px; font-size: 0.68rem; margin-left: 6px; color: var(--text-muted); border-radius: 4px;" onclick="revertChefRequest('${req.id}')" title="Revert to Pending">Undo</button>
                 `;
+            } else if (canReviewIndentRecheck(parentIndent)) {
+                actionsHtml = `<button class="btn btn-outline" onclick="reviewIndentRecheck('${req.indentId}')">Review recheck</button>`;
             } else if (req.status === 'Rejected') {
                 actionsHtml = `<button class="btn btn-outline" onclick="reviewChefRequests(['${req.id}'])">Review / edit / approve</button>`;
             } else if (req.status === 'Sent to Admin' || req.status === 'Consolidated') {
@@ -2971,14 +2995,17 @@ function loadIndentsData() {
     tbody.innerHTML = viewableIndents.map(indent => {
         let statusHtml = '';
         if (indent.status === 'Pending Approval') statusHtml = `<span class="status pending">Pending Approval</span>`;
+        else if (indent.status === 'Recheck Requested') statusHtml = '<span class="status pending">Recheck Requested</span>';
         else if (indent.status === 'Approved') statusHtml = `<span class="status ok">Approved</span>`;
         else statusHtml = `<span class="status low">Rejected</span>`;
         
         const totalQty = (indent.items || []).reduce((sum, item) => sum + (Number(item.revisedQty ?? item.originalQty) || 0), 0);
         
         let actionBtn = '';
-        if (currentUser && currentUser.role === 'admin') {
+        if (currentUser?.role === 'admin' && indent.status === 'Pending Approval') {
             actionBtn = `<button class="btn btn-primary" style="padding: 4px 12px; font-size: 0.75rem;" onclick="openIndentApprovalModal('${indent.id}')">Review & Approve</button>`;
+        } else if (canReviewIndentRecheck(indent)) {
+            actionBtn = `<button class="btn btn-outline" onclick="reviewIndentRecheck('${indent.id}')">Review recheck</button>`;
         } else {
             actionBtn = `<button class="btn btn-outline" style="padding: 4px 12px; font-size: 0.75rem;" onclick="openIndentApprovalModal('${indent.id}')">View Breakdown</button>`;
         }
@@ -3041,6 +3068,9 @@ function openIndentApprovalModal(indentId) {
         statusBadge += ` <span style="font-size: 0.78rem; color: var(--text-muted); margin-left: 8px;">(PO: <strong style="color: var(--primary); font-family: monospace;">${indent.poNumber}</strong>)</span>`;
     }
     document.getElementById('apprModalStatus').innerHTML = statusBadge;
+    const recheckNote = document.getElementById('apprModalRecheckNote');
+    recheckNote.classList.toggle('hidden', indent.status !== 'Recheck Requested');
+    recheckNote.textContent = indent.recheckReason || '';
     
     // Admin buttons visibility
     const adminButtons = document.getElementById('apprModalAdminButtons');
@@ -3350,17 +3380,52 @@ window.rejectRequest = async function(reqId) {
     }
 };
 
+window.requestIndentRecheck = async function(indentId) {
+    const indent = indentsData.find(i => i.id === indentId);
+    if (currentUser?.role !== 'admin' || indent?.status !== 'Pending Approval') return false;
+    const reason = await window.showPromptModal('Tell the Executive Chef what to recheck.', '', 'Request recheck', {confirmText: 'Send to Executive Chef'});
+    if (typeof reason !== 'string') return false;
+    if (!reason.trim() || reason.trim().length > 500) {
+        window.showToast('Enter a recheck note of 1 to 500 characters.', 'warning');
+        return false;
+    }
+    try {
+        await runDatabaseAction('operations/indents/request-recheck', {id: indentId, reason: reason.trim()});
+        loadRequestsData();
+        loadIndentsData();
+        window.showToast(`Recheck requested for ${indent.indentNumber}.`, 'success');
+        return true;
+    } catch (error) {
+        window.showToast(error.message, 'warning');
+        return false;
+    }
+};
+
+function canReviewIndentRecheck(indent) {
+    return currentUser?.role === 'executive_chef' && indent?.status === 'Recheck Requested' && indent.ownerId === currentUser.id;
+}
+
+window.reviewIndentRecheck = function(indentId) {
+    if (!canReviewIndentRecheck(indentsData.find(i => i.id === indentId))) return;
+    window.reviewChefRequests(requestsData.filter(r => r.indentId === indentId).map(r => r.id));
+};
+
 window.reviewChefRequests = function(ids) {
     if (currentUser?.role !== 'executive_chef') return;
     const selected = requestsData.filter(r => ids.includes(r.id));
-    const parentIds = new Set(selected.filter(r => r.status === 'Rejected' && r.indentId).map(r => r.indentId));
+    const parentIds = new Set(selected.filter(r => ['Rejected', 'Recheck Requested'].includes(r.status) && r.indentId).map(r => r.indentId));
     const rows = requestsData.filter(r => ids.includes(r.id) || parentIds.has(r.indentId));
     const dialog = document.createElement('dialog');
     dialog.className = 'operations-dialog vendor-receipt-dialog';
     const title = document.createElement('h2');
     title.textContent = 'Review requests and approve quantities';
     const note = document.createElement('p');
-    note.textContent = 'Review every item below and edit quantities as needed. Rejected consolidated requests include all their items. Approval makes these items ready to consolidate and submit again.';
+    note.textContent = 'Review each quantity and make any changes. Approved quantities are ready to consolidate and submit.';
+    const recheckNotes = indentsData.filter(i => parentIds.has(i.id) && i.status === 'Recheck Requested').map(indent => {
+        const message = document.createElement('p');
+        message.textContent = `${indent.indentNumber} · Admin note — ${indent.recheckReason}`;
+        return message;
+    });
     const form = document.createElement('form');
     const scroll = document.createElement('div');
     scroll.className = 'table-container';
@@ -3384,7 +3449,7 @@ window.reviewChefRequests = function(ids) {
     approve.type = 'submit'; approve.className = 'btn btn-primary'; approve.textContent = 'Approve all reviewed items';
     const cancel = document.createElement('button');
     cancel.type = 'button'; cancel.className = 'btn btn-outline'; cancel.textContent = 'Cancel'; cancel.onclick = () => dialog.close();
-    scroll.append(table); form.append(scroll, approve, cancel); dialog.append(title, note, form); document.body.append(dialog);
+    scroll.append(table); form.append(scroll, approve, cancel); dialog.append(title, note, ...recheckNotes, form); document.body.append(dialog);
     dialog.onclose = () => dialog.remove();
     form.onsubmit = async event => {
         event.preventDefault(); approve.disabled = true;

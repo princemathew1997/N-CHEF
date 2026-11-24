@@ -7,7 +7,7 @@ import { raiseVendorOrders, planVendorReceipt, planPurchaseOrderCancellation } f
 import { digest, equalSecret, getSessionKey, hashPassword, randomToken, sessionCookie, verifyPassword } from './auth.mjs';
 import { clone, fail, hasOutlet, id, number, project, safeText, validateChanges } from './model.mjs';
 import { persistChanges as persistDatabaseChanges, readState, readClientState, markAllNotifications } from './database.mjs';
-import { dispatchList, dispatchItems, stockHistoryPage, stockReport } from './queues.mjs';
+import { dailyCuisineIssues, dispatchList, dispatchItems, stockHistoryPage, stockReport } from './queues.mjs';
 import { priceHistory, correctStockPrice } from './prices.mjs';
 import { setAvailableStockPrice, stockPriceEditingEnabled } from './stock-prices.mjs';
 
@@ -133,6 +133,7 @@ export default {
         if (path === '/api/dispatches') return send(await dispatchList(env.DB, actor, query));
         if (path === '/api/dispatches/items') return send(await dispatchItems(env.DB, actor, query));
         if (path === '/api/stock/history') return send(await stockHistoryPage(env.DB, actor, query));
+        if (path === '/api/stock/cuisine-issues') return response(await dailyCuisineIssues(env.DB, actor, query));
         if (path === '/api/stock/report') return send(await stockReport(env.DB, actor, query));
       }
       if (['/api/session', '/api/state'].includes(path) && request.method === 'GET') {
@@ -338,7 +339,7 @@ export default {
         const recallingIndent = path === '/api/operations/indents/recall';
         const derived = reviewingChefRequests ? reviewChefRequests(state, actor, input) : recallingIndent ? recallConsolidatedRequest(state, actor, input) : editingCuisineRequest ? editCuisineRequest(state, actor, input) : operationCommand(state, actor, input, path.slice('/api/operations/'.length), transact);
         let next = derived.next, touched = [];
-        if (derived.changes.length) { const privileged = editingCuisineRequest || recallingIndent || reviewingChefRequests; const validated = validateChanges(next, derived.changes, privileged ? { ...actor, role: 'admin' } : actor, privileged); next = validated.next; touched = validated.touched; }
+        if (derived.changes.length) { const privileged = editingCuisineRequest || recallingIndent || reviewingChefRequests || path === '/api/operations/indents/request-recheck'; const validated = validateChanges(next, derived.changes, privileged ? { ...actor, role: 'admin' } : actor, privileged); next = validated.next; touched = validated.touched; }
         return send(await persistChanges(env.DB, state, next, touched, actor, input.operationId, stock));
       }
       if (['/api/purchase-orders/raise', '/api/purchase-orders/cancel'].includes(path) && request.method === 'POST') {

@@ -4,7 +4,7 @@ import {dayIST} from './operations.mjs';
 const parameters=query=>query instanceof URLSearchParams?query:new URLSearchParams(query);
 export function dateRange(query,defaultToday=false){
   const from=query.get('from') || (defaultToday?dayIST():''),to=query.get('to') || (defaultToday?dayIST():'');
-  for(const date of [from,to])if(date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || dayIST(date+'T00:00:00+05:30')!==date))fail('Choose valid IST dates.');
+  for(const date of [from,to])if(date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date+'T00:00:00+05:30')) || dayIST(date+'T00:00:00+05:30')!==date))fail('Choose valid IST dates.');
   if(from && to && from>to)fail('From date must be on or before To date.');
   return {from,to,start:from?new Date(from+'T00:00:00+05:30').toISOString():null,end:to?new Date(Date.parse(to+'T00:00:00+05:30')+86400000).toISOString():null};
 }
@@ -99,6 +99,30 @@ export async function stockHistoryPage(db,actor,input){
   const totals=await statement(db,`SELECT count(*) count,coalesce(sum(total_cost_minor),0) totalCostMinor,coalesce(sum(total_cost_minor IS NULL),0) unknownCosts FROM outlet_stock_history WHERE ${clauses.length?clauses.join(' AND '):'1'}`,values).first();
   if(cursor){clauses.push('(created_at,id)<(?,?)');values.push(...cursor);}
   const rows=await statement(db,`SELECT *,created_at sort_time,id page_id FROM outlet_stock_history WHERE ${clauses.length?clauses.join(' AND '):'1'} ORDER BY created_at DESC,id DESC LIMIT ?`,[...values,limit+1]).all();return {...page(rows.results,limit),totals};
+}
+
+export async function dailyCuisineIssues(db, actor, input) {
+  if (actor.role !== 'admin') fail('Administrator permission required.', 403);
+  const query = parameters(input);
+  const day = query.get('day') || dayIST();
+  const { start, end } = dateRange(new URLSearchParams({ from: day, to: day }));
+  const { clauses, values } = scope(actor, query);
+  const cuisine = query.get('cuisine');
+  if (cuisine) {
+    clauses.push('h.cuisine = ?');
+    values.push(cuisine);
+  }
+  const { results: rows } = await statement(db, `SELECT coalesce(nullif(h.cuisine, ''), 'Unspecified') cuisine,
+      o.name outlet, h.item_name itemName, h.unit, h.unit_cost_minor unitCostMinor,
+      -sum(h.delta) quantity, sum(h.total_cost_minor) totalCostMinor,
+      sum(h.total_cost_minor IS NULL) unpricedIssues
+    FROM outlet_stock_history h JOIN outlets o ON o.id = h.outlet_id
+    WHERE h.kind = 'distribute' AND h.delta < 0 AND h.created_at >= ? AND h.created_at < ?
+      ${clauses.length ? 'AND ' + clauses.join(' AND ') : ''}
+    GROUP BY h.cuisine, h.outlet_id, h.item_id, h.item_name, h.unit, h.unit_cost_minor
+    ORDER BY cuisine COLLATE NOCASE, outlet COLLATE NOCASE, itemName COLLATE NOCASE, h.unit_cost_minor`,
+    [start, end, ...values]).all();
+  return { day, rows };
 }
 
 export async function stockReport(db,actor,input){

@@ -1592,6 +1592,11 @@ body.database-saving::after {
 .queue-filters { display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px; margin:16px 0; }
 .queue-filters label { display:flex; flex-direction:column; gap:5px; min-width:140px; flex:1; }
 .queue-filters .item-picker { min-width:0; }
+.cuisine-issue-report h2 { font-size:1.15rem; margin-bottom:8px; }
+.cuisine-issue-report section { margin-top:20px; }
+.cuisine-issue-report section p { margin:4px 0 10px; }
+.cuisine-issue-report .table-container { height:auto; min-height:0; }
+.cuisine-issue-report :is(th, td):nth-child(n+3) { text-align:right; }
 .queue-filter-panel { margin:12px 0; }
 .queue-filter-panel summary { cursor:pointer; color:var(--primary); padding:8px 12px; border:1px solid var(--border); border-radius:8px; width:fit-content; }
 .queue-counts { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:16px; }

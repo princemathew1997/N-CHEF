@@ -465,11 +465,35 @@ test('review workflow: four-character credentials, date rules, edit cutoff, cons
  const snapshot=(await request('state')).data;
  const combined={...indent,id:crypto.randomUUID(),indentNumber:'REQ-REVIEW-2',items:[{itemId:item.id,originalQty:7,revisedQty:5,comment:'Recalled and combined with new requirement',cuisineBreakdown:[{cuisine:'Indian',qty:5}]}]};
  await ok(save([{entity:'indents',key:combined.id,value:combined},...[req.id,fresh.id].map(id=>({entity:'requests',key:id,value:{...snapshot.requests.find(r=>r.id===id),status:'Consolidated',indentId:combined.id}}))],exec));
- const staleRecall={id:combined.id,operationId:crypto.randomUUID(),revision:(await request('state')).data.revision};
- await ok(cmd('indents/approve',{indentId:combined.id},purchaser));
+ const recheckPath='operations/indents/request-recheck';
+ const details={id:combined.id,reason:'Confirm the revised quantity'};
+ assert.equal((await cmd(recheckPath,details,purchaser)).status,403);
+ assert.equal((await cmd(recheckPath,{...details,reason:' '},adminCookie)).status,400);
+ const recheckInput={...details,operationId:crypto.randomUUID(),revision:(await request('state')).data.revision};
+ const rechecked=await ok(request(recheckPath,'POST',recheckInput));
+ assert.equal(rechecked.indents.find(i=>i.id===combined.id).recheckReason,details.reason);
+ assert.deepEqual(rechecked.requests.filter(r=>r.indentId===combined.id).map(r=>r.status),['Recheck Requested','Recheck Requested']);
+ assert.deepEqual(rechecked.outletStock,snapshot.outletStock);
+ assert.equal((await ok(request(recheckPath,'POST',recheckInput))).revision,rechecked.revision);
+ assert.equal((await cmd('indents/approve',{indentId:combined.id},adminCookie)).status,409);
+ assert.equal((await save([{entity:'indents',key:combined.id,value:null}])).status,409);
+ const chefView=await ok(request('state','GET',undefined,exec));
+ const notice=chefView.operationRecords.find(n=>n.eventType==='indent_recheck_requested' && n.indentId===combined.id);
+ assert.equal(notice.read,false);assert.match(notice.message,/Confirm the revised quantity/);
+ assert.ok(!(await ok(request('state','GET',undefined,head))).operationRecords.some(n=>n.id===notice.id));
+ const lines=chefView.requests.filter(r=>r.indentId===combined.id).map(r=>({id:r.id,expectedQuantity:r.qty,expectedStatus:r.status,quantity:r.revisedQty ?? r.qty}));
+ assert.equal((await cmd('operations/requests/review',{lines:lines.slice(0,1)},exec)).status,409);
+ const reviewResponse=await mf.dispatchFetch(origin+'/api/operations/requests/review',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',...authHeaders(exec),'X-NCHEF-Workspace':'paged','X-NCHEF-Client-Release':testReleaseCommit},body:JSON.stringify({lines,operationId:crypto.randomUUID(),revision:chefView.revision})});
+ const reviewed=await reviewResponse.json();assert.equal(reviewResponse.status,200,JSON.stringify(reviewed));
+ assert.equal(reviewed.operationRecords.find(n=>n.id===notice.id).read,true);
+ assert.ok(reviewed.requests.filter(r=>[req.id,fresh.id].includes(r.id)).every(r=>r.status==='Accepted' && !r.indentId));
+ const resubmitted={...combined,id:crypto.randomUUID(),indentNumber:'REQ-REVIEW-3'};
+ await ok(save([{entity:'indents',key:resubmitted.id,value:resubmitted},...[req.id,fresh.id].map(id=>({entity:'requests',key:id,value:{...reviewed.requests.find(r=>r.id===id),status:'Consolidated',indentId:resubmitted.id}}))],exec));
+ const staleRecall={id:resubmitted.id,operationId:crypto.randomUUID(),revision:(await request('state')).data.revision};
+ await ok(cmd('indents/approve',{indentId:resubmitted.id},purchaser));
  assert.equal((await request('operations/indents/recall','POST',staleRecall,exec)).status,409);
- assert.equal((await cmd('operations/indents/recall',{id:combined.id},exec)).status,409);
- const after=(await request('state')).data;assert.equal(after.indents.find(i=>i.id===combined.id).status,'Approved');
+ assert.equal((await cmd('operations/indents/recall',{id:resubmitted.id},exec)).status,409);
+ const after=(await request('state')).data;assert.equal(after.indents.find(i=>i.id===resubmitted.id).status,'Approved');
  const later={...indent,id:crypto.randomUUID(),indentNumber:'REQ-REVIEW-NEXT',items:[{itemId:item.id,originalQty:1,revisedQty:1}]};
  await ok(save([{entity:'indents',key:later.id,value:later}],exec));
 });
@@ -560,6 +584,40 @@ test('consolidated distribution enforces notes, shared stock, request links and 
  const deliveries=issued.operationRecords.filter(d=>d.kind==='delivery' && sources.some(r=>r.id===d.requestId));assert.equal(deliveries.length,2);assert.equal(deliveries.find(d=>d.requestId===sources[1].id).issueComment,'Limited available stock');
  const retry=await ok(request('operations/distribution/issue','POST',input,purchaserCookie));assert.equal(retry.revision,issued.revision);
  assert.equal((await cmd('operations/distribution/issue',{indentId:id,lines},chefCookie)).status,403);
+});
+
+test('daily cuisine issues group recorded costs and quantities within one IST day',async()=>{
+ const {items}= (await request('state')).data;
+ const outletId='report-test';
+ assert.equal((await save([{entity:'outlets',key:outletId,value:{id:outletId,name:'Report Outlet'}}])).status,200);
+ const movement=(time,cuisine,delta,unitCost,totalCost,kind='distribute',outlet=outletId)=>db.prepare(`
+   INSERT INTO outlet_stock_history (id,operation_id,item_id,outlet_id,delta,quantity,kind,cuisine,item_name,unit,actor_name,created_at,unit_cost_minor,total_cost_minor)
+   VALUES (?,?,?,?,?,0,?,?,?,?,?,?,?,?)`).bind(crypto.randomUUID(),'report-test',items[0].id,outlet,delta,kind,cuisine,'Report Rice','kg','Admin',time,unitCost,totalCost);
+ await db.batch([
+   movement('2026-01-17T18:29:59.999Z','Indian',-10,200,2000),
+   movement('2026-01-17T18:30:00.000Z','Indian',-1.5,200,300),
+   movement('2026-01-18T12:00:00.000Z','Indian',-2,200,400),
+   movement('2026-01-18T13:00:00.000Z','Indian',-1,250,250),
+   movement('2026-01-18T14:00:00.000Z','Chinese',-2,null,null),
+   movement('2026-01-18T15:00:00.000Z','Chinese',-4,0,0),
+   movement('2026-01-18T16:00:00.000Z','Chinese',2,200,400,'return'),
+   movement('2026-01-18T17:00:00.000Z','Chinese',-1,300,300,'distribute','brigade'),
+   movement('2026-01-18T18:30:00.000Z','Indian',-10,200,2000),
+ ]);
+ const url=`stock/cuisine-issues?day=2026-01-18&outlet=${outletId}`;
+ for(const cookie of [chefCookie,supervisorCookie,purchaserCookie]) assert.equal((await request(url,'GET',undefined,cookie)).status,403);
+ const result=await request(url);
+ assert.equal(result.status,200,JSON.stringify(result.data));
+ assert.equal(result.data.day,'2026-01-18');
+ assert.deepEqual(result.data.rows.map(r=>[r.cuisine,r.outlet,r.itemName,r.quantity,r.unitCostMinor,r.totalCostMinor,r.unpricedIssues]),[
+   ['Chinese','Report Outlet','Report Rice',2,null,null,1],
+   ['Chinese','Report Outlet','Report Rice',4,0,0,0],
+   ['Indian','Report Outlet','Report Rice',3.5,200,700,0],
+   ['Indian','Report Outlet','Report Rice',1,250,250,0],
+ ]);
+ assert.equal((await request(url+'&cuisine=Indian')).data.rows.length,2);
+ assert.equal((await request('stock/cuisine-issues?day=2026-01-18&cuisine=Chinese')).data.rows.length,3);
+ assert.equal((await request('stock/cuisine-issues?day=2026-99-99')).status,400);
 });
 
 test('price history routes restrict roles and use receipt records for both purchase flows',async()=>{
