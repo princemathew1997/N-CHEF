@@ -477,7 +477,7 @@ test('review workflow: four-character credentials, date rules, edit cutoff, cons
  const recheckPath='operations/indents/request-recheck';
  const details={id:combined.id,reason:'Confirm the revised quantity'};
  assert.equal((await cmd(recheckPath,details,purchaser)).status,403);
- assert.equal((await cmd(recheckPath,{...details,reason:' '},adminCookie)).status,400);
+ for(const reason of [' ','.','  No  '])assert.equal((await cmd(recheckPath,{...details,reason},adminCookie)).status,400);
  const recheckInput={...details,operationId:crypto.randomUUID(),revision:(await request('state')).data.revision};
  const rechecked=await ok(request(recheckPath,'POST',recheckInput));
  assert.equal(rechecked.indents.find(i=>i.id===combined.id).recheckReason,details.reason);

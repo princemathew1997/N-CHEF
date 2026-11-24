@@ -237,9 +237,10 @@ function openBulkReceiptRecheck(container, request) {
   form.onsubmit = async event => {
     event.preventDefault();
     const submit = form.querySelector('.btn-primary');
+    if (submit.disabled) return;
+    submit.disabled = true;
     const error = form.querySelector('[role=alert]');
     error.textContent = '';
-    submit.disabled = true;
     try {
       const file = form.elements.sheet.files[0];
       if (file && (!/\.csv$/i.test(file.name) || file.size > maxReceiptBytes)) throw new Error(`Choose a CSV of at most ${maxReceiptBytes / 1000} KB.`);

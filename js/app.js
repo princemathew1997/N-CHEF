@@ -3394,12 +3394,13 @@ window.requestAdminRecheck = async function(path, id) {
     if (currentUser?.role !== 'admin') return false;
     const reason = await window.showPromptModal('Tell the submitter what to recheck.', '', 'Request recheck', {confirmText: 'Send recheck request'});
     if (typeof reason !== 'string') return false;
-    if (!reason.trim() || reason.trim().length > 500) {
-        window.showToast('Enter a recheck note of 1 to 500 characters.', 'warning');
+    const note = reason.trim();
+    if (note.length < 3 || note.length > 500) {
+        window.showToast('Enter a recheck note of 3 to 500 characters.', 'warning');
         return false;
     }
     try {
-        await runDatabaseAction(path, {id, reason: reason.trim()});
+        await runDatabaseAction(path, {id, reason: note});
         window.showToast('Recheck requested.', 'success');
         return true;
     } catch (error) {
@@ -3478,7 +3479,9 @@ window.reviewChefRequests = function(ids, indentId) {
     scroll.append(table); form.append(scroll, approve, cancel); dialog.append(title, note, ...recheckNotes, form); document.body.append(dialog);
     dialog.onclose = () => dialog.remove();
     form.onsubmit = async event => {
-        event.preventDefault(); approve.disabled = true;
+        event.preventDefault();
+        if (approve.disabled) return;
+        approve.disabled = true;
         try {
             const lines = inputs.map(({request, input}) => ({id:request.id, quantity:Number(input.value), expectedQuantity:request.qty, expectedStatus:request.status}));
             await runDatabaseAction(purchaserRecheck ? 'operations/indents/resubmit-recheck' : 'operations/requests/review', {id:indentId, lines});

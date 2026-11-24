@@ -187,13 +187,18 @@
         </article>`;
     }
     function printCuisineIssues(day, report) {
-        const preview = window.open('', '_blank');
-        if (!preview) {
-            window.showToast('Allow pop-ups to export the report as a PDF.', 'warning');
-            return;
-        }
-        preview.opener = null;
-        preview.document.write(`<!doctype html><html lang="en"><head><meta charset="utf-8">
+        document.getElementById('cuisineIssuePrintFrame')?.remove();
+        const frame = document.createElement('iframe');
+        frame.id = 'cuisineIssuePrintFrame';
+        frame.title = 'Daily Cuisine Issues print document';
+        frame.tabIndex = -1;
+        frame.setAttribute('aria-hidden', 'true');
+        frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+        document.body.append(frame);
+        const preview = frame.contentWindow;
+        const printDocument = frame.contentDocument;
+        printDocument.open();
+        printDocument.write(`<!doctype html><html lang="en"><head><meta charset="utf-8">
             <title>Daily Cuisine Issues - ${esc(day)}</title>
             <style>
                 @page { size: A4; margin: 15mm; }
@@ -209,11 +214,11 @@
                 tr { break-inside: avoid; }
                 th, td { padding: 6pt; border-bottom: 1px solid #bcc9ce; text-align: left; overflow-wrap: anywhere; }
                 th:nth-child(n+3), td:nth-child(n+3) { text-align: right; }
-                @media print { button { display: none; } }
-                @media screen { body { max-width: 48rem; margin: 2rem auto; padding: 0 1rem; } }
-            </style></head><body><button type="button" onclick="window.print()">Print / Save as PDF</button>
+            </style></head><body>
             <h1>Daily Cuisine Issues</h1>${report}</body></html>`);
-        preview.document.close();
+        printDocument.close();
+        preview.addEventListener('afterprint', () => frame.remove(), {once:true});
+        preview.focus();
         preview.print();
     }
     function renderCuisineIssues(content) {

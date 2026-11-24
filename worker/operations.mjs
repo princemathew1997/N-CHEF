@@ -28,7 +28,7 @@ export function notify(state, roles, outletId, message, sourceId) {
 }
 function recheckDetails(actor, input, now) {
   const recheckReason = safeText(input.reason, 'Recheck note', 500).trim();
-  if (!recheckReason) fail('Provide a note explaining what to recheck.');
+  if (recheckReason.length < 3) fail('Provide a recheck note of at least 3 characters.');
   return {status:'Recheck Requested',recheckReason,recheckRequestedBy:actor.id,recheckRequestedAt:now};
 }
 function notifyRecheck(state, status, userId, outletId, sourceId, label, link) {
