@@ -268,14 +268,15 @@
                                     } else if (req.status && req.status.startsWith('PO Raised')) {
                                         badge = `<span class="status" style="background: rgba(67, 97, 238, 0.15); color: #4895ef; border: 1px solid rgba(67, 97, 238, 0.35); font-weight: 600; padding: 3px 8px; border-radius: 6px;">${esc(req.status)}</span>`;
                                     }
-                                    const note = req.rejectReason ? `<span style="color: #ff6b6b;">${esc(req.rejectReason)}</span>` : (req.items && req.items[0]?.comment ? esc(req.items[0].comment) : '-');
+                                    const recheck = canReviewIndentRecheck(req);
+                                    const note = recheck ? esc(req.recheckReason) : req.rejectReason ? `<span style="color: #ff6b6b;">${esc(req.rejectReason)}</span>` : (req.items && req.items[0]?.comment ? esc(req.items[0].comment) : '-');
                                     return `<tr>
                                         <td><strong>${esc(req.indentNumber || req.id)}</strong></td>
                                         <td>${esc(outletsData.find(o => o.id === req.outletId)?.name || req.outletName || req.outletId)}</td>
                                         <td>${esc(req.date || req.createdAt?.slice(0, 10) || '-')}</td>
                                         <td>${totalItems} item(s)</td>
                                         <td>${badge}</td>
-                                        <td>${note}</td>
+                                        <td>${note}${recheck?` <button type="button" class="btn btn-outline" data-ingredient-recheck="${esc(req.id)}">Review and resubmit</button>`:''}</td>
                                     </tr>`;
                                 }).join('')}
                             </tbody>
@@ -302,6 +303,7 @@
             `;
             const btn = content.querySelector('#btnOpenBulkCuisineWizard');
             if (btn) btn.onclick = () => window.openRequestWizard?.();
+            for (const button of content.querySelectorAll('[data-ingredient-recheck]')) button.onclick = () => window.reviewIndentRecheck(button.dataset.ingredientRecheck);
             if (window.lucide) window.lucide.createIcons();
             return;
         }
@@ -866,6 +868,7 @@
             if (currentView === 'inventory:history' && !document.activeElement?.closest('.queue-filters')) {
                 window.StockHistoryQueues.refresh();
             }
+            if (currentView === 'inventory:receipt') window.renderBulkReceiptApprovalAndHistory?.(panel.querySelector('#bulkReceiptApprovalAndHistoryContainer'));
             if (currentView.startsWith('inventory:') && !panel.querySelector('form') && !panel.contains(document.activeElement)) {
                 render();
             }

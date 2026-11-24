@@ -21,6 +21,19 @@
     const outletName=id=>outletsData.find(o=>o.id===id)?.name || id;
     const pageTitle=key=>key==='deliveries' && currentUser?.role==='cuisine_head'?'Receive Order':titles[key];
     const link=(page,text)=>`<a class="btn btn-outline" href="#" data-operations="${page}">${esc(text || pageTitle(page))}</a>`;
+    function notificationAction(notice) {
+        if (notice.eventType === 'delivery_issued') return link('deliveries', currentUser.role==='cuisine_head'?'Receive Order':'Confirm delivery');
+        if (notice.eventType === 'indent_recheck_requested' && canReviewIndentRecheck(indentsData.find(i=>i.id===notice.indentId))) return button('review-indent-recheck',notice.indentId,'Review and resubmit');
+        if (notice.eventType === 'request_recheck_requested' && canResubmitCuisineRecheck(requestsData.find(r=>r.id===notice.sourceId))) return button('review-cuisine-recheck',notice.sourceId,'Review and resubmit');
+        if (notice.eventType === 'account_recheck_requested' && records('account_request').some(r=>r.id===notice.sourceId && r.status==='Recheck Requested')) return button('account-resubmit',notice.sourceId,'Review and resubmit');
+        if (notice.eventType === 'bulk_receipt_recheck_requested' && committedState.operationRecords.some(r=>r.id===notice.sourceId && r.status==='Recheck Requested')) return `<a href="#" class="btn btn-outline" data-view="inventory:receipt">Review returned batch</a>`;
+        return '';
+    }
+    function accountRequestFields(request) {
+        return input('name','Requested person name','text',request?.name || '','required maxlength="200"')+
+            select('role','Role',opt(['cuisine_head','executive_chef'],r=>r,r=>names[r]))+
+            select('outletId','Outlet',opt(outletsData))+select('cuisine','Cuisine',opt(cuisinesData,r=>r.name));
+    }
     let panel,page='approvals',editor=null,filterDate=InventoryTools.day(),filterVendor='',filterOutlet='',wasteFrom=InventoryTools.day(),wasteTo=InventoryTools.day();
     let purchaseSection='open',purchaseFrom='',purchaseTo='';
     const purchaseDates={open:{from:'',to:''},received:null};
@@ -32,7 +45,7 @@
         panel.innerHTML=`<header class="dash-header"><div><h1>${page==='deliveries' && currentUser.role==='cuisine_head'?'Receive Order':titles[page]}</h1><p>${esc(names[currentUser.role])}</p></div></header><div class="panel inventory-workspace" id="operationsContent"></div>`;
         const content=panel.querySelector('#operationsContent');
         if(page==='legacy')window.renderLegacyImport(content);
-        if(page==='notifications')content.innerHTML=`<div class="notification-actions"><button type="button" class="btn btn-outline" data-action="read-all" ${(committedState.unreadNotificationCount ?? records('notification').filter(n=>!n.read).length)?'':'disabled'}>Mark all as read</button></div>`+table(['When','Message','Action'],records('notification').slice().reverse().map(n=>[esc(InventoryTools.timestamp(n.createdAt)),esc(n.message),(n.eventType==='delivery_issued'?link('deliveries',currentUser.role==='cuisine_head'?'Receive Order':'Confirm delivery')+' ':' ')+(n.read?'Read':button('read',n.id,'Mark read'))]));
+        if(page==='notifications')content.innerHTML=`<div class="notification-actions"><button type="button" class="btn btn-outline" data-action="read-all" ${(committedState.unreadNotificationCount ?? records('notification').filter(n=>!n.read).length)?'':'disabled'}>Mark all as read</button></div>`+table(['When','Message','Action'],records('notification').slice().reverse().map(n=>[esc(InventoryTools.timestamp(n.createdAt)),esc(n.message),`${notificationAction(n)} ${n.read?'Read':button('read',n.id,'Mark read')}`]));
         if(page==='category' || page==='unit'){
             content.innerHTML=formHTML(input('name','New '+page,'text','','required maxlength="200"'))+table(['Name'],records(page).map(r=>[esc(r.name)]));
             bindForm(content.querySelector('form'),data=>act('operations/'+page+'/add',data));
@@ -118,7 +131,7 @@
                     approve.insertAdjacentHTML('beforebegin', button('recheck-indent', approve.dataset.id, 'Request recheck'));
                 }
             }
-            if(direct.length)content.innerHTML+=`<section class="operations-card approval-request-card direct-request-card"><header class="approval-request-header"><div><small>Individual requests</small><h3>Cuisine requests awaiting approval</h3></div></header>${table(['Cuisine request','Requested','Revised','Available','Shortage','Action'],direct.map(r=>[esc(r.itemName),esc(r.qty),esc(r.revisedQty ?? r.qty),esc(stock(r.itemId,r.outletId)),esc(Math.max(0,(r.revisedQty ?? r.qty)-stock(r.itemId,r.outletId))),button('approve-request',r.id,'Edit / approve')]))}</section>`;
+            if(direct.length)content.innerHTML+=`<section class="operations-card approval-request-card direct-request-card"><header class="approval-request-header"><div><small>Individual requests</small><h3>Cuisine requests awaiting approval</h3></div></header>${table(['Cuisine request','Requested','Revised','Available','Shortage','Action'],direct.map(r=>[esc(r.itemName),esc(r.qty),esc(r.revisedQty ?? r.qty),esc(stock(r.itemId,r.outletId)),esc(Math.max(0,(r.revisedQty ?? r.qty)-stock(r.itemId,r.outletId))),button('approve-request',r.id,'Edit / approve')+(currentUser.role==='admin'?button('recheck-cuisine',r.id,'Request recheck'):'')]))}</section>`;
             if(!indents.length && !direct.length)content.innerHTML=ordering?'<p>No approved requests awaiting vendor orders.</p>':'<p>No requests awaiting approval.</p>';
             if(!ordering && vendorOrders.length){
                 content.insertAdjacentHTML('afterbegin',`<p>Approved requests are ready for purchasing. ${link('vendor-orders')}</p>`);
@@ -172,8 +185,14 @@
             const draw=()=>{wasteFrom=filters.querySelector('[name=from]').value;wasteTo=filters.querySelector('[name=to]').value;try{InventoryTools.bounds(wasteFrom,wasteTo);}catch(e){content.querySelector('#wasteRows').textContent=e.message;return;}const rows=records('wastage').filter(r=>InventoryTools.day(r.createdAt)>=wasteFrom && InventoryTools.day(r.createdAt)<=wasteTo);content.querySelector('#wasteRows').innerHTML=table(['Date','Outlet','Item','Quantity','Reason','Person','Value'],rows.map(r=>[esc(InventoryTools.timestamp(r.createdAt)),esc(outletName(r.outletId)),esc(r.itemName),esc(r.quantity+' '+r.unit),esc(r.reason),esc(r.actorName),price(r.totalCostMinor)]))+`<p>Total recorded value: ${price(rows.reduce((sum,r)=>sum+(r.totalCostMinor || 0),0))}${rows.some(r=>r.totalCostMinor==null)?' (unpriced wastage excluded)':''}</p>`;};content.querySelector('#applyWaste').onclick=draw;draw();
         }
         if(page==='accounts'){
-            content.innerHTML=currentUser.role==='purchaser'?formHTML(input('name','Requested person name','text','','required maxlength="200"')+select('role','Role',opt(['cuisine_head','executive_chef'],r=>r,r=>names[r]))+select('outletId','Outlet',opt(outletsData))+select('cuisine','Cuisine',opt(cuisinesData,r=>r.name))):'';
-            content.innerHTML+=table(['Name','Role','Outlet','Status','Action'],records('account_request').map(r=>[esc(r.name),esc(names[r.role]),esc(outletName(r.outletId)),esc(r.status+(r.reason?' — '+r.reason:'')),currentUser.role==='admin' && r.status==='Pending'?button('account-approve',r.id,'Approve / set credentials')+button('account-reject',r.id,'Reject'):'']));
+            content.innerHTML=currentUser.role==='purchaser'?formHTML(accountRequestFields()):'';
+            content.innerHTML+=table(['Name','Role','Outlet','Status','Action'],records('account_request').map(r=>{
+                const note=r.status==='Recheck Requested'?r.recheckReason:r.reason;
+                let actions='';
+                if(currentUser.role==='admin' && r.status==='Pending') actions=button('account-approve',r.id,'Approve / set credentials')+button('account-recheck',r.id,'Request recheck')+button('account-reject',r.id,'Reject');
+                if(currentUser.role==='purchaser' && r.status==='Recheck Requested') actions=button('account-resubmit',r.id,'Review and resubmit');
+                return [esc(r.name),esc(names[r.role]),esc(outletName(r.outletId)),esc(r.status+(note?' — '+note:'')),actions];
+            }));
             const form=content.querySelector('form');if(form)bindForm(form,data=>act('operations/accounts/request',data));
         }
         if(page==='vendors'){
@@ -225,6 +244,9 @@
         if(action==='read')return act('operations/notifications/read',{id});
         if(action==='approve-indent')return act('indents/approve',{indentId:id});
         if(action==='recheck-indent')return window.requestIndentRecheck(id);
+        if(action==='recheck-cuisine')return window.requestCuisineRecheck(id);
+        if(action==='review-indent-recheck')return window.reviewIndentRecheck(id);
+        if(action==='review-cuisine-recheck')return window.resubmitCuisineRecheck(id);
         if(action==='view-received-po'){
             const po=purchaseOrdersData.find(p=>p.id===id);if(!po)return;
             const dialog=document.createElement('dialog');dialog.className='operations-dialog';dialog.innerHTML=`<h2>${esc(po.poNumber)} · ${esc(po.vendorName)}</h2><p>Outlet: ${esc(outletName(po.outletId))} · Received: ${esc(InventoryTools.timestamp(po.receivedAt))}</p>${receiptComparisons(po)}${table(['Item','Unit','Ordered','Received','Rejected'],po.items.map(i=>[esc(i.itemName),esc(i.unit || masterItemsData.find(x=>x.id===i.itemId)?.unit),esc(i.qty),esc(i.receivedQty || 0),esc(i.rejectedQty || 0)]))}<button type="button" class="btn btn-outline" data-close>Close</button>`;document.body.append(dialog);dialog.querySelector('[data-close]').onclick=()=>dialog.close();dialog.onclose=()=>dialog.remove();dialog.showModal();return;
@@ -287,6 +309,18 @@
             return editorForm('Resolve delivery issue',formHTML(select('resolution','Resolution',opt(physical?['replacement','return','wastage']:['replacement','shortage'],r=>r,r=>({replacement:'Issue replacement',shortage:'Confirm shortage',return:'Return usable stock',wastage:'Record confirmed wastage'}[r])))+(physical?select('disposition','If replacing: handling of rejected goods','<option value="">Choose when issuing replacement</option><option value="wastage">Confirmed wastage</option><option value="return">Return usable stock</option>').replace(' required',''):'')+input('note','Resolution note','text','','required maxlength="500"')),data=>act('operations/deliveries/resolve',{id,...data}));
         }
         if(action==='account-reject')return editorForm('Reject account request',formHTML(input('reason','Reason','text','','required maxlength="500"')),data=>act('operations/accounts/resolve',{id,approve:false,...data}));
+        if(action==='account-recheck')return window.requestAdminRecheck('operations/accounts/request-recheck',id);
+        if(action==='account-resubmit'){
+            const r=records('account_request').find(r=>r.id===id && r.status==='Recheck Requested');
+            if(!r)return;
+            const dialog=editorForm('Review account request',`<p>${esc(r.recheckReason)}</p>`+formHTML(accountRequestFields(r)),data=>act('operations/accounts/request',{id,...data}));
+            const form=dialog.querySelector('form');
+            form.elements.role.value=r.role;
+            form.elements.outletId.value=r.outletId;
+            if(r.cuisine)form.elements.cuisine.value=r.cuisine;
+            form.querySelector('button').textContent='Resubmit for approval';
+            return;
+        }
         if(action==='account-approve'){
             const r=records('account_request').find(r=>r.id===id);return editorForm('Approve account and confirm assignments',userForm({name:r.name,assignedLocations:[r.outletId],assignedSections:r.cuisine?[r.cuisine]:[]},r.role),(data,form)=>act('operations/accounts/resolve',{id,approve:true,user:readUser(data,form)}));
         }

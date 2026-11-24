@@ -1808,7 +1808,9 @@ function loadChefPortalData() {
             
             const outletName = r.outletName || (outletsData.find(o => o.id === r.outletId)?.name) || allocatedOutlet.name;
             
-            const editAction=r.status==='Pending' && !r.indentId?`<button class="btn btn-outline" onclick="editChefPlacedRequest('${r.id}')">Edit quantity</button> `:'';
+            const editAction = canResubmitCuisineRecheck(r)
+                ? `<button class="btn btn-outline" onclick="resubmitCuisineRecheck('${r.id}')">Review and resubmit</button>`
+                : r.status==='Pending' && !r.indentId?`<button class="btn btn-outline" onclick="editChefPlacedRequest('${r.id}')">Edit quantity</button> `:'';
             const actionHtml = (r.status === 'Pending' && !r.indentId)
                 ? `<button class="btn btn-outline" style="padding: 3px 9px; font-size: 0.72rem; border-color: rgba(230,57,70,0.4); color: #ff6b6b; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;" onclick="deleteChefRequest('${r.id}')" title="Cancel this request">
                     <i data-lucide="trash-2" style="width: 12px; height: 12px;"></i> Cancel
@@ -2356,6 +2358,8 @@ function loadRequestsData() {
                                         <i data-lucide="file-text" style="width:11px; height:11px;"></i> Review Request
                                     </button>
                                 `;
+                            } else if (r.status === 'Sent to Admin') {
+                                actionHtml = `<button class="btn btn-outline" onclick="requestCuisineRecheck('${r.id}')">Request recheck</button>`;
                             } else {
                                 actionHtml = `<span style="font-size: 0.75rem; color: #4895ef; font-weight: 500;">Awaiting Admin Approval</span>`;
                             }
@@ -2383,6 +2387,8 @@ function loadRequestsData() {
                                 </span>
                                 <button class="btn btn-outline" style="padding: 2px 6px; font-size: 0.68rem; margin-left: 6px; color: var(--text-muted); border-radius: 4px;" onclick="revertChefRequest('${r.id}')" title="Revert to Pending">Undo</button>
                             `;
+                        } else if (canResubmitCuisineRecheck(r)) {
+                            actionHtml = `<button class="btn btn-outline" onclick="resubmitCuisineRecheck('${r.id}')">Review and resubmit</button>`;
                         } else if (canReviewIndentRecheck(parentIndent)) {
                             actionHtml = `<button class="btn btn-outline" onclick="reviewIndentRecheck('${r.indentId}')">Review recheck</button>`;
                         } else if (r.status === 'Rejected') {
@@ -2476,7 +2482,7 @@ function loadRequestsData() {
     // Review the filtered requests together before accepting their quantities.
     if (currentUser.role === 'executive_chef' && containerSec) {
         const reviewable = viewableRequests.filter(r => ['Pending', 'Rejected'].includes(r.status) ||
-            (r.status === 'Recheck Requested' && canReviewIndentRecheck(indentsData.find(i => i.id === r.indentId))));
+            (r.status === 'Recheck Requested' && r.indentId && canReviewIndentRecheck(indentsData.find(i => i.id === r.indentId))));
         if (reviewable.length) {
             const reviewButton = document.createElement('button');
             reviewButton.className = 'btn btn-primary';
@@ -2526,6 +2532,8 @@ function loadRequestsData() {
                             <i data-lucide="file-text" style="width: 12px; height: 12px;"></i> Review Request
                         </button>
                     `;
+                } else if (req.status === 'Sent to Admin') {
+                    actionsHtml = `<button class="btn btn-outline" onclick="requestCuisineRecheck('${req.id}')">Request recheck</button>`;
                 } else {
                     actionsHtml = `<span style="font-size: 0.75rem; color: #4895ef;">Awaiting Admin Approval</span>`;
                 }
@@ -2555,6 +2563,8 @@ function loadRequestsData() {
                     </span>
                     <button class="btn btn-outline" style="padding: 2px 6px; font-size: 0.68rem; margin-left: 6px; color: var(--text-muted); border-radius: 4px;" onclick="revertChefRequest('${req.id}')" title="Revert to Pending">Undo</button>
                 `;
+            } else if (canResubmitCuisineRecheck(req)) {
+                actionsHtml = `<button class="btn btn-outline" onclick="resubmitCuisineRecheck('${req.id}')">Review and resubmit</button>`;
             } else if (canReviewIndentRecheck(parentIndent)) {
                 actionsHtml = `<button class="btn btn-outline" onclick="reviewIndentRecheck('${req.indentId}')">Review recheck</button>`;
             } else if (req.status === 'Rejected') {
@@ -3380,20 +3390,17 @@ window.rejectRequest = async function(reqId) {
     }
 };
 
-window.requestIndentRecheck = async function(indentId) {
-    const indent = indentsData.find(i => i.id === indentId);
-    if (currentUser?.role !== 'admin' || indent?.status !== 'Pending Approval') return false;
-    const reason = await window.showPromptModal('Tell the Executive Chef what to recheck.', '', 'Request recheck', {confirmText: 'Send to Executive Chef'});
+window.requestAdminRecheck = async function(path, id) {
+    if (currentUser?.role !== 'admin') return false;
+    const reason = await window.showPromptModal('Tell the submitter what to recheck.', '', 'Request recheck', {confirmText: 'Send recheck request'});
     if (typeof reason !== 'string') return false;
     if (!reason.trim() || reason.trim().length > 500) {
         window.showToast('Enter a recheck note of 1 to 500 characters.', 'warning');
         return false;
     }
     try {
-        await runDatabaseAction('operations/indents/request-recheck', {id: indentId, reason: reason.trim()});
-        loadRequestsData();
-        loadIndentsData();
-        window.showToast(`Recheck requested for ${indent.indentNumber}.`, 'success');
+        await runDatabaseAction(path, {id, reason: reason.trim()});
+        window.showToast('Recheck requested.', 'success');
         return true;
     } catch (error) {
         window.showToast(error.message, 'warning');
@@ -3401,26 +3408,45 @@ window.requestIndentRecheck = async function(indentId) {
     }
 };
 
+window.requestIndentRecheck = id => window.requestAdminRecheck('operations/indents/request-recheck', id);
+window.requestCuisineRecheck = id => window.requestAdminRecheck('operations/requests/request-recheck', id);
+
+function canResubmitCuisineRecheck(request) {
+    return !!currentUser && request?.status === 'Recheck Requested' && !request.indentId && request.recheckAssigneeId === currentUser.id;
+}
+
+window.resubmitCuisineRecheck = async function(id) {
+    const request = requestsData.find(r => r.id === id);
+    if (!canResubmitCuisineRecheck(request)) return;
+    const quantity = await window.showPromptModal(`${request.recheckReason}\n\nEnter the reviewed quantity for ${request.itemName} (${request.unit || 'units'}).`, request.revisedQty ?? request.qty, 'Review cuisine request', {confirmText:'Resubmit for approval'});
+    if (typeof quantity !== 'string') return;
+    try {
+        await runDatabaseAction('operations/requests/resubmit-recheck', {id, quantity:Number(quantity)});
+        window.showToast('Request resubmitted for approval.', 'success');
+    } catch (error) { window.showToast(error.message, 'warning'); }
+};
+
 function canReviewIndentRecheck(indent) {
-    return currentUser?.role === 'executive_chef' && indent?.status === 'Recheck Requested' && indent.ownerId === currentUser.id;
+    return ['executive_chef', 'purchaser'].includes(currentUser?.role) && indent?.status === 'Recheck Requested' && indent.ownerId === currentUser.id;
 }
 
 window.reviewIndentRecheck = function(indentId) {
     if (!canReviewIndentRecheck(indentsData.find(i => i.id === indentId))) return;
-    window.reviewChefRequests(requestsData.filter(r => r.indentId === indentId).map(r => r.id));
+    window.reviewChefRequests(requestsData.filter(r => r.indentId === indentId).map(r => r.id), indentId);
 };
 
-window.reviewChefRequests = function(ids) {
-    if (currentUser?.role !== 'executive_chef') return;
+window.reviewChefRequests = function(ids, indentId) {
+    const purchaserRecheck = currentUser?.role === 'purchaser' && canReviewIndentRecheck(indentsData.find(i => i.id === indentId));
+    if (!purchaserRecheck && currentUser?.role !== 'executive_chef') return;
     const selected = requestsData.filter(r => ids.includes(r.id));
     const parentIds = new Set(selected.filter(r => ['Rejected', 'Recheck Requested'].includes(r.status) && r.indentId).map(r => r.indentId));
     const rows = requestsData.filter(r => ids.includes(r.id) || parentIds.has(r.indentId));
     const dialog = document.createElement('dialog');
     dialog.className = 'operations-dialog vendor-receipt-dialog';
     const title = document.createElement('h2');
-    title.textContent = 'Review requests and approve quantities';
+    title.textContent = purchaserRecheck ? 'Review consolidated request' : 'Review requests and approve quantities';
     const note = document.createElement('p');
-    note.textContent = 'Review each quantity and make any changes. Approved quantities are ready to consolidate and submit.';
+    note.textContent = purchaserRecheck ? 'Review each quantity before sending the request back to Admin.' : 'Review each quantity and make any changes. Approved quantities are ready to consolidate and submit.';
     const recheckNotes = indentsData.filter(i => parentIds.has(i.id) && i.status === 'Recheck Requested').map(indent => {
         const message = document.createElement('p');
         message.textContent = `${indent.indentNumber} · Admin note — ${indent.recheckReason}`;
@@ -3446,7 +3472,7 @@ window.reviewChefRequests = function(ids) {
         return {request: {...request}, input};
     });
     const approve = document.createElement('button');
-    approve.type = 'submit'; approve.className = 'btn btn-primary'; approve.textContent = 'Approve all reviewed items';
+    approve.type = 'submit'; approve.className = 'btn btn-primary'; approve.textContent = purchaserRecheck ? 'Resubmit for approval' : 'Approve all reviewed items';
     const cancel = document.createElement('button');
     cancel.type = 'button'; cancel.className = 'btn btn-outline'; cancel.textContent = 'Cancel'; cancel.onclick = () => dialog.close();
     scroll.append(table); form.append(scroll, approve, cancel); dialog.append(title, note, ...recheckNotes, form); document.body.append(dialog);
@@ -3454,9 +3480,10 @@ window.reviewChefRequests = function(ids) {
     form.onsubmit = async event => {
         event.preventDefault(); approve.disabled = true;
         try {
-            await runDatabaseAction('operations/requests/review', {lines: inputs.map(({request, input}) => ({id:request.id, quantity:Number(input.value), expectedQuantity:request.qty, expectedStatus:request.status}))});
+            const lines = inputs.map(({request, input}) => ({id:request.id, quantity:Number(input.value), expectedQuantity:request.qty, expectedStatus:request.status}));
+            await runDatabaseAction(purchaserRecheck ? 'operations/indents/resubmit-recheck' : 'operations/requests/review', {id:indentId, lines});
             dialog.close(); loadRequestsData(); updateRequestsBadge();
-            window.showToast('All reviewed items approved. Ready to consolidate.', 'success');
+            window.showToast(purchaserRecheck ? 'Request resubmitted for approval.' : 'All reviewed items approved. Ready to consolidate.', 'success');
         } catch (error) { window.showToast(error.message, 'warning'); }
         finally { approve.disabled = false; }
     };
@@ -3539,6 +3566,7 @@ window.sendRequestToAdmin = async function(reqId) {
     
     req.status = 'Sent to Admin';
     req.forwardedBy = (currentUser && currentUser.name) ? currentUser.name : 'Executive Chef';
+    req.forwardedById = currentUser.id;
     req.forwardedAt = new Date().toISOString();
     
     await saveData();

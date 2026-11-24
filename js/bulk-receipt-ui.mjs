@@ -210,16 +210,70 @@ window.renderBulkReceiptCSVUpload = (container, onParsedBatch) => {
   };
 };
 
-// Render Admin Incoming Requests (Approvals) into a container
+function openBulkReceiptRecheck(container, request) {
+  const dialog = document.createElement('dialog');
+  dialog.className = 'operations-dialog';
+  dialog.innerHTML = `<h2>Review batch ${escapeHTML(request.batchId)}</h2><p>${escapeHTML(request.recheckReason)}</p>
+    <form class="inventory-form">
+      <label>Vendor bill type <select name="vendorBillType" required><option value="">Choose Cash or Credit</option><option value="cash">Cash</option><option value="credit">Credit</option></select></label>
+      <label>Corrected CSV (optional)<input type="file" name="sheet" accept=".csv,text/csv"></label>
+      <p>Upload a corrected CSV if the stock rows changed. Otherwise the original rows will be resubmitted.</p>
+      <button type="button" class="btn btn-outline" data-original>Download original CSV</button>
+      <button class="btn btn-primary">Resubmit for approval</button>
+      <button type="button" class="btn btn-outline" data-close>Cancel</button>
+      <p role="alert"></p>
+    </form>`;
+  const form = dialog.querySelector('form');
+  form.elements.vendorBillType.value = request.vendorBillType || '';
+  form.querySelector('[data-close]').onclick = () => dialog.close();
+  form.querySelector('[data-original]').onclick = () => {
+    const url = URL.createObjectURL(new Blob([request.csv], {type:'text/csv;charset=utf-8'}));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${request.batchId}.csv`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  form.onsubmit = async event => {
+    event.preventDefault();
+    const submit = form.querySelector('.btn-primary');
+    const error = form.querySelector('[role=alert]');
+    error.textContent = '';
+    submit.disabled = true;
+    try {
+      const file = form.elements.sheet.files[0];
+      if (file && (!/\.csv$/i.test(file.name) || file.size > maxReceiptBytes)) throw new Error(`Choose a CSV of at most ${maxReceiptBytes / 1000} KB.`);
+      await runDatabaseAction('stock/bulk-receipt/request', {
+        requestId: request.id,
+        csv: file ? await file.text() : request.csv,
+        vendorBillType: form.elements.vendorBillType.value
+      });
+      dialog.close();
+      window.renderBulkReceiptApprovalAndHistory(container);
+      window.showToast('Batch resubmitted for approval.', 'success');
+    } catch (failure) {
+      const detail = failure.data?.errors?.[0]?.message;
+      error.textContent = detail || failure.message;
+    } finally { submit.disabled = false; }
+  };
+  dialog.onclose = () => dialog.remove();
+  document.body.append(dialog);
+  dialog.showModal();
+}
+
+// Render incoming approvals for Admin and returned batches for the submitting purchaser.
 window.renderBulkReceiptApprovalAndHistory = (container) => {
   if (!container || !currentUser) return;
   const isAdmin = currentUser.role === 'admin';
   const allRecords = committedState?.operationRecords || [];
   const bulkRequests = allRecords.filter(r => (r.kind === 'notification' && r.eventType === 'bulk_receipt_request') || r.kind === 'bulk_receipt_request');
 
-  // Only render if admin has incoming requests awaiting review
   if (!isAdmin) {
-    container.innerHTML = '';
+    const returned = bulkRequests.filter(r => r.status === 'Recheck Requested' && r.requestedBy === currentUser.id);
+    container.innerHTML = returned.length ? `<h3>Bulk receipts to recheck</h3>${tableMarkup(['Batch', 'Admin note', 'Action'], returned.map(r => [escapeHTML(r.batchId), escapeHTML(r.recheckReason), `<button type="button" class="btn btn-outline" data-returned-batch="${escapeHTML(r.id)}">Review and resubmit</button>`]), true)}` : '';
+    for (const button of container.querySelectorAll('[data-returned-batch]')) {
+      button.onclick = () => openBulkReceiptRecheck(container, returned.find(r => r.id === button.dataset.returnedBatch));
+    }
     return;
   }
 
@@ -272,8 +326,9 @@ window.renderBulkReceiptApprovalAndHistory = (container) => {
                   Submitted on (IST): <strong>${escapeHTML(formatIST(req.createdAt))}</strong> · Rows: <strong>${escapeHTML(req.rowCount)}</strong> · Total Value: <strong>${escapeHTML(formatCost(req.totalCostMinor || 0))}</strong>
                 </div>
               </div>
-              <div style="display: flex; gap: 8px;">
+              <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                 <button type="button" class="btn btn-outline" data-admin-action="view" data-id="${escapeHTML(req.id)}">View Items (${req.rowCount})</button>
+                <button type="button" class="btn btn-outline" data-admin-action="recheck" data-id="${escapeHTML(req.id)}">Request recheck</button>
                 <button type="button" class="btn btn-outline" data-admin-action="reject" data-id="${escapeHTML(req.id)}" style="color: #f87171; border-color: rgba(248, 113, 113, 0.4);">Reject</button>
                 ${req.vendorBillType ? `<span>Vendor bill type: ${req.vendorBillType === 'cash' ? 'Cash' : 'Credit'}</span>` : `<label>Vendor bill type <select name="vendorBillType" required><option value="">Choose Cash or Credit</option><option value="cash">Cash</option><option value="credit">Credit</option></select></label>`}
                 <button type="button" class="btn btn-primary" data-admin-action="approve" data-id="${escapeHTML(req.id)}">Approve & Receive Stock</button>
@@ -290,6 +345,13 @@ window.renderBulkReceiptApprovalAndHistory = (container) => {
           const reqId = btn.dataset.id;
           const targetReq = pending.find(r => r.id === reqId);
           if (!targetReq) return;
+
+          if (act === 'recheck') {
+            btn.disabled = true;
+            if (await window.requestAdminRecheck('operations/bulk-receipts/request-recheck', reqId)) window.renderBulkReceiptApprovalAndHistory(container);
+            btn.disabled = false;
+            return;
+          }
 
           if (act === 'view') {
             const preview = targetReq.itemsPreview || [];
