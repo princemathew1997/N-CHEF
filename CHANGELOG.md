@@ -4,6 +4,11 @@ Use semantic versions: PATCH for fixes, MINOR for compatible features, MAJOR for
 breaking changes. A Git tag identifies a shipped source revision; the GitHub
 Release's deployment records identify the actual Cloudflare rollback targets.
 
+## 2.14.0 - 2026-11-24
+
+- Let admins send consolidated and individual cuisine requests, bulk stock receipts, and account requests back for recheck. Submitters can review the admin note, make corrections, and resubmit for approval.
+- Add Daily Cuisine Issues for admins, with issued quantities, recorded costs, outlet and cuisine filters, and PDF export for a selected IST date.
+
 ## 2.13.6 - 2026-11-18
 
 - Require sign-in in a fresh tab on shared computers. Existing sessions require sign-in again after this release.
